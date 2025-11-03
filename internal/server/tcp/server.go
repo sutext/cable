@@ -5,12 +5,14 @@ import (
 	"net"
 
 	"sutext.github.io/cable/internal/safe"
+	"sutext.github.io/cable/logger"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
 )
 
 type bioServer struct {
 	conns   *safe.Map[string, *conn]
+	logger  logger.Logger
 	onData  server.OnData
 	onAuth  server.OnAuth
 	address string

@@ -6,12 +6,14 @@ import (
 
 	"github.com/cloudwego/netpoll"
 	"sutext.github.io/cable/internal/safe"
+	"sutext.github.io/cable/logger"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
 )
 
 type nioServer struct {
 	conns     *safe.Map[string, *conn]
+	logger    logger.Logger
 	onData    server.OnData
 	onAuth    server.OnAuth
 	address   string
@@ -21,6 +23,7 @@ type nioServer struct {
 func NewNIO(options *server.Options) *nioServer {
 	s := &nioServer{
 		address: options.Address,
+		logger:  options.Logger,
 		conns:   safe.NewMap[string, *conn](),
 	}
 	return s
@@ -80,12 +83,12 @@ func (s *nioServer) handlePacket(id *packet.Identity, p packet.Packet) {
 		if s.onData == nil {
 			return
 		}
-		res, err := s.onData(id.UserID, p)
+		res, err := s.onData(id, p)
 		if err != nil {
 			return
 		}
 		if res != nil {
-			conn.sendPacket(res)
+			conn.SendPacket(res)
 		}
 	case packet.PING:
 		conn.SendPong()

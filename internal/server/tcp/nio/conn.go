@@ -14,19 +14,19 @@ func (c *conn) GetID() *packet.Identity {
 	return c.id
 }
 func (c *conn) Close(code packet.CloseCode) {
-	c.sendPacket(packet.NewClose(code))
+	c.SendPacket(packet.NewClose(code))
 	c.Connection.Close()
 }
 func (c *conn) SendPing() error {
-	return c.sendPacket(packet.NewPing())
+	return c.SendPacket(packet.NewPing())
 }
 func (c *conn) SendPong() error {
-	return c.sendPacket(packet.NewPong())
+	return c.SendPacket(packet.NewPong())
 }
 func (c *conn) SendData(data []byte) error {
-	return c.sendPacket(packet.NewData(data))
+	return c.SendPacket(packet.NewData(data))
 }
 
-func (c *conn) sendPacket(p packet.Packet) error {
+func (c *conn) SendPacket(p packet.Packet) error {
 	return packet.WriteTo(c.Connection, p)
 }

@@ -1,7 +1,10 @@
 package server
 
 import (
-	qc "golang.org/x/net/quic"
+	"log/slog"
+
+	"golang.org/x/net/quic"
+	"sutext.github.io/cable/logger"
 )
 
 type Option struct {
@@ -11,22 +14,20 @@ type Options struct {
 	Network    string
 	Address    string
 	UseNIO     bool
-	QuicConfig *qc.Config
+	Logger     logger.Logger
+	QuicConfig *quic.Config
 }
 
-func (o *Options) Apply(opts ...Option) {
-	for _, opt := range opts {
-		opt.F(o)
-	}
-}
 func NewOptions(opts ...Option) *Options {
-	var options = &Options{}
+	var options = &Options{
+		Logger: logger.NewJSON(slog.LevelInfo),
+	}
 	for _, o := range opts {
 		o.F(options)
 	}
 	return options
 }
-func WithQUIC(address string, config *qc.Config) Option {
+func WithQUIC(address string, config *quic.Config) Option {
 	return Option{F: func(o *Options) {
 		o.Network = "quic"
 		o.Address = address
@@ -38,4 +39,7 @@ func WithTCP(address string) Option {
 }
 func WithNIO(useNIO bool) Option {
 	return Option{F: func(o *Options) { o.UseNIO = useNIO }}
+}
+func WithLogger(logger logger.Logger) Option {
+	return Option{F: func(o *Options) { o.Logger = logger }}
 }

@@ -48,7 +48,7 @@ func (c *conn) Close(code packet.CloseCode) {
 	if c.raw == nil {
 		return
 	}
-	c.sendPacket(packet.NewClose(code))
+	c.SendPacket(packet.NewClose(code))
 	c.raw.Close()
 	c.keepAlive.Stop()
 	close(c.authed)
@@ -93,18 +93,18 @@ func (c *conn) serve() {
 }
 
 func (c *conn) connack(code packet.ConnectCode) error {
-	return c.sendPacket(packet.NewConnack(code))
+	return c.SendPacket(packet.NewConnack(code))
 }
 func (c *conn) SendPing() error {
-	return c.sendPacket(packet.NewPing())
+	return c.SendPacket(packet.NewPing())
 }
 func (c *conn) SendPong() error {
-	return c.sendPacket(packet.NewPong())
+	return c.SendPacket(packet.NewPong())
 }
 func (c *conn) SendData(data []byte) error {
-	return c.sendPacket(packet.NewData(data))
+	return c.SendPacket(packet.NewData(data))
 }
-func (c *conn) sendPacket(p packet.Packet) error {
+func (c *conn) SendPacket(p packet.Packet) error {
 	if c.stream == nil {
 		return server.ErrConnectionClosed
 	}
@@ -149,12 +149,12 @@ func (c *conn) handlePacket(p packet.Packet) {
 			return
 		}
 		p := p.(*packet.DataPacket)
-		res, err := c.server.onData(c.id.ClientID, p)
+		res, err := c.server.onData(c.id, p)
 		if err != nil {
 			return
 		}
 		if res != nil {
-			c.sendPacket(res)
+			c.SendPacket(res)
 		}
 	case packet.PING:
 		c.SendPong()

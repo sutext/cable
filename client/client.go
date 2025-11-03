@@ -23,7 +23,7 @@ type Client struct {
 	port      string
 	onData    OnData
 	status    Status
-	logger    *slog.Logger
+	logger    logger.Logger
 	retrier   *Retrier
 	identity  *packet.Identity
 	retrying  bool
@@ -36,7 +36,7 @@ func New(host, port string) *Client {
 		host:      host,
 		port:      port,
 		status:    StatusUnknown,
-		logger:    logger.New(logger.LevelDebug, logger.FormatJSON),
+		logger:    logger.NewText(slog.LevelDebug),
 		retrier:   NewRetrier(100000, backoff.Constant(time.Second*2)),
 		keepalive: keepalive.New(60, 5),
 	}
@@ -44,7 +44,6 @@ func New(host, port string) *Client {
 		c.sendPacket(packet.NewPing())
 	})
 	c.keepalive.TimeoutFunc(func() {
-		c.logger.Error("keepalive timeout")
 		c.tryClose(CloseReasonPingTimeout)
 	})
 	return c
@@ -52,8 +51,8 @@ func New(host, port string) *Client {
 func (c *Client) OnData(f OnData) {
 	c.onData = f
 }
-func (c *Client) SetLogger(level logger.Level, format logger.Format) {
-	c.logger = logger.New(level, format)
+func (c *Client) SetLogger(l logger.Logger) {
+	c.logger = l
 }
 func (c *Client) SetRetrier(limit int, backoff backoff.Backoff) {
 	c.retrier = NewRetrier(limit, backoff)

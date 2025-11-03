@@ -5,12 +5,14 @@ import (
 
 	qc "golang.org/x/net/quic"
 	"sutext.github.io/cable/internal/safe"
+	"sutext.github.io/cable/logger"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
 )
 
 type quicServer struct {
 	conns   *safe.Map[string, *conn]
+	logger  logger.Logger
 	onData  server.OnData
 	onAuth  server.OnAuth
 	address string
@@ -22,6 +24,7 @@ func NewQUIC(options *server.Options) *quicServer {
 		conns:   safe.NewMap(map[string]*conn{}),
 		address: options.Address,
 		config:  options.QuicConfig,
+		logger:  options.Logger,
 	}
 	return s
 }

@@ -1,7 +1,6 @@
 package cable
 
 import (
-	"sutext.github.io/cable/broker"
 	"sutext.github.io/cable/internal/server/quic"
 	"sutext.github.io/cable/internal/server/tcp"
 	"sutext.github.io/cable/internal/server/tcp/nio"
@@ -21,7 +20,4 @@ func NewServer(opts ...server.Option) (server.Server, error) {
 	default:
 		return nil, server.ErrNetworkNotSupport
 	}
-}
-func NewBroker(config *broker.Config) broker.Broker {
-	return broker.New(config)
 }

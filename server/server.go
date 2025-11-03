@@ -10,11 +10,9 @@ import (
 type Conn interface {
 	GetID() *packet.Identity
 	Close(reason packet.CloseCode)
-	SendPing() error
-	SendPong() error
-	SendData(data []byte) error
+	SendPacket(p packet.Packet) error
 }
-type OnData func(cid string, p *packet.DataPacket) (*packet.DataPacket, error)
+type OnData func(id *packet.Identity, p *packet.DataPacket) (*packet.DataPacket, error)
 type OnAuth func(p *packet.Identity) error
 
 type Server interface {
