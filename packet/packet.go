@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"io"
 
-	"sutext.github.io/cable/buffer"
+	"sutext.github.io/cable/internal/buffer"
 )
 
 const (

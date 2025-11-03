@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"sutext.github.io/cable/buffer"
+	"sutext.github.io/cable/internal/buffer"
 )
 
 type DataPacket struct {

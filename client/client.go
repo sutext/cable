@@ -9,7 +9,7 @@ import (
 
 	"sutext.github.io/cable/internal/backoff"
 	"sutext.github.io/cable/internal/keepalive"
-	"sutext.github.io/cable/logger"
+	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
 )
 
@@ -41,7 +41,7 @@ func New(host, port string) *Client {
 		keepalive: keepalive.New(60, 5),
 	}
 	c.keepalive.PingFunc(func() {
-		c.sendPacket(packet.NewPing())
+		c.SendPacket(packet.NewPing())
 	})
 	c.keepalive.TimeoutFunc(func() {
 		c.tryClose(CloseReasonPingTimeout)
@@ -119,20 +119,20 @@ func (c *Client) reconnect() {
 		c.tryClose(err)
 		return
 	}
-	c.sendPacket(packet.NewConnect(c.identity))
+	c.SendPacket(packet.NewConnect(c.identity))
 }
 
 func (c *Client) SendData(data []byte) error {
-	return c.sendPacket(packet.NewData(data))
+	return c.SendPacket(packet.NewData(data))
 }
 
 func (c *Client) SendPing() error {
-	return c.sendPacket(packet.NewPing())
+	return c.SendPacket(packet.NewPing())
 }
 func (c *Client) SendPong() error {
-	return c.sendPacket(packet.NewPong())
+	return c.SendPacket(packet.NewPong())
 }
-func (c *Client) sendPacket(p packet.Packet) error {
+func (c *Client) SendPacket(p packet.Packet) error {
 	if c.conn == nil {
 		return ErrNotConnected
 	}

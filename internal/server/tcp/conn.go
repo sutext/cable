@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"sutext.github.io/cable/internal/keepalive"
-	"sutext.github.io/cable/logger"
+	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
 )

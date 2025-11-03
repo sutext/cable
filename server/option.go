@@ -4,7 +4,7 @@ import (
 	"log/slog"
 
 	"golang.org/x/net/quic"
-	"sutext.github.io/cable/logger"
+	"sutext.github.io/cable/internal/logger"
 )
 
 type Option struct {

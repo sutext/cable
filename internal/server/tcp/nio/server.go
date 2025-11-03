@@ -5,8 +5,8 @@ import (
 	"net"
 
 	"github.com/cloudwego/netpoll"
+	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/internal/safe"
-	"sutext.github.io/cable/logger"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
 )

@@ -3,7 +3,7 @@ package packet
 import (
 	"fmt"
 
-	"sutext.github.io/cable/buffer"
+	"sutext.github.io/cable/internal/buffer"
 )
 
 type CloseCode uint16
