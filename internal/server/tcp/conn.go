@@ -1,7 +1,6 @@
 package tcp
 
 import (
-	"fmt"
 	"net"
 	"sync"
 	"time"
@@ -16,13 +15,13 @@ type conn struct {
 	id        *packet.Identity
 	mu        *sync.RWMutex
 	raw       net.Conn
-	server    *bioServer
+	server    *tcpServer
 	authed    chan struct{}
 	logger    logger.Logger
 	keepAlive *keepalive.KeepAlive
 }
 
-func newConn(raw net.Conn, server *bioServer) *conn {
+func newConn(raw net.Conn, server *tcpServer) *conn {
 	c := &conn{
 		mu:     new(sync.RWMutex),
 		raw:    raw,
@@ -106,24 +105,21 @@ func (c *conn) SendPacket(p packet.Packet) error {
 	}
 	return packet.WriteTo(c.raw, p)
 }
-func (c *conn) doAuth(id *packet.Identity) error {
+func (c *conn) doAuth(id *packet.ConnectPacket) packet.ConnectCode {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.closed() {
-		return server.ErrConnectionClosed
-	}
 	if c.id != nil {
-		return fmt.Errorf("already login")
+		return packet.AlreadyConnected
 	}
-	err := c.server.onAuth(id)
-	if err != nil {
-		return err
+	code := c.server.connHandler(id)
+	if code == packet.ConnectionAccepted {
+		c.id = id.Identity
+		c.authed <- struct{}{}
+		go c.server.addConn(c)
+		c.keepAlive.Start()
 	}
-	c.id = id
-	c.authed <- struct{}{}
-	go c.server.addConn(c)
-	c.keepAlive.Start()
-	return nil
+
+	return code
 }
 func (c *conn) handlePacket(p packet.Packet) {
 	if c.closed() {
@@ -132,20 +128,13 @@ func (c *conn) handlePacket(p packet.Packet) {
 	switch p.Type() {
 	case packet.CONNECT:
 		p := p.(*packet.ConnectPacket)
-		if p.Identity != nil {
-			err := c.doAuth(p.Identity)
-			if err != nil {
-				c.Close(packet.CloseAuthenticationFailure)
-				return
-			}
-		}
-		c.connack(packet.ConnectionAccepted)
+		c.connack(c.doAuth(p))
 	case packet.DATA:
 		if c.id == nil {
 			return
 		}
 		p := p.(*packet.DataPacket)
-		res, err := c.server.onData(c.id, p)
+		res, err := c.server.dataHandler(c.id, p)
 		if err != nil {
 			return
 		}

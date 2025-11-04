@@ -1,8 +1,8 @@
 package packet
 
 import (
+	"bytes"
 	"fmt"
-	"reflect"
 
 	"sutext.github.io/cable/internal/buffer"
 )
@@ -33,7 +33,7 @@ func (p *DataPacket) Equal(other Packet) bool {
 		return false
 	}
 	otherData := other.(*DataPacket)
-	return p.Channel == otherData.Channel && reflect.DeepEqual(p.Payload, otherData.Payload)
+	return p.Channel == otherData.Channel && bytes.Equal(p.Payload, otherData.Payload)
 }
 
 func (p *DataPacket) WriteTo(buf *buffer.Buffer) error {

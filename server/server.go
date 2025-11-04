@@ -12,16 +12,16 @@ type Conn interface {
 	Close(reason packet.CloseCode)
 	SendPacket(p packet.Packet) error
 }
-type OnData func(id *packet.Identity, p *packet.DataPacket) (*packet.DataPacket, error)
-type OnAuth func(p *packet.Identity) error
+type DataHandler func(id *packet.Identity, p *packet.DataPacket) (*packet.DataPacket, error)
+type ConnHandler func(p *packet.ConnectPacket) packet.ConnectCode
 
 type Server interface {
 	Serve() error
-	OnAuth(handler OnAuth)
-	OnData(handler OnData)
 	GetConn(cid string) (Conn, error)
 	KickConn(cid string) error
 	Shutdown(ctx context.Context) error
+	HandleConn(handler ConnHandler)
+	HandleData(handler DataHandler)
 }
 
 var (

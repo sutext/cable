@@ -3,28 +3,27 @@ package nio
 import (
 	"context"
 	"net"
+	"sync"
 
 	"github.com/cloudwego/netpoll"
 	"sutext.github.io/cable/internal/logger"
-	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
 )
 
 type nioServer struct {
-	conns     *safe.Map[string, *conn]
-	logger    logger.Logger
-	onData    server.OnData
-	onAuth    server.OnAuth
-	address   string
-	eventLoop netpoll.EventLoop
+	conns       sync.Map
+	logger      logger.Logger
+	dataHandler server.DataHandler
+	connHandler server.ConnHandler
+	address     string
+	eventLoop   netpoll.EventLoop
 }
 
 func NewNIO(options *server.Options) *nioServer {
 	s := &nioServer{
 		address: options.Address,
 		logger:  options.Logger,
-		conns:   safe.NewMap[string, *conn](),
 	}
 	return s
 }
@@ -44,16 +43,16 @@ func (s *nioServer) Serve() error {
 	s.eventLoop = eventLoop
 	return eventLoop.Serve(ln)
 }
-func (s *nioServer) OnAuth(handler server.OnAuth) {
-	s.onAuth = handler
+func (s *nioServer) HandleConn(handler server.ConnHandler) {
+	s.connHandler = handler
 }
-func (s *nioServer) OnData(handler server.OnData) {
-	s.onData = handler
+func (s *nioServer) HandleData(handler server.DataHandler) {
+	s.dataHandler = handler
 }
 
 func (s *nioServer) GetConn(cid string) (server.Conn, error) {
-	if con, ok := s.conns.Get(cid); ok {
-		return con, nil
+	if con, ok := s.conns.Load(cid); ok {
+		return con.(*conn), nil
 	}
 	return nil, server.ErrConnctionNotFound
 }
@@ -64,8 +63,8 @@ func (s *nioServer) Shutdown(ctx context.Context) error {
 	return nil
 }
 func (s *nioServer) KickConn(cid string) error {
-	if conn, ok := s.conns.Get(cid); ok {
-		conn.Close(packet.CloseKickedOut)
+	if cn, ok := s.conns.Load(cid); ok {
+		cn.(*conn).Close(packet.CloseKickedOut)
 		s.conns.Delete(cid)
 		return nil
 	}
@@ -73,17 +72,18 @@ func (s *nioServer) KickConn(cid string) error {
 }
 
 func (s *nioServer) handlePacket(id *packet.Identity, p packet.Packet) {
-	conn, ok := s.conns.Get(id.ClientID)
+	cn, ok := s.conns.Load(id.ClientID)
 	if !ok {
 		return
 	}
+	conn := cn.(*conn)
 	switch p.Type() {
 	case packet.DATA:
 		p := p.(*packet.DataPacket)
-		if s.onData == nil {
+		if s.dataHandler == nil {
 			return
 		}
-		res, err := s.onData(id, p)
+		res, err := s.dataHandler(id, p)
 		if err != nil {
 			return
 		}
@@ -111,7 +111,7 @@ func (s *nioServer) onPrepare(conn netpoll.Connection) context.Context {
 	return context.Background()
 }
 func (s *nioServer) onConnect(ctx context.Context, c netpoll.Connection) context.Context {
-	if s.onAuth == nil {
+	if s.connHandler == nil {
 		c.Close()
 		return ctx
 	}
@@ -125,17 +125,24 @@ func (s *nioServer) onConnect(ctx context.Context, c netpoll.Connection) context
 		c.Close()
 		return ctx
 	}
-	if err := s.onAuth(connPacket.Identity); err != nil {
+	code := s.connHandler(connPacket)
+
+	if code == packet.AlreadyConnected {
+		cn := &conn{
+			Connection: c,
+			id:         connPacket.Identity,
+		}
+		if old, loaded := s.conns.LoadOrStore(connPacket.Identity.ClientID, cn); loaded {
+			old.(*conn).Close(packet.CloseDuplicateLogin)
+		}
+	}
+	packet.WriteTo(c, packet.NewConnack(code))
+	if code != packet.AlreadyConnected {
 		closePacket := &packet.ClosePacket{Code: packet.CloseAuthenticationFailure}
 		packet.WriteTo(c, closePacket)
 		c.Close()
 		return ctx
 	}
-	s.conns.Set(connPacket.Identity.ClientID, &conn{
-		Connection: c,
-		id:         connPacket.Identity,
-	})
-	packet.WriteTo(c, packet.NewConnack(packet.ConnectionAccepted))
 	return context.WithValue(ctx, identityKey, connPacket.Identity)
 }
 func (s *nioServer) onDisconnect(ctx context.Context, conn netpoll.Connection) {

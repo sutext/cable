@@ -3,30 +3,30 @@ package tcp
 import (
 	"context"
 	"net"
+	"sync"
 
 	"sutext.github.io/cable/internal/logger"
-	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
 )
 
-type bioServer struct {
-	conns   *safe.Map[string, *conn]
-	logger  logger.Logger
-	onData  server.OnData
-	onAuth  server.OnAuth
-	address string
+type tcpServer struct {
+	conns       sync.Map
+	logger      logger.Logger
+	dataHandler server.DataHandler
+	connHandler server.ConnHandler
+	address     string
 }
 
-func NewTCP(options *server.Options) *bioServer {
-	s := &bioServer{
-		conns:   safe.NewMap(map[string]*conn{}),
+func NewTCP(options *server.Options) *tcpServer {
+	s := &tcpServer{
 		address: options.Address,
+		conns:   sync.Map{},
 	}
 	return s
 }
 
-func (s *bioServer) Serve() error {
+func (s *tcpServer) Serve() error {
 	listener, err := net.Listen("tcp", s.address)
 	if err != nil {
 		return err
@@ -40,38 +40,35 @@ func (s *bioServer) Serve() error {
 		go c.serve()
 	}
 }
-func (s *bioServer) OnAuth(handler server.OnAuth) {
-	s.onAuth = handler
+func (s *tcpServer) HandleConn(handler server.ConnHandler) {
+	s.connHandler = handler
 }
-func (s *bioServer) OnData(handler server.OnData) {
-	s.onData = handler
+func (s *tcpServer) HandleData(handler server.DataHandler) {
+	s.dataHandler = handler
 }
-func (s *bioServer) GetConn(cid string) (server.Conn, error) {
-	if conn, ok := s.conns.Get(cid); ok {
-		return conn, nil
+func (s *tcpServer) GetConn(cid string) (server.Conn, error) {
+	if cn, ok := s.conns.Load(cid); ok {
+		return cn.(*conn), nil
 	}
 	return nil, server.ErrConnctionNotFound
 }
-func (s *bioServer) KickConn(cid string) error {
-	if conn, ok := s.conns.Get(cid); ok {
-		conn.Close(packet.CloseKickedOut)
+func (s *tcpServer) KickConn(cid string) error {
+	if cn, ok := s.conns.Load(cid); ok {
+		cn.(*conn).Close(packet.CloseKickedOut)
 		s.conns.Delete(cid)
 		return nil
 	}
 	return server.ErrConnctionNotFound
 }
-func (s *bioServer) Shutdown(ctx context.Context) error {
+func (s *tcpServer) Shutdown(ctx context.Context) error {
 	return nil
 }
-func (s *bioServer) addConn(c *conn) {
-	s.conns.Write(func(m map[string]*conn) {
-		cid := c.GetID().ClientID
-		if old, ok := m[cid]; ok {
-			old.Close(packet.CloseDuplicateLogin)
-		}
-		m[cid] = c
-	})
+func (s *tcpServer) addConn(c *conn) {
+	if old, loaded := s.conns.LoadOrStore(c.GetID().ClientID, c); loaded {
+		old.(*conn).Close(packet.CloseDuplicateLogin)
+		return
+	}
 }
-func (s *bioServer) delConn(c *conn) {
+func (s *tcpServer) delConn(c *conn) {
 	s.conns.Delete(c.GetID().ClientID)
 }

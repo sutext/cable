@@ -31,10 +31,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	s.OnAuth(func(p *packet.Identity) error {
-		return nil
+	s.HandleConn(func(p *packet.ConnectPacket) packet.ConnectCode {
+		return packet.ConnectionAccepted
 	})
-	s.OnData(func(id *packet.Identity, p *packet.DataPacket) (*packet.DataPacket, error) {
+	s.HandleData(func(id *packet.Identity, p *packet.DataPacket) (*packet.DataPacket, error) {
 		return nil, nil
 	})
 	logger.Info("entry server start")
