@@ -2,7 +2,6 @@ package packet
 
 import (
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 
@@ -20,16 +19,30 @@ type PacketType uint8
 const (
 	CONNECT PacketType = 1 // CONNECT packet
 	CONNACK PacketType = 2 // CONNACK packet
-	PING    PacketType = 3 // PING packet
-	PONG    PacketType = 4 // PONG packet
-	DATA    PacketType = 5 // DATA packet
+	MESSAGE PacketType = 3 // MESSAGE packet
+	PING    PacketType = 4 // PING packet
+	PONG    PacketType = 5 // PONG packet
 	CLOSE   PacketType = 6 // CLOSE packet
+
 )
 
-var (
-	ErrUnkownPacketType   = errors.New("unknown packet type")
-	ErrPacketSizeTooLarge = errors.New("packet size too large")
+type Error uint8
+
+const (
+	ErrUnknownPacketType  Error = 1
+	ErrPacketSizeTooLarge Error = 2
 )
+
+func (e Error) Error() string {
+	switch e {
+	case ErrUnknownPacketType:
+		return "unknown packet type"
+	case ErrPacketSizeTooLarge:
+		return "packet size too large"
+	default:
+		return "unknown error"
+	}
+}
 
 func (t PacketType) String() string {
 	switch t {
@@ -41,8 +54,8 @@ func (t PacketType) String() string {
 		return "PING"
 	case PONG:
 		return "PONG"
-	case DATA:
-		return "DATA"
+	case MESSAGE:
+		return "MESSAGE"
 	case CLOSE:
 		return "CLOSE"
 	default:
@@ -126,8 +139,8 @@ func ReadFrom(r io.Reader) (Packet, error) {
 			return nil, err
 		}
 		return connack, nil
-	case DATA:
-		data := &DataPacket{}
+	case MESSAGE:
+		data := &MessagePacket{}
 		err := data.ReadFrom(buf)
 		if err != nil {
 			return nil, err
@@ -145,7 +158,7 @@ func ReadFrom(r io.Reader) (Packet, error) {
 		}
 		return close, nil
 	default:
-		return nil, ErrUnkownPacketType
+		return nil, ErrUnknownPacketType
 	}
 }
 func WriteTo(w io.Writer, p Packet) error {

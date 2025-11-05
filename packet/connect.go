@@ -7,21 +7,20 @@ import (
 )
 
 type Identity struct {
-	UserID    string
-	ClientID  string
-	AuthToken string
+	UserID     string
+	ClientID   string
+	Credential string
 }
 type ConnectPacket struct {
-	Version   string
-	KeepAlive uint16
-	Identity  *Identity
+	Version  uint8
+	Identity *Identity
 }
 
 func NewConnect(identity *Identity) *ConnectPacket {
-	return &ConnectPacket{Identity: identity}
+	return &ConnectPacket{Identity: identity, Version: 1}
 }
 func (p *ConnectPacket) String() string {
-	return fmt.Sprintf("CONNECT(uid=%s, cid=%s, token=%s)", p.Identity.UserID, p.Identity.ClientID, p.Identity.AuthToken)
+	return fmt.Sprintf("CONNECT(uid=%s, cid=%s)", p.Identity.UserID, p.Identity.ClientID)
 }
 func (p *ConnectPacket) Type() PacketType {
 	return CONNECT
@@ -34,21 +33,24 @@ func (p *ConnectPacket) Equal(other Packet) bool {
 		return false
 	}
 	otherP := other.(*ConnectPacket)
-	return p.Identity.AuthToken == otherP.Identity.AuthToken &&
+	return p.Version == otherP.Version && p.Identity.Credential == otherP.Identity.Credential &&
 		p.Identity.UserID == otherP.Identity.UserID &&
 		p.Identity.ClientID == otherP.Identity.ClientID
 }
 func (p *ConnectPacket) WriteTo(buffer *buffer.Buffer) error {
+	buffer.WriteUInt8(p.Version)
 	if p.Identity != nil {
-		buffer.WriteString(p.Identity.AuthToken)
+		buffer.WriteString(p.Identity.Credential)
 		buffer.WriteString(p.Identity.UserID)
 		buffer.WriteString(p.Identity.ClientID)
 	}
 	return nil
 }
 func (p *ConnectPacket) ReadFrom(buffer *buffer.Buffer) error {
-	if buffer.Len() == 0 {
+	if version, err := buffer.ReadUInt8(); err != nil {
 		return nil
+	} else {
+		p.Version = version
 	}
 	token, err := buffer.ReadString()
 	if err != nil {
@@ -63,35 +65,25 @@ func (p *ConnectPacket) ReadFrom(buffer *buffer.Buffer) error {
 		return err
 	}
 	p.Identity = &Identity{
-		AuthToken: token,
-		UserID:    userID,
-		ClientID:  clientID,
+		Credential: token,
+		UserID:     userID,
+		ClientID:   clientID,
 	}
 	return nil
 }
 
-type ConnectCode uint16
+type ConnackCode uint8
 
 const (
-	// Connection Accepted
-	ConnectionAccepted ConnectCode = 0
-	// Connection Refused, unacceptable protocol version
-	AlreadyConnected ConnectCode = 1
-	// Identifier rejected
-	IdentifierRejected ConnectCode = 2
-	// Server unavailable
-	ServerUnavailable ConnectCode = 3
-	// Bad user name or password
-	BadUserNameOrPassword ConnectCode = 4
-	// Not authorized
-	NotAuthorized ConnectCode = 5
+	ConnectionAccepted ConnackCode = 0
+	ConnectionRejected ConnackCode = 1
 )
 
 type ConnackPacket struct {
-	Code ConnectCode
+	Code ConnackCode
 }
 
-func NewConnack(code ConnectCode) *ConnackPacket {
+func NewConnack(code ConnackCode) *ConnackPacket {
 	return &ConnackPacket{
 		Code: code,
 	}
@@ -113,14 +105,14 @@ func (p *ConnackPacket) Equal(other Packet) bool {
 	return p.Code == otherP.Code
 }
 func (p *ConnackPacket) WriteTo(buffer *buffer.Buffer) error {
-	buffer.WriteUInt16(uint16(p.Code))
+	buffer.WriteUInt8(uint8(p.Code))
 	return nil
 }
 func (p *ConnackPacket) ReadFrom(buffer *buffer.Buffer) error {
-	code, err := buffer.ReadUInt16()
+	code, err := buffer.ReadUInt8()
 	if err != nil {
 		return err
 	}
-	p.Code = ConnectCode(code)
+	p.Code = ConnackCode(code)
 	return nil
 }

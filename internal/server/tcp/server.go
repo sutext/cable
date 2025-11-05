@@ -11,17 +11,19 @@ import (
 )
 
 type tcpServer struct {
-	conns       sync.Map
-	logger      logger.Logger
-	dataHandler server.DataHandler
-	connHandler server.ConnHandler
-	address     string
+	conns          sync.Map
+	logger         logger.Logger
+	messageHandler server.MessageHandler
+	connectHandler server.ConnectHandler
+	address        string
 }
 
-func NewTCP(options *server.Options) *tcpServer {
+func NewTCP(address string, options *server.Options) *tcpServer {
 	s := &tcpServer{
-		address: options.Address,
-		conns:   sync.Map{},
+		address:        address,
+		logger:         options.Logger,
+		messageHandler: options.MessageHandler,
+		connectHandler: options.ConnectHandler,
 	}
 	return s
 }
@@ -39,12 +41,6 @@ func (s *tcpServer) Serve() error {
 		c := newConn(conn, s)
 		go c.serve()
 	}
-}
-func (s *tcpServer) HandleConn(handler server.ConnHandler) {
-	s.connHandler = handler
-}
-func (s *tcpServer) HandleData(handler server.DataHandler) {
-	s.dataHandler = handler
 }
 func (s *tcpServer) GetConn(cid string) (server.Conn, error) {
 	if cn, ok := s.conns.Load(cid); ok {

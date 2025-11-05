@@ -12,6 +12,8 @@ func (e Error) Error() string {
 		return "buffer too short"
 	case ErrVarintOverflow:
 		return "varint overflow"
+	case ErrInvalidReadLen:
+		return "invalid length when read"
 	default:
 		return "unknown error"
 	}
@@ -20,6 +22,7 @@ func (e Error) Error() string {
 const (
 	ErrBufferTooShort Error = 1
 	ErrVarintOverflow Error = 2
+	ErrInvalidReadLen Error = 3
 )
 
 type WriteTo interface {
@@ -90,14 +93,22 @@ func (b *Buffer) WriteVarint(i int64) {
 }
 func (b *Buffer) WriteString(s string) {
 	bytes := []byte(s)
-	b.WriteVarint(int64(len(bytes)))
-	b.WriteBytes(bytes)
+	b.WriteData(bytes)
 }
 func (b *Buffer) WriteData(data []byte) {
-	b.WriteVarint(int64(len(data)))
-	b.WriteBytes(data)
+	l := len(data)
+	b.WriteVarint(int64(l))
+	if l > 0 {
+		b.WriteBytes(data)
+	}
 }
 func (b *Buffer) ReadBytes(l int) ([]byte, error) {
+	if l < 0 {
+		return nil, ErrInvalidReadLen
+	}
+	if l == 0 {
+		return nil, nil
+	}
 	if b.pos+l > len(b.buf) {
 		return nil, ErrBufferTooShort
 	}
@@ -177,15 +188,11 @@ func (b *Buffer) ReadVarint() (int64, error) {
 	return varint, nil
 }
 func (b *Buffer) ReadString() (string, error) {
-	l, err := b.ReadVarint()
-	if err != nil {
+	if bytes, err := b.ReadData(); err != nil {
 		return "", err
+	} else {
+		return string(bytes), nil
 	}
-	bytes, err := b.ReadBytes(int(l))
-	if err != nil {
-		return "", err
-	}
-	return string(bytes), nil
 }
 func (b *Buffer) ReadData() ([]byte, error) {
 	l, err := b.ReadVarint()
@@ -201,4 +208,15 @@ func (b *Buffer) ReadAll() ([]byte, error) {
 	p := b.buf[b.pos:]
 	b.pos = len(b.buf)
 	return p, nil
+}
+func Marshal(w WriteTo) ([]byte, error) {
+	b := &Buffer{pos: 0, buf: []byte{}}
+	if err := w.WriteTo(b); err != nil {
+		return nil, err
+	}
+	return b.buf, nil
+}
+func Unmarshal(r ReadFrom, buf []byte) error {
+	b := &Buffer{pos: 0, buf: buf}
+	return r.ReadFrom(b)
 }

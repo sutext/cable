@@ -15,7 +15,7 @@ import (
 
 var ErrNotConnected = errors.New("not connected")
 
-type OnData func(p *packet.DataPacket) error
+type OnData func(p *packet.MessagePacket) error
 type Client struct {
 	mu        *sync.RWMutex
 	conn      *conn
@@ -123,7 +123,7 @@ func (c *Client) reconnect() {
 }
 
 func (c *Client) SendData(data []byte) error {
-	return c.SendPacket(packet.NewData(data))
+	return c.SendPacket(packet.NewMessage(data))
 }
 
 func (c *Client) SendPing() error {
@@ -177,8 +177,8 @@ func (c *Client) handlePacket(p packet.Packet) {
 			return
 		}
 		c.safeSetStatus(StatusOpened)
-	case packet.DATA:
-		p := p.(*packet.DataPacket)
+	case packet.MESSAGE:
+		p := p.(*packet.MessagePacket)
 		if c.onData != nil {
 			err := c.onData(p)
 			if err != nil {

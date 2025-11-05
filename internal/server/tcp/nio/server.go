@@ -6,24 +6,27 @@ import (
 	"sync"
 
 	"github.com/cloudwego/netpoll"
+	"sutext.github.io/cable/internal/buffer"
 	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
 )
 
 type nioServer struct {
-	conns       sync.Map
-	logger      logger.Logger
-	dataHandler server.DataHandler
-	connHandler server.ConnHandler
-	address     string
-	eventLoop   netpoll.EventLoop
+	conns          sync.Map
+	logger         logger.Logger
+	messageHandler server.MessageHandler
+	connectHandler server.ConnectHandler
+	address        string
+	eventLoop      netpoll.EventLoop
 }
 
-func NewNIO(options *server.Options) *nioServer {
+func NewNIO(address string, options *server.Options) *nioServer {
 	s := &nioServer{
-		address: options.Address,
-		logger:  options.Logger,
+		address:        address,
+		logger:         options.Logger,
+		connectHandler: options.ConnectHandler,
+		messageHandler: options.MessageHandler,
 	}
 	return s
 }
@@ -43,11 +46,11 @@ func (s *nioServer) Serve() error {
 	s.eventLoop = eventLoop
 	return eventLoop.Serve(ln)
 }
-func (s *nioServer) HandleConn(handler server.ConnHandler) {
-	s.connHandler = handler
+func (s *nioServer) HandleConnect(handler server.ConnectHandler) {
+	s.connectHandler = handler
 }
-func (s *nioServer) HandleData(handler server.DataHandler) {
-	s.dataHandler = handler
+func (s *nioServer) HandleData(handler server.MessageHandler) {
+	s.messageHandler = handler
 }
 
 func (s *nioServer) GetConn(cid string) (server.Conn, error) {
@@ -78,12 +81,12 @@ func (s *nioServer) handlePacket(id *packet.Identity, p packet.Packet) {
 	}
 	conn := cn.(*conn)
 	switch p.Type() {
-	case packet.DATA:
-		p := p.(*packet.DataPacket)
-		if s.dataHandler == nil {
+	case packet.MESSAGE:
+		p := p.(*packet.MessagePacket)
+		if s.messageHandler == nil {
 			return
 		}
-		res, err := s.dataHandler(id, p)
+		res, err := s.messageHandler(p, id)
 		if err != nil {
 			return
 		}
@@ -101,7 +104,12 @@ func (s *nioServer) onRequest(ctx context.Context, conn netpoll.Connection) erro
 	id := ctx.Value(identityKey).(*packet.Identity)
 	pkt, err := packet.ReadFrom(conn)
 	if err != nil {
-		conn.Close()
+		switch err.(type) {
+		case packet.Error, buffer.Error:
+			s.close(conn, packet.CloseInvalidPacket)
+		default:
+			s.close(conn, packet.CloseInternalError)
+		}
 		return err
 	}
 	s.handlePacket(id, pkt)
@@ -111,23 +119,23 @@ func (s *nioServer) onPrepare(conn netpoll.Connection) context.Context {
 	return context.Background()
 }
 func (s *nioServer) onConnect(ctx context.Context, c netpoll.Connection) context.Context {
-	if s.connHandler == nil {
-		c.Close()
-		return ctx
-	}
 	pkt, err := packet.ReadFrom(c)
 	if err != nil {
-		c.Close()
+		switch err.(type) {
+		case packet.Error, buffer.Error:
+			s.close(c, packet.CloseInvalidPacket)
+		default:
+			s.close(c, packet.CloseInternalError)
+		}
 		return ctx
 	}
 	connPacket, ok := pkt.(*packet.ConnectPacket)
 	if !ok {
-		c.Close()
+		s.close(c, packet.CloseInternalError)
 		return ctx
 	}
-	code := s.connHandler(connPacket)
-
-	if code == packet.AlreadyConnected {
+	code := s.connectHandler(connPacket)
+	if code == packet.ConnectionAccepted {
 		cn := &conn{
 			Connection: c,
 			id:         connPacket.Identity,
@@ -137,13 +145,15 @@ func (s *nioServer) onConnect(ctx context.Context, c netpoll.Connection) context
 		}
 	}
 	packet.WriteTo(c, packet.NewConnack(code))
-	if code != packet.AlreadyConnected {
-		closePacket := &packet.ClosePacket{Code: packet.CloseAuthenticationFailure}
-		packet.WriteTo(c, closePacket)
-		c.Close()
+	if code != packet.ConnectionAccepted {
+		s.close(c, packet.CloseAuthenticationFailure)
 		return ctx
 	}
 	return context.WithValue(ctx, identityKey, connPacket.Identity)
+}
+func (s *nioServer) close(conn netpoll.Connection, code packet.CloseCode) {
+	packet.WriteTo(conn, packet.NewClose(code))
+	conn.Close()
 }
 func (s *nioServer) onDisconnect(ctx context.Context, conn netpoll.Connection) {
 	id, ok := ctx.Value(identityKey).(*packet.Identity)

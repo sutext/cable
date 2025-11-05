@@ -11,19 +11,21 @@ import (
 )
 
 type quicServer struct {
-	conns       sync.Map
-	logger      logger.Logger
-	dataHandler server.DataHandler
-	connHandler server.ConnHandler
-	address     string
-	config      *qc.Config
+	conns          sync.Map
+	logger         logger.Logger
+	messageHandler server.MessageHandler
+	connectHandler server.ConnectHandler
+	address        string
+	config         *qc.Config
 }
 
-func NewQUIC(options *server.Options) *quicServer {
+func NewQUIC(address string, options *server.Options) *quicServer {
 	s := &quicServer{
-		address: options.Address,
-		config:  options.QuicConfig,
-		logger:  options.Logger,
+		address:        address,
+		config:         options.QuicConfig,
+		logger:         options.Logger,
+		connectHandler: options.ConnectHandler,
+		messageHandler: options.MessageHandler,
 	}
 	return s
 }
@@ -41,12 +43,6 @@ func (s *quicServer) Serve() error {
 		c := newConn(conn, s)
 		go c.serve()
 	}
-}
-func (s *quicServer) HandleConn(handler server.ConnHandler) {
-	s.connHandler = handler
-}
-func (s *quicServer) HandleData(handler server.DataHandler) {
-	s.dataHandler = handler
 }
 func (s *quicServer) GetConn(cid string) (server.Conn, error) {
 	if cn, ok := s.conns.Load(cid); ok {

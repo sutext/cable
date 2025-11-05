@@ -17,26 +17,27 @@ import (
 
 func main() {
 	ctx := context.Background()
-	logger := logger.NewText(slog.LevelDebug)
+	logger := logger.NewJSON(slog.LevelDebug)
 
-	s, err := cable.NewServer(server.WithTCP(":8080"))
-	// s, err := entry.NewServer(entry.QUIC(&quic.Config{
-	// 	TLSConfig:            &tls.Config{InsecureSkipVerify: true},
-	// 	MaxBidiRemoteStreams: 1,
-	// 	MaxIdleTimeout:       5 * time.Second,
-	// 	MaxUniRemoteStreams:  1,
-	// }), ":8080")
+	s, err := cable.NewServer(":8080",
+		// server.WithQUIC(&quic.Config{
+		// 	TLSConfig:            &tls.Config{InsecureSkipVerify: true},
+		// 	MaxIdleTimeout:       5 * time.Second,
+		// 	MaxBidiRemoteStreams: 1,
+		// 	MaxUniRemoteStreams:  1,
+		// }),
+		server.WithLogger(logger),
+		server.WithConnectHandler(func(p *packet.ConnectPacket) packet.ConnackCode {
+			return packet.ConnectionAccepted
+		}),
+		server.WithMessageHandler(func(p *packet.MessagePacket, id *packet.Identity) (*packet.MessagePacket, error) {
+			return p, nil
+		}),
+	)
 	if err != nil {
 		logger.Error("listen", "error", err)
 		os.Exit(1)
 	}
-
-	s.HandleConn(func(p *packet.ConnectPacket) packet.ConnectCode {
-		return packet.ConnectionAccepted
-	})
-	s.HandleData(func(id *packet.Identity, p *packet.DataPacket) (*packet.DataPacket, error) {
-		return nil, nil
-	})
 	logger.Info("entry server start")
 	ctx, cancel := context.WithCancelCause(ctx)
 	sigs := make(chan os.Signal, 1)

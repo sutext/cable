@@ -24,7 +24,7 @@ func (c *conn) SendPong() error {
 	return c.SendPacket(packet.NewPong())
 }
 func (c *conn) SendData(data []byte) error {
-	return c.SendPacket(packet.NewData(data))
+	return c.SendPacket(packet.NewMessage(data))
 }
 
 func (c *conn) SendPacket(p packet.Packet) error {

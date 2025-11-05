@@ -6,52 +6,34 @@ import (
 	"sutext.github.io/cable/internal/buffer"
 )
 
-type CloseCode uint16
+type CloseCode uint8
 
 const (
-	CloseNormal                CloseCode = 1000
-	CloseGoingAway             CloseCode = 1001
-	CloseAlreayLogined         CloseCode = 1002
-	CloseUnsupported           CloseCode = 1003
-	CloseNoStatus              CloseCode = 1004
-	CloseInvalidFrame          CloseCode = 1005
-	CloseMessageTooBig         CloseCode = 1006
-	CloseInternalError         CloseCode = 1007
-	CloseServiceRestart        CloseCode = 1008
-	CloseDuplicateLogin        CloseCode = 1009
-	CloseAuthenticationFailure CloseCode = 1010
-	CloseAuthenticationTimeout CloseCode = 1011
-	CloseKickedOut             CloseCode = 1012
+	CloseNormal                CloseCode = 0
+	CloseKickedOut             CloseCode = 1
+	CloseInvalidPacket         CloseCode = 2
+	CloseInternalError         CloseCode = 3
+	CloseDuplicateLogin        CloseCode = 4
+	CloseAuthenticationFailure CloseCode = 5
+	CloseAuthenticationTimeout CloseCode = 6
 )
 
 func (c CloseCode) String() string {
 	switch c {
 	case CloseNormal:
 		return "Normal"
-	case CloseGoingAway:
-		return "Going Away"
-	case CloseAlreayLogined:
-		return "Already Logined"
-	case CloseUnsupported:
-		return "Unsupported"
-	case CloseNoStatus:
-		return "No Status"
-	case CloseInvalidFrame:
-		return "Invalid Frame"
-	case CloseMessageTooBig:
-		return "Message Too Big"
+	case CloseKickedOut:
+		return "Kicked Out"
+	case CloseInvalidPacket:
+		return "Invalid Packet"
 	case CloseInternalError:
 		return "Internal Error"
-	case CloseServiceRestart:
-		return "Service Restart"
 	case CloseDuplicateLogin:
 		return "Duplicate Login"
 	case CloseAuthenticationFailure:
 		return "Authentication Failure"
 	case CloseAuthenticationTimeout:
 		return "Authentication Timeout"
-	case CloseKickedOut:
-		return "Kicked Out"
 	default:
 		return "Unknown"
 	}
@@ -84,12 +66,12 @@ func (p *ClosePacket) Equal(other Packet) bool {
 	return p.Code == otherClose.Code
 }
 func (p *ClosePacket) WriteTo(w *buffer.Buffer) error {
-	w.WriteUInt16(uint16(p.Code))
+	w.WriteUInt8(uint8(p.Code))
 	return nil
 }
 
 func (p *ClosePacket) ReadFrom(buffer *buffer.Buffer) error {
-	code, err := buffer.ReadUInt16()
+	code, err := buffer.ReadUInt8()
 	if err != nil {
 		return err
 	}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	qc "golang.org/x/net/quic"
+	"sutext.github.io/cable/internal/buffer"
 	"sutext.github.io/cable/internal/keepalive"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
@@ -83,15 +84,21 @@ func (c *conn) serve() {
 	}
 	c.stream = s
 	for {
-		packet, err := packet.ReadFrom(c.stream)
+		p, err := packet.ReadFrom(c.stream)
 		if err != nil {
+			switch err.(type) {
+			case packet.Error, buffer.Error:
+				c.Close(packet.CloseInvalidPacket)
+			default:
+				c.Close(packet.CloseInternalError)
+			}
 			return
 		}
-		go c.handlePacket(packet)
+		go c.handlePacket(p)
 	}
 }
 
-func (c *conn) connack(code packet.ConnectCode) error {
+func (c *conn) connack(code packet.ConnackCode) error {
 	return c.SendPacket(packet.NewConnack(code))
 }
 func (c *conn) SendPing() error {
@@ -101,7 +108,7 @@ func (c *conn) SendPong() error {
 	return c.SendPacket(packet.NewPong())
 }
 func (c *conn) SendData(data []byte) error {
-	return c.SendPacket(packet.NewData(data))
+	return c.SendPacket(packet.NewMessage(data))
 }
 func (c *conn) SendPacket(p packet.Packet) error {
 	if c.stream == nil {
@@ -109,13 +116,13 @@ func (c *conn) SendPacket(p packet.Packet) error {
 	}
 	return packet.WriteTo(c.stream, p)
 }
-func (c *conn) doAuth(id *packet.ConnectPacket) packet.ConnectCode {
+func (c *conn) doAuth(id *packet.ConnectPacket) packet.ConnackCode {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.id != nil {
-		return packet.AlreadyConnected
+		return packet.ConnectionAccepted
 	}
-	code := c.server.connHandler(id)
+	code := c.server.connectHandler(id)
 	if code == packet.ConnectionAccepted {
 		c.id = id.Identity
 		c.authed <- struct{}{}
@@ -133,12 +140,12 @@ func (c *conn) handlePacket(p packet.Packet) {
 	case packet.CONNECT:
 		p := p.(*packet.ConnectPacket)
 		c.connack(c.doAuth(p))
-	case packet.DATA:
+	case packet.MESSAGE:
 		if c.id == nil {
 			return
 		}
-		p := p.(*packet.DataPacket)
-		res, err := c.server.dataHandler(c.id, p)
+		p := p.(*packet.MessagePacket)
+		res, err := c.server.messageHandler(p, c.id)
 		if err != nil {
 			return
 		}

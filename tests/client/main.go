@@ -28,7 +28,7 @@ func RandomClient() *Client {
 	}
 }
 func (c *Client) Start() {
-	c.cli.Connect(&packet.Identity{AuthToken: c.userId, UserID: c.userId, ClientID: c.token})
+	c.cli.Connect(&packet.Identity{Credential: c.userId, UserID: c.userId, ClientID: c.token})
 	for {
 		c.cli.SendData([]byte("hello world"))
 		time.Sleep(c.backoff.Next(c.count))
