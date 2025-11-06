@@ -6,9 +6,9 @@ import (
 	"sync"
 
 	"github.com/cloudwego/netpoll"
-	"sutext.github.io/cable/internal/buffer"
 	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/packet/coder"
 	"sutext.github.io/cable/server"
 )
 
@@ -102,10 +102,10 @@ func (s *nioServer) handlePacket(id *packet.Identity, p packet.Packet) {
 
 func (s *nioServer) onRequest(ctx context.Context, conn netpoll.Connection) error {
 	id := ctx.Value(identityKey).(*packet.Identity)
-	pkt, err := packet.ReadFrom(conn)
+	pkt, err := packet.ReadFrom(netpoll.NewIOReader(conn.Reader()))
 	if err != nil {
 		switch err.(type) {
-		case packet.Error, buffer.Error:
+		case packet.Error, coder.Error:
 			s.close(conn, packet.CloseInvalidPacket)
 		default:
 			s.close(conn, packet.CloseInternalError)
@@ -119,10 +119,10 @@ func (s *nioServer) onPrepare(conn netpoll.Connection) context.Context {
 	return context.Background()
 }
 func (s *nioServer) onConnect(ctx context.Context, c netpoll.Connection) context.Context {
-	pkt, err := packet.ReadFrom(c)
+	pkt, err := packet.ReadFrom(netpoll.NewIOReader(c.Reader()))
 	if err != nil {
 		switch err.(type) {
-		case packet.Error, buffer.Error:
+		case packet.Error, coder.Error:
 			s.close(c, packet.CloseInvalidPacket)
 		default:
 			s.close(c, packet.CloseInternalError)
@@ -144,7 +144,7 @@ func (s *nioServer) onConnect(ctx context.Context, c netpoll.Connection) context
 			old.(*conn).Close(packet.CloseDuplicateLogin)
 		}
 	}
-	packet.WriteTo(c, packet.NewConnack(code))
+	s.send(c, packet.NewConnack(code))
 	if code != packet.ConnectionAccepted {
 		s.close(c, packet.CloseAuthenticationFailure)
 		return ctx
@@ -152,8 +152,13 @@ func (s *nioServer) onConnect(ctx context.Context, c netpoll.Connection) context
 	return context.WithValue(ctx, identityKey, connPacket.Identity)
 }
 func (s *nioServer) close(conn netpoll.Connection, code packet.CloseCode) {
-	packet.WriteTo(conn, packet.NewClose(code))
+	s.send(conn, packet.NewClose(code))
 	conn.Close()
+}
+func (s *nioServer) send(conn netpoll.Connection, p packet.Packet) {
+	w := conn.Writer()
+	packet.WriteTo(netpoll.NewIOWriter(w), p)
+	w.Flush()
 }
 func (s *nioServer) onDisconnect(ctx context.Context, conn netpoll.Connection) {
 	id, ok := ctx.Value(identityKey).(*packet.Identity)

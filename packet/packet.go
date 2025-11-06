@@ -1,31 +1,21 @@
 package packet
 
 import (
-	"encoding/binary"
+	"bufio"
 	"fmt"
 	"io"
+	"slices"
 
-	"sutext.github.io/cable/internal/buffer"
+	"sutext.github.io/cable/packet/coder"
 )
 
 const (
 	MIN_LEN int = 0
-	MID_LEN int = 0xfff
-	MAX_LEN int = 0xfffffff
+	MID_LEN int = 0x7ff        // 2047
+	MAX_LEN int = 0x7ff_ffffff // 32GB
 )
 
-type PacketType uint8
-
-const (
-	CONNECT PacketType = 1 // CONNECT packet
-	CONNACK PacketType = 2 // CONNACK packet
-	MESSAGE PacketType = 3 // MESSAGE packet
-	PING    PacketType = 4 // PING packet
-	PONG    PacketType = 5 // PONG packet
-	CLOSE   PacketType = 6 // CLOSE packet
-
-)
-
+// Error represents an error code.
 type Error uint8
 
 const (
@@ -44,18 +34,36 @@ func (e Error) Error() string {
 	}
 }
 
+// PacketType represents a packet type.
+type PacketType uint8
+
+const (
+	CONNECT  PacketType = iota // CONNECT packet
+	CONNACK                    // CONNACK packet
+	MESSAGE                    // MESSAGE packet
+	REQUEST                    // REQUEST packet
+	RESPONSE                   // RESPONSE packet
+	PING                       // PING packet
+	PONG                       // PONG packet
+	CLOSE                      // CLOSE packet
+)
+
 func (t PacketType) String() string {
 	switch t {
 	case CONNECT:
 		return "CONNECT"
 	case CONNACK:
 		return "CONNACK"
+	case MESSAGE:
+		return "MESSAGE"
+	case REQUEST:
+		return "REQUEST"
+	case RESPONSE:
+		return "RESPONSE"
 	case PING:
 		return "PING"
 	case PONG:
 		return "PONG"
-	case MESSAGE:
-		return "MESSAGE"
 	case CLOSE:
 		return "CLOSE"
 	default:
@@ -65,8 +73,7 @@ func (t PacketType) String() string {
 
 type Packet interface {
 	fmt.Stringer
-	buffer.WriteTo
-	buffer.ReadFrom
+	coder.Codable
 	Type() PacketType
 	Equal(Packet) bool
 }
@@ -93,10 +100,10 @@ func (p *pingpong) Equal(other Packet) bool {
 	}
 	return p.t == other.Type()
 }
-func (p *pingpong) WriteTo(w *buffer.Buffer) error {
+func (p *pingpong) EncodeTo(c coder.Writer) error {
 	return nil
 }
-func (p *pingpong) ReadFrom(r *buffer.Buffer) error {
+func (p *pingpong) DecodeFrom(c coder.Reader) error {
 	return nil
 }
 func ReadFrom(r io.Reader) (Packet, error) {
@@ -108,14 +115,14 @@ func ReadFrom(r io.Reader) (Packet, error) {
 	}
 	packetType := PacketType(header[0] >> 5)
 	//read length
-	flag := header[0] & 0x10
-	var length uint32
-	if flag != 0 {
-		bs := make([]byte, 2)
+	byteCount := (header[0] >> 3) & 0x03
+	length := uint64(header[0]&0x07)<<8 | uint64(header[1])
+	if byteCount > 0 {
+		bs := make([]byte, byteCount)
 		io.ReadFull(r, bs)
-		length = binary.BigEndian.Uint32([]byte{header[0] & 0x0f, header[1], bs[0], bs[1]})
-	} else {
-		length = binary.BigEndian.Uint32([]byte{0, 0, header[0] & 0x0f, header[1]})
+		for _, b := range bs {
+			length = length<<8 | uint64(b)
+		}
 	}
 	// read data
 	data := make([]byte, length)
@@ -123,37 +130,44 @@ func ReadFrom(r io.Reader) (Packet, error) {
 	if err != nil {
 		return nil, err
 	}
-	buf := buffer.New(data)
 	switch packetType {
 	case CONNECT:
 		conn := &ConnectPacket{}
-		err := conn.ReadFrom(buf)
-		if err != nil {
+		if err := coder.Unmarshal(conn, data); err != nil {
 			return nil, err
 		}
 		return conn, nil
 	case CONNACK:
 		connack := &ConnackPacket{}
-		err := connack.ReadFrom(buf)
-		if err != nil {
+		if err := coder.Unmarshal(connack, data); err != nil {
 			return nil, err
 		}
 		return connack, nil
 	case MESSAGE:
-		data := &MessagePacket{}
-		err := data.ReadFrom(buf)
-		if err != nil {
+		msg := &MessagePacket{}
+		if err := coder.Unmarshal(msg, data); err != nil {
 			return nil, err
 		}
-		return data, nil
+		return msg, nil
+	case REQUEST:
+		req := &RequestPacket{}
+		if err := coder.Unmarshal(req, data); err != nil {
+			return nil, err
+		}
+		return req, nil
+	case RESPONSE:
+		res := &ResponsePacket{}
+		if err := coder.Unmarshal(res, data); err != nil {
+			return nil, err
+		}
+		return res, nil
 	case PING:
 		return NewPing(), nil
 	case PONG:
 		return NewPong(), nil
 	case CLOSE:
 		close := &ClosePacket{}
-		err := close.ReadFrom(buf)
-		if err != nil {
+		if err := coder.Unmarshal(close, data); err != nil {
 			return nil, err
 		}
 		return close, nil
@@ -162,32 +176,42 @@ func ReadFrom(r io.Reader) (Packet, error) {
 	}
 }
 func WriteTo(w io.Writer, p Packet) error {
-	buf := buffer.New()
-	err := p.WriteTo(buf)
+	bw := bufio.NewWriter(w)
+	data, err := coder.Marshal(p)
 	if err != nil {
 		return err
 	}
-	length := buf.Len()
+	length := len(data)
 	if length > MAX_LEN {
 		return ErrPacketSizeTooLarge
 	}
 	var header []byte
 	if length > MID_LEN {
-		header = make([]byte, 4)
-		binary.BigEndian.PutUint32(header, uint32(length))
-		header[0] = byte(p.Type()<<5) | 0x10 | header[0]
+		bs := make([]byte, 0, 5)
+		for length > 0 {
+			bs = append(bs, byte(length&0xff))
+			length >>= 8
+		}
+		slices.Reverse(bs)
+		if bs[0] > 7 {
+			header = make([]byte, len(bs)+1)
+			copy(header[1:], bs)
+		} else {
+			header = bs
+		}
+		header[0] = byte(p.Type()<<5) | byte(len(header)-2)<<3 | header[0]
 	} else {
 		header = make([]byte, 2)
-		binary.BigEndian.PutUint16(header, uint16(length))
-		header[0] = byte(p.Type()<<5) | header[0]
+		header[0] = byte(p.Type()<<5) | byte(length>>8)
+		header[1] = byte(length)
 	}
-	_, err = w.Write(header)
+	_, err = bw.Write(header)
 	if err != nil {
 		return err
 	}
-	_, err = w.Write(buf.Bytes())
+	_, err = bw.Write(data)
 	if err != nil {
 		return err
 	}
-	return nil
+	return bw.Flush()
 }

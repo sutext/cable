@@ -7,7 +7,7 @@ import (
 )
 
 func TestPacket(t *testing.T) {
-	identity := Identity{}
+	identity := Identity{"1", "2", "tok"}
 	testp(t, NewConnect(&identity))
 	testp(t, NewConnack(0))
 	testp(t, SmallMessage())
@@ -15,13 +15,15 @@ func TestPacket(t *testing.T) {
 	testp(t, NewPing())
 	testp(t, NewPong())
 	testp(t, NewClose(0))
+	testp(t, NewRequest())
+	testp(t, NewResponse())
 }
 func SmallMessage() Packet {
 	return NewMessage([]byte("hello world"))
 }
 func BigMessage() Packet {
-	msg := NewMessage([]byte("hellfasdfhellfasdfsafsadfasdfasdfasdfsdafasdfasdfsd;afjjjjdslfjasl;dkfjasdlfjasdl;kfjasl;dfjsadlk;fjasl;dkfjasldk;fjlskd;ajflasdkfjlaksdjfalsd;fjalsd;kfjsadl;kfjasl;dkfjasdl;kfjalsdkfjals;dkfjasld;kfjals;dkfjsal;dkfjalsd;kfjlas;dkfjalsdkfjsld;fjals;dfjals;fjaldsk;ohellfasdfsafsadfasdfasdfasdfsdafasdfasdfsd;afjjjjdslfjasl;dkfjasdlfjasdl;kfjasl;dfjsadlk;fjasl;dkfjasldk;fjlskd;ajflasdkfjlaksdjfalsd;fjalsd;kfjsadl;kfjasl;dkfjasdl;kfjalsdkfjals;dkfjasld;kfjals;dkfjsal;dkfjalsd;kfjlas;dkfjalsdkfjsld;fjals;dfjals;fjaldsk;ohellfasdfsafsadfasdfasdfasdfsdafasdfasdfsd;afjjjjdslfjasl;dkfjasdlfjasdl;kfjasl;dfjsadlk;fjasl;dkfjasldk;fjlskd;ajflasdkfjlaksdjfalsd;fjalsd;kfjsadl;kfjasl;dkfjasdl;kfjalsdkfjals;dkfjasld;kfjals;dkfjsal;dkfjalsd;kfjlas;dkfjalsdkfjsld;fjals;dfjals;fjaldsk;ohellfasdfsafsadfasdfasdfasdfsdafasdfasdfsd;afjjjjdslfjasl;dkfjasdlfjasdl;kfjasl;dfjsadlk;fjasl;dkfjasldk;fjlskd;ajflasdkfjlaksdjfalsd;fjalsd;kfjsadl;kfjasl;dkfjasdl;kfjalsdkfjals;dkfjasld;kfjals;dkfjsal;dkfjalsd;kfjlas;dkfjalsdkfjsld;fjals;dfjals;fjaldsk;ohellfasdfsafsadfasdfasdfasdfsdafasdfasdfsd;afjjjjdslfjasl;dkfjasdlfjasdl;kfjasl;dfjsadlk;fjasl;dkfjasldk;fjlskd;ajflasdkfjlaksdjfalsd;fjalsd;kfjsadl;kfjasl;dkfjasdl;kfjalsdkfjals;dkfjasld;kfjals;dkfjsal;dkfjalsd;kfjlas;dkfjalsdkfjsld;fjals;dfjals;fjaldsk;ohellfasdfsafsadfasdfasdfasdfsdafasdfasdfsd;afjjjjdslfjasl;dkfjasdlfjasdl;kfjasl;dfjsadlk;fjasl;dkfjasldk;fjlskd;ajflasdkfjlaksdjfalsd;fjalsd;kfjsadl;kfjasl;dkfjasdl;kfjalsdkfjals;dkfjasld;kfjals;dkfjsal;dkfjalsd;kfjlas;dkfjalsdkfjsld;fjals;dfjals;fjaldsk;ohellfasdfsafsadfasdfasdfasdfsdafasdfasdfsd;afjjjjdslfjasl;dkfjasdlfjasdl;kfjasl;dfjsadlk;fjasl;dkfjasldk;fjlskd;ajflasdkfjlaksdjfalsd;fjalsd;kfjsadl;kfjasl;dkfjasdl;kfjalsdkfjals;dkfjasld;kfjals;dkfjsal;dkfjalsd;kfjlas;dkfjalsdkfjsld;fjals;dfjals;fjaldsk;ohellfasdfsafsadfasdfasdfasdfsdafasdfasdfsd;afjjjjdslfjasl;dkfjasdlfjasdl;kfjasl;dfjsadlk;fjasl;dkfjasldk;fjlskd;ajflasdkfjlaksdjfalsd;fjalsd;kfjsadl;kfjasl;dkfjasdl;kfjalsdkfjals;dkfjasld;kfjals;dkfjsal;dkfjalsd;kfjlas;dkfjalsdkfjsld;fjals;dfjals;fjaldsk;osafsadfasdfasdfasdfsdafasdfasdfsd;afjjjjdslfjasl;dkfjasdlfjasdl;kfjasl;dfjsadlk;fjasl;dkfjasldk;fjlskd;ajflasdkfjlaksdjfalsd;fjalsd;kfjsadl;kfjasl;dkfjasdl;kfjalsdkfjals;dkfjasld;kfjals;dkfjsal;dkfjalsd;kfjlas;dkfjalsdkfjsld;fjals;dfjals;fjaldsk;o"))
-	return msg
+	data := make([]byte, 0xfff)
+	return NewMessage(data)
 }
 func testp(t *testing.T, p Packet) {
 	rw := &ReadWriter{}

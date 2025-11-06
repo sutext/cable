@@ -6,9 +6,9 @@ import (
 	"time"
 
 	qc "golang.org/x/net/quic"
-	"sutext.github.io/cable/internal/buffer"
 	"sutext.github.io/cable/internal/keepalive"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/packet/coder"
 	"sutext.github.io/cable/server"
 )
 
@@ -87,7 +87,7 @@ func (c *conn) serve() {
 		p, err := packet.ReadFrom(c.stream)
 		if err != nil {
 			switch err.(type) {
-			case packet.Error, buffer.Error:
+			case packet.Error, coder.Error:
 				c.Close(packet.CloseInvalidPacket)
 			default:
 				c.Close(packet.CloseInternalError)

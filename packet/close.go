@@ -3,7 +3,7 @@ package packet
 import (
 	"fmt"
 
-	"sutext.github.io/cable/internal/buffer"
+	"sutext.github.io/cable/packet/coder"
 )
 
 type CloseCode uint8
@@ -65,13 +65,13 @@ func (p *ClosePacket) Equal(other Packet) bool {
 	otherClose := other.(*ClosePacket)
 	return p.Code == otherClose.Code
 }
-func (p *ClosePacket) WriteTo(w *buffer.Buffer) error {
+
+func (p *ClosePacket) EncodeTo(w coder.Writer) error {
 	w.WriteUInt8(uint8(p.Code))
 	return nil
 }
-
-func (p *ClosePacket) ReadFrom(buffer *buffer.Buffer) error {
-	code, err := buffer.ReadUInt8()
+func (p *ClosePacket) DecodeFrom(r coder.Reader) error {
+	code, err := r.ReadUInt8()
 	if err != nil {
 		return err
 	}

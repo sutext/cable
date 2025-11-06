@@ -3,7 +3,7 @@ package packet
 import (
 	"fmt"
 
-	"sutext.github.io/cable/internal/buffer"
+	"sutext.github.io/cable/packet/coder"
 )
 
 type Identity struct {
@@ -22,6 +22,7 @@ func NewConnect(identity *Identity) *ConnectPacket {
 func (p *ConnectPacket) String() string {
 	return fmt.Sprintf("CONNECT(uid=%s, cid=%s)", p.Identity.UserID, p.Identity.ClientID)
 }
+
 func (p *ConnectPacket) Type() PacketType {
 	return CONNECT
 }
@@ -37,30 +38,31 @@ func (p *ConnectPacket) Equal(other Packet) bool {
 		p.Identity.UserID == otherP.Identity.UserID &&
 		p.Identity.ClientID == otherP.Identity.ClientID
 }
-func (p *ConnectPacket) WriteTo(buffer *buffer.Buffer) error {
-	buffer.WriteUInt8(p.Version)
+func (p *ConnectPacket) EncodeTo(w coder.Writer) error {
+	w.WriteUInt8(p.Version)
 	if p.Identity != nil {
-		buffer.WriteString(p.Identity.Credential)
-		buffer.WriteString(p.Identity.UserID)
-		buffer.WriteString(p.Identity.ClientID)
+		w.WriteString(p.Identity.Credential)
+		w.WriteString(p.Identity.UserID)
+		w.WriteString(p.Identity.ClientID)
 	}
 	return nil
 }
-func (p *ConnectPacket) ReadFrom(buffer *buffer.Buffer) error {
-	if version, err := buffer.ReadUInt8(); err != nil {
+
+func (p *ConnectPacket) DecodeFrom(r coder.Reader) error {
+	if version, err := r.ReadUInt8(); err != nil {
 		return nil
 	} else {
 		p.Version = version
 	}
-	token, err := buffer.ReadString()
+	token, err := r.ReadString()
 	if err != nil {
 		return err
 	}
-	userID, err := buffer.ReadString()
+	userID, err := r.ReadString()
 	if err != nil {
 		return err
 	}
-	clientID, err := buffer.ReadString()
+	clientID, err := r.ReadString()
 	if err != nil {
 		return err
 	}
@@ -104,12 +106,13 @@ func (p *ConnackPacket) Equal(other Packet) bool {
 	otherP := other.(*ConnackPacket)
 	return p.Code == otherP.Code
 }
-func (p *ConnackPacket) WriteTo(buffer *buffer.Buffer) error {
-	buffer.WriteUInt8(uint8(p.Code))
+
+func (p *ConnackPacket) EncodeTo(w coder.Writer) error {
+	w.WriteUInt8(uint8(p.Code))
 	return nil
 }
-func (p *ConnackPacket) ReadFrom(buffer *buffer.Buffer) error {
-	code, err := buffer.ReadUInt8()
+func (p *ConnackPacket) DecodeFrom(r coder.Reader) error {
+	code, err := r.ReadUInt8()
 	if err != nil {
 		return err
 	}

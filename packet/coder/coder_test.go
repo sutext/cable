@@ -1,10 +1,10 @@
-package buffer
+package coder
 
 import (
 	"testing"
 )
 
-func TestBufferInt(t *testing.T) {
+func TestCoderInt(t *testing.T) {
 	testInt(int8(-100), t)
 	testInt(int16(-10000), t)
 	testInt(int32(-1000000000), t)
@@ -14,17 +14,13 @@ func TestBufferInt(t *testing.T) {
 	testInt(uint32(4294967295), t)
 	testInt(uint64(18446744073709551615), t)
 }
-func TestBufferVarint(t *testing.T) {
-	testVarint(-100, t)
-	testVarint(-10000, t)
-	testVarint(-1000000000, t)
-	testVarint(-1000000000000000000, t)
+func TestCoderVarint(t *testing.T) {
 	testVarint(100, t)
 	testVarint(10000, t)
 	testVarint(1000000000, t)
 	testVarint(1000000000000000000, t)
 }
-func TestBufferString(t *testing.T) {
+func TestCoderString(t *testing.T) {
 	testString("hello world", t)
 	testString("你好，世界", t)
 	testString("こんにちは世界", t)
@@ -32,7 +28,7 @@ func TestBufferString(t *testing.T) {
 }
 
 func testInt(data any, t *testing.T) {
-	var buufer = New()
+	var buufer = &coder{}
 	switch d := data.(type) {
 	case int8:
 		buufer.WriteInt8(d)
@@ -86,8 +82,8 @@ func testInt(data any, t *testing.T) {
 		t.Error("unknown type")
 	}
 }
-func testVarint(i int64, t *testing.T) {
-	var b = New()
+func testVarint(i uint64, t *testing.T) {
+	var b = &coder{}
 	b.WriteVarint(i)
 	new, _ := b.ReadVarint()
 	if new != i {
@@ -95,7 +91,7 @@ func testVarint(i int64, t *testing.T) {
 	}
 }
 func testString(s string, t *testing.T) {
-	var b = New()
+	var b = &coder{}
 	b.WriteString(s)
 	new, _ := b.ReadString()
 	if new != s {

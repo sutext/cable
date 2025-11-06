@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"sutext.github.io/cable/internal/buffer"
+	"sutext.github.io/cable/packet/coder"
 )
 
 type MessagePacket struct {
@@ -35,25 +35,24 @@ func (p *MessagePacket) Equal(other Packet) bool {
 	return bytes.Equal(p.Payload, otherData.Payload)
 }
 
-func (p *MessagePacket) WriteTo(buf *buffer.Buffer) error {
-	buf.WriteUInt8(p.Flags)
-	buf.WriteString(p.Channel)
-	buf.WriteBytes(p.Payload)
+func (p *MessagePacket) EncodeTo(w coder.Writer) error {
+	w.WriteUInt8(p.Flags)
+	w.WriteString(p.Channel)
+	w.WriteBytes(p.Payload)
 	return nil
 }
-
-func (p *MessagePacket) ReadFrom(buf *buffer.Buffer) error {
-	flags, err := buf.ReadUInt8()
+func (p *MessagePacket) DecodeFrom(r coder.Reader) error {
+	flags, err := r.ReadUInt8()
 	if err != nil {
 		return err
 	}
 	p.Flags = flags
-	channel, err := buf.ReadString()
+	channel, err := r.ReadString()
 	if err != nil {
 		return err
 	}
 	p.Channel = channel
-	payload, err := buf.ReadAll()
+	payload, err := r.ReadAll()
 	if err != nil {
 		return err
 	}
