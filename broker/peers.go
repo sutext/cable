@@ -12,7 +12,9 @@ import (
 
 type Peer interface {
 	SendMessage(m *packet.Message) error
+	IsOnline(uid string) (bool, error)
 	KickConn(cid string) error
+	KickUser(uid string) error
 }
 
 type peer struct {
@@ -48,11 +50,29 @@ func (p *peer) SendMessage(m *packet.Message) error {
 	_, err = p.client.Request(context.Background(), req)
 	return err
 }
-
+func (p *peer) IsOnline(uid string) (bool, error) {
+	req := &packet.Request{
+		Method: "IsOnline",
+		Body:   []byte(uid),
+	}
+	res, err := p.client.Request(context.Background(), req)
+	if err != nil {
+		return false, err
+	}
+	return res.Body[0] == 1, nil
+}
 func (p *peer) KickConn(cid string) error {
 	req := &packet.Request{
 		Method: "KickConn",
 		Body:   []byte(cid),
+	}
+	_, err := p.client.Request(context.Background(), req)
+	return err
+}
+func (p *peer) KickUser(uid string) error {
+	req := &packet.Request{
+		Method: "KickUser",
+		Body:   []byte(uid),
 	}
 	_, err := p.client.Request(context.Background(), req)
 	return err
