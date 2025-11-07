@@ -1,66 +1,79 @@
 package client
 
 import (
-	"errors"
-	"log/slog"
-	"net"
+	"context"
 	"sync"
 	"time"
 
-	"sutext.github.io/cable/internal/backoff"
 	"sutext.github.io/cable/internal/keepalive"
 	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
 )
 
-var ErrNotConnected = errors.New("not connected")
+type Error uint8
 
-type OnData func(p *packet.MessagePacket) error
-type Client struct {
-	mu        *sync.RWMutex
-	conn      *conn
-	host      string
-	port      string
-	onData    OnData
-	status    Status
-	logger    logger.Logger
-	retrier   *Retrier
-	identity  *packet.Identity
-	retrying  bool
-	keepalive *keepalive.KeepAlive
+const (
+	ErrNotConnected Error = iota
+	ErrRequestTimeout
+)
+
+func (e Error) Error() string {
+	return [...]string{"ErrNotConnected", "ErrRequestTimeout"}[e]
 }
 
-func New(host, port string) *Client {
-	c := &Client{
-		mu:        new(sync.RWMutex),
-		host:      host,
-		port:      port,
-		status:    StatusUnknown,
-		logger:    logger.NewText(slog.LevelDebug),
-		retrier:   NewRetrier(100000, backoff.Constant(time.Second*2)),
-		keepalive: keepalive.New(60, 5),
+type StatusHandler func(status Status)
+type MessageHandler func(p *packet.MessagePacket) error
+type RequestHandler func(p *packet.RequestPacket) (*packet.ResponsePacket, error)
+type Client interface {
+	ID() *packet.Identity
+	Status() Status
+	Connect(identity *packet.Identity)
+	Request(ctx context.Context, p *packet.RequestPacket) (*packet.ResponsePacket, error)
+	SendMessage(p *packet.MessagePacket) error
+}
+type client struct {
+	mu             *sync.RWMutex
+	conn           *conn
+	tasks          sync.Map
+	status         Status
+	logger         logger.Logger
+	address        string
+	retrier        *Retrier
+	identity       *packet.Identity
+	retrying       bool
+	keepalive      *keepalive.KeepAlive
+	statusHandler  StatusHandler
+	messageHandler MessageHandler
+	requestHandler RequestHandler
+	requestTimeout time.Duration
+}
+
+func New(address string, options ...Option) Client {
+	opts := newOptions(options...)
+	c := &client{
+		mu:             new(sync.RWMutex),
+		address:        address,
+		status:         StatusUnknown,
+		logger:         opts.logger,
+		retrier:        NewRetrier(opts.retryLimit, opts.retryBackoff),
+		keepalive:      keepalive.New(opts.pingInterval, opts.pingTimeout),
+		statusHandler:  opts.statusHandler,
+		messageHandler: opts.messageHandler,
+		requestHandler: opts.requestHandler,
+		requestTimeout: opts.requestTimeout,
 	}
 	c.keepalive.PingFunc(func() {
-		c.SendPacket(packet.NewPing())
+		c.sendPacket(packet.NewPing())
 	})
 	c.keepalive.TimeoutFunc(func() {
 		c.tryClose(CloseReasonPingTimeout)
 	})
 	return c
 }
-func (c *Client) OnData(f OnData) {
-	c.onData = f
+func (c *client) ID() *packet.Identity {
+	return c.identity
 }
-func (c *Client) SetLogger(l logger.Logger) {
-	c.logger = l
-}
-func (c *Client) SetRetrier(limit int, backoff backoff.Backoff) {
-	c.retrier = NewRetrier(limit, backoff)
-}
-func (c *Client) SetKeepAlive(interval time.Duration, timeout time.Duration) {
-	c.keepalive = keepalive.New(interval, timeout)
-}
-func (c *Client) Connect(identity *packet.Identity) {
+func (c *client) Connect(identity *packet.Identity) {
 	c.identity = identity
 	switch c.Status() {
 	case StatusOpened, StatusOpening:
@@ -69,7 +82,7 @@ func (c *Client) Connect(identity *packet.Identity) {
 	c.setStatus(StatusOpening)
 	c.reconnect()
 }
-func (c *Client) tryClose(err error) {
+func (c *client) tryClose(err error) {
 	c.logger.Error("try close", "reason", err)
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -106,7 +119,7 @@ func (c *Client) tryClose(err error) {
 	})
 
 }
-func (c *Client) reconnect() {
+func (c *client) reconnect() {
 	if c.conn != nil {
 		c.conn.close()
 		c.conn = nil
@@ -114,41 +127,53 @@ func (c *Client) reconnect() {
 	c.conn = &conn{}
 	c.conn.onPacket(c.handlePacket)
 	c.conn.onError(c.tryClose)
-	err := c.conn.connect(net.JoinHostPort(c.host, c.port))
+	err := c.conn.connect(c.address)
 	if err != nil {
 		c.tryClose(err)
 		return
 	}
-	c.SendPacket(packet.NewConnect(c.identity))
+	c.sendPacket(packet.NewConnect(c.identity))
 }
 
-func (c *Client) SendData(data []byte) error {
-	return c.SendPacket(packet.NewMessage(data))
+func (c *client) SendPing() error {
+	return c.sendPacket(packet.NewPing())
 }
-
-func (c *Client) SendPing() error {
-	return c.SendPacket(packet.NewPing())
+func (c *client) SendPong() error {
+	return c.sendPacket(packet.NewPong())
 }
-func (c *Client) SendPong() error {
-	return c.SendPacket(packet.NewPong())
+func (c *client) SendMessage(p *packet.MessagePacket) error {
+	return c.sendPacket(p)
 }
-func (c *Client) SendPacket(p packet.Packet) error {
+func (c *client) Request(ctx context.Context, p *packet.RequestPacket) (*packet.ResponsePacket, error) {
+	c.sendPacket(p)
+	resp := make(chan *packet.ResponsePacket)
+	c.tasks.Store(p.Serial, resp)
+	select {
+	case res := <-resp:
+		return res, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(c.requestTimeout):
+		return nil, ErrRequestTimeout
+	}
+}
+func (c *client) sendPacket(p packet.Packet) error {
 	if c.conn == nil {
 		return ErrNotConnected
 	}
 	return c.conn.sendPacket(p)
 }
-func (c *Client) Status() Status {
+func (c *client) Status() Status {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.status
 }
-func (c *Client) safeSetStatus(status Status) {
+func (c *client) safeSetStatus(status Status) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.setStatus(status)
 }
-func (c *Client) setStatus(status Status) {
+func (c *client) setStatus(status Status) {
 	if c.status == status {
 		return
 	}
@@ -168,7 +193,7 @@ func (c *Client) setStatus(status Status) {
 		c.keepalive.Start()
 	}
 }
-func (c *Client) handlePacket(p packet.Packet) {
+func (c *client) handlePacket(p packet.Packet) {
 	c.logger.Info("receive", "packet", p.String())
 	switch p.Type() {
 	case packet.CONNACK:
@@ -179,11 +204,29 @@ func (c *Client) handlePacket(p packet.Packet) {
 		c.safeSetStatus(StatusOpened)
 	case packet.MESSAGE:
 		p := p.(*packet.MessagePacket)
-		if c.onData != nil {
-			err := c.onData(p)
+		if c.messageHandler != nil {
+			err := c.messageHandler(p)
 			if err != nil {
 				c.logger.Error("data handler error", "error", err)
 			}
+		}
+	case packet.REQUEST:
+		p := p.(*packet.RequestPacket)
+		if c.requestHandler != nil {
+			res, err := c.requestHandler(p)
+			if err != nil {
+				c.logger.Error("request handler error", "error", err)
+			}
+			if res != nil {
+				c.sendPacket(res)
+			}
+		}
+	case packet.RESPONSE:
+		p := p.(*packet.ResponsePacket)
+		if t, ok := c.tasks.LoadAndDelete(p.Serial); ok {
+			t.(chan *packet.ResponsePacket) <- p
+		} else {
+			c.logger.Error("response task not found", "serial", p.Serial)
 		}
 	case packet.PING:
 		c.SendPong()

@@ -4,7 +4,7 @@ import (
 	"sync"
 	"time"
 
-	"sutext.github.io/cable/internal/backoff"
+	"sutext.github.io/cable/backoff"
 )
 
 type Retrier struct {

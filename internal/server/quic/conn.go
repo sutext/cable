@@ -2,6 +2,7 @@ package quic
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -16,6 +17,7 @@ type conn struct {
 	id        *packet.Identity
 	mu        *sync.RWMutex
 	raw       *qc.Conn
+	tasks     sync.Map
 	stream    *qc.Stream
 	server    *quicServer
 	authed    chan struct{}
@@ -38,7 +40,7 @@ func newConn(raw *qc.Conn, server *quicServer) *conn {
 	})
 	return c
 }
-func (c *conn) GetID() *packet.Identity {
+func (c *conn) ID() *packet.Identity {
 	return c.id
 }
 
@@ -48,7 +50,7 @@ func (c *conn) Close(code packet.CloseCode) {
 	if c.raw == nil {
 		return
 	}
-	c.SendPacket(packet.NewClose(code))
+	c.sendPacket(packet.NewClose(code))
 	c.raw.Close()
 	c.keepAlive.Stop()
 	close(c.authed)
@@ -99,18 +101,34 @@ func (c *conn) serve() {
 }
 
 func (c *conn) connack(code packet.ConnackCode) error {
-	return c.SendPacket(packet.NewConnack(code))
+	return c.sendPacket(packet.NewConnack(code))
 }
 func (c *conn) SendPing() error {
-	return c.SendPacket(packet.NewPing())
+	return c.sendPacket(packet.NewPing())
 }
 func (c *conn) SendPong() error {
-	return c.SendPacket(packet.NewPong())
+	return c.sendPacket(packet.NewPong())
 }
 func (c *conn) SendData(data []byte) error {
-	return c.SendPacket(packet.NewMessage(data))
+	return c.sendPacket(packet.NewMessage(data))
 }
-func (c *conn) SendPacket(p packet.Packet) error {
+func (c *conn) SendMessage(p *packet.MessagePacket) error {
+	return c.sendPacket(p)
+}
+func (c *conn) Request(ctx context.Context, p *packet.RequestPacket) (*packet.ResponsePacket, error) {
+	c.sendPacket(p)
+	resp := make(chan *packet.ResponsePacket)
+	c.tasks.Store(p.Serial, resp)
+	select {
+	case res := <-resp:
+		return res, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-time.After(10 * time.Second):
+		return nil, errors.New("timeout")
+	}
+}
+func (c *conn) sendPacket(p packet.Packet) error {
 	if c.stream == nil {
 		return server.ErrConnectionClosed
 	}
@@ -145,12 +163,24 @@ func (c *conn) handlePacket(p packet.Packet) {
 			return
 		}
 		p := p.(*packet.MessagePacket)
-		res, err := c.server.messageHandler(p, c.id)
+		c.server.messageHandler(p, c.id)
+
+	case packet.REQUEST:
+		if c.id == nil {
+			return
+		}
+		p := p.(*packet.RequestPacket)
+		res, err := c.server.requestHandler(p, c.id)
 		if err != nil {
 			return
 		}
 		if res != nil {
-			c.SendPacket(res)
+			c.sendPacket(res)
+		}
+	case packet.RESPONSE:
+		p := p.(*packet.ResponsePacket)
+		if resp, ok := c.tasks.LoadAndDelete(p.Serial); ok {
+			(resp.(chan *packet.ResponsePacket)) <- p
 		}
 	case packet.PING:
 		c.SendPong()

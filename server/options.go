@@ -9,7 +9,7 @@ import (
 )
 
 type Option struct {
-	F func(*Options)
+	f func(*Options)
 }
 type Options struct {
 	Network        string
@@ -18,6 +18,7 @@ type Options struct {
 	QuicConfig     *quic.Config
 	ConnectHandler ConnectHandler
 	MessageHandler MessageHandler
+	RequestHandler RequestHandler
 }
 
 func NewOptions(opts ...Option) *Options {
@@ -28,33 +29,36 @@ func NewOptions(opts ...Option) *Options {
 		ConnectHandler: func(p *packet.ConnectPacket) packet.ConnackCode {
 			return packet.ConnectionAccepted
 		},
-		MessageHandler: func(p *packet.MessagePacket, id *packet.Identity) (*packet.MessagePacket, error) {
-			return p, nil
+		MessageHandler: func(p *packet.MessagePacket, id *packet.Identity) error {
+			return nil
+		},
+		RequestHandler: func(p *packet.RequestPacket, id *packet.Identity) (*packet.ResponsePacket, error) {
+			return &packet.ResponsePacket{Serial: p.Serial, Body: p.Body}, nil
 		},
 	}
 	for _, o := range opts {
-		o.F(options)
+		o.f(options)
 	}
 	return options
 }
 func WithQUIC(config *quic.Config) Option {
-	return Option{F: func(o *Options) {
+	return Option{f: func(o *Options) {
 		o.Network = "quic"
 		o.QuicConfig = config
 	}}
 }
 func WithTCP() Option {
-	return Option{F: func(o *Options) { o.Network = "tcp" }}
+	return Option{f: func(o *Options) { o.Network = "tcp" }}
 }
 func WithNIO(useNIO bool) Option {
-	return Option{F: func(o *Options) { o.UseNIO = useNIO }}
+	return Option{f: func(o *Options) { o.UseNIO = useNIO }}
 }
 func WithLogger(logger logger.Logger) Option {
-	return Option{F: func(o *Options) { o.Logger = logger }}
+	return Option{f: func(o *Options) { o.Logger = logger }}
 }
 func WithConnectHandler(handler ConnectHandler) Option {
-	return Option{F: func(o *Options) { o.ConnectHandler = handler }}
+	return Option{f: func(o *Options) { o.ConnectHandler = handler }}
 }
 func WithMessageHandler(handler MessageHandler) Option {
-	return Option{F: func(o *Options) { o.MessageHandler = handler }}
+	return Option{f: func(o *Options) { o.MessageHandler = handler }}
 }

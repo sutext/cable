@@ -27,7 +27,7 @@ func (k *KeepAlive) Start() {
 	k.stop = make(chan struct{})
 	k.mu.Unlock()
 	go func() {
-		ticker := time.NewTicker(k.interval * time.Second)
+		ticker := time.NewTicker(k.interval)
 		for {
 			select {
 			case <-k.stop:
@@ -66,7 +66,7 @@ func (k *KeepAlive) sendPing() {
 	k.pong = make(chan struct{})
 	k.mu.Unlock()
 	k.sendFunc()
-	timer := time.NewTimer(k.timeout * time.Second)
+	timer := time.NewTimer(k.timeout)
 	defer timer.Stop()
 	select {
 	case <-k.stop:

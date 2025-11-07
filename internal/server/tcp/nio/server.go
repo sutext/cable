@@ -15,10 +15,11 @@ import (
 type nioServer struct {
 	conns          sync.Map
 	logger         logger.Logger
-	messageHandler server.MessageHandler
-	connectHandler server.ConnectHandler
 	address        string
 	eventLoop      netpoll.EventLoop
+	messageHandler server.MessageHandler
+	connectHandler server.ConnectHandler
+	requestHandler server.RequestHandler
 }
 
 func NewNIO(address string, options *server.Options) *nioServer {
@@ -27,6 +28,7 @@ func NewNIO(address string, options *server.Options) *nioServer {
 		logger:         options.Logger,
 		connectHandler: options.ConnectHandler,
 		messageHandler: options.MessageHandler,
+		requestHandler: options.RequestHandler,
 	}
 	return s
 }
@@ -86,13 +88,23 @@ func (s *nioServer) handlePacket(id *packet.Identity, p packet.Packet) {
 		if s.messageHandler == nil {
 			return
 		}
-		res, err := s.messageHandler(p, id)
+		s.messageHandler(p, id)
+
+	case packet.REQUEST:
+		p := p.(*packet.RequestPacket)
+		if s.requestHandler == nil {
+			return
+		}
+		res, err := s.requestHandler(p, id)
 		if err != nil {
 			return
 		}
 		if res != nil {
-			conn.SendPacket(res)
+			conn.sendPacket(res)
 		}
+	case packet.RESPONSE:
+		p := p.(*packet.ResponsePacket)
+		conn.handleResponse(p)
 	case packet.PING:
 		conn.SendPong()
 	default:

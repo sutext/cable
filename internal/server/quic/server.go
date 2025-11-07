@@ -13,19 +13,21 @@ import (
 type quicServer struct {
 	conns          sync.Map
 	logger         logger.Logger
+	config         *qc.Config
+	address        string
 	messageHandler server.MessageHandler
 	connectHandler server.ConnectHandler
-	address        string
-	config         *qc.Config
+	requestHandler server.RequestHandler
 }
 
 func NewQUIC(address string, options *server.Options) *quicServer {
 	s := &quicServer{
-		address:        address,
 		config:         options.QuicConfig,
 		logger:         options.Logger,
+		address:        address,
 		connectHandler: options.ConnectHandler,
 		messageHandler: options.MessageHandler,
+		requestHandler: options.RequestHandler,
 	}
 	return s
 }
@@ -62,10 +64,10 @@ func (s *quicServer) Shutdown(ctx context.Context) error {
 	return nil
 }
 func (s *quicServer) addConn(c *conn) {
-	if cn, loaded := s.conns.LoadOrStore(c.GetID().ClientID, c); loaded {
+	if cn, loaded := s.conns.LoadOrStore(c.ID().ClientID, c); loaded {
 		cn.(*conn).Close(packet.CloseDuplicateLogin)
 	}
 }
 func (s *quicServer) delConn(c *conn) {
-	s.conns.Delete(c.GetID().ClientID)
+	s.conns.Delete(c.ID().ClientID)
 }

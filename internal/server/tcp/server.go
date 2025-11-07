@@ -13,9 +13,10 @@ import (
 type tcpServer struct {
 	conns          sync.Map
 	logger         logger.Logger
+	address        string
 	messageHandler server.MessageHandler
 	connectHandler server.ConnectHandler
-	address        string
+	requestHandler server.RequestHandler
 }
 
 func NewTCP(address string, options *server.Options) *tcpServer {
@@ -24,6 +25,7 @@ func NewTCP(address string, options *server.Options) *tcpServer {
 		logger:         options.Logger,
 		messageHandler: options.MessageHandler,
 		connectHandler: options.ConnectHandler,
+		requestHandler: options.RequestHandler,
 	}
 	return s
 }
@@ -60,11 +62,11 @@ func (s *tcpServer) Shutdown(ctx context.Context) error {
 	return nil
 }
 func (s *tcpServer) addConn(c *conn) {
-	if old, loaded := s.conns.LoadOrStore(c.GetID().ClientID, c); loaded {
+	if old, loaded := s.conns.LoadOrStore(c.ID().ClientID, c); loaded {
 		old.(*conn).Close(packet.CloseDuplicateLogin)
 		return
 	}
 }
 func (s *tcpServer) delConn(c *conn) {
-	s.conns.Delete(c.GetID().ClientID)
+	s.conns.Delete(c.ID().ClientID)
 }

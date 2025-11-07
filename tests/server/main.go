@@ -30,8 +30,8 @@ func main() {
 		server.WithConnectHandler(func(p *packet.ConnectPacket) packet.ConnackCode {
 			return packet.ConnectionAccepted
 		}),
-		server.WithMessageHandler(func(p *packet.MessagePacket, id *packet.Identity) (*packet.MessagePacket, error) {
-			return p, nil
+		server.WithMessageHandler(func(p *packet.MessagePacket, id *packet.Identity) error {
+			return nil
 		}),
 	)
 	if err != nil {

@@ -7,13 +7,15 @@ import (
 )
 
 type Conn interface {
-	GetID() *packet.Identity
+	ID() *packet.Identity
 	Close(code packet.CloseCode)
-	SendPacket(p packet.Packet) error
+	Request(ctx context.Context, p *packet.RequestPacket) (*packet.ResponsePacket, error)
+	SendMessage(p *packet.MessagePacket) error
 }
 
 type ConnectHandler func(p *packet.ConnectPacket) packet.ConnackCode
-type MessageHandler func(p *packet.MessagePacket, id *packet.Identity) (*packet.MessagePacket, error)
+type MessageHandler func(p *packet.MessagePacket, id *packet.Identity) error
+type RequestHandler func(p *packet.RequestPacket, id *packet.Identity) (*packet.ResponsePacket, error)
 
 type Server interface {
 	Serve() error
