@@ -36,12 +36,12 @@ func (c *conn) SendData(data []byte) error {
 func (c *conn) sendPacket(p packet.Packet) error {
 	return packet.WriteTo(c.Connection, p)
 }
-func (c *conn) SendMessage(p *packet.MessagePacket) error {
+func (c *conn) SendMessage(p *packet.Message) error {
 	return c.sendPacket(p)
 }
-func (c *conn) Request(ctx context.Context, p *packet.RequestPacket) (*packet.ResponsePacket, error) {
+func (c *conn) Request(ctx context.Context, p *packet.Request) (*packet.Response, error) {
 	c.sendPacket(p)
-	resp := make(chan *packet.ResponsePacket)
+	resp := make(chan *packet.Response)
 	c.tasks.Store(p.Serial, resp)
 	select {
 	case res := <-resp:
@@ -52,8 +52,8 @@ func (c *conn) Request(ctx context.Context, p *packet.RequestPacket) (*packet.Re
 		return nil, errors.New("timeout")
 	}
 }
-func (c *conn) handleResponse(p *packet.ResponsePacket) {
+func (c *conn) handleResponse(p *packet.Response) {
 	if resp, ok := c.tasks.LoadAndDelete(p.Serial); ok {
-		(resp.(chan *packet.ResponsePacket)) <- p
+		(resp.(chan *packet.Response)) <- p
 	}
 }

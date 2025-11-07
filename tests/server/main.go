@@ -11,7 +11,6 @@ import (
 
 	"sutext.github.io/cable"
 	"sutext.github.io/cable/internal/logger"
-	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
 )
 
@@ -19,7 +18,7 @@ func main() {
 	ctx := context.Background()
 	logger := logger.NewJSON(slog.LevelDebug)
 
-	s, err := cable.NewServer(":8080",
+	s := cable.NewServer(":8080",
 		// server.WithQUIC(&quic.Config{
 		// 	TLSConfig:            &tls.Config{InsecureSkipVerify: true},
 		// 	MaxIdleTimeout:       5 * time.Second,
@@ -27,17 +26,7 @@ func main() {
 		// 	MaxUniRemoteStreams:  1,
 		// }),
 		server.WithLogger(logger),
-		server.WithConnectHandler(func(p *packet.ConnectPacket) packet.ConnackCode {
-			return packet.ConnectionAccepted
-		}),
-		server.WithMessageHandler(func(p *packet.MessagePacket, id *packet.Identity) error {
-			return nil
-		}),
 	)
-	if err != nil {
-		logger.Error("listen", "error", err)
-		os.Exit(1)
-	}
 	logger.Info("entry server start")
 	ctx, cancel := context.WithCancelCause(ctx)
 	sigs := make(chan os.Signal, 1)

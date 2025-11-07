@@ -4,11 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"maps"
-
-	"sutext.github.io/cable/packet/coder"
 )
 
-type RequestPacket struct {
+type Request struct {
 	Flags   uint8
 	Serial  uint64
 	Method  string
@@ -17,23 +15,23 @@ type RequestPacket struct {
 	Body    []byte
 }
 
-func NewRequest() *RequestPacket {
-	return &RequestPacket{}
+func NewRequest() *Request {
+	return &Request{}
 }
-func (p *RequestPacket) Type() PacketType {
+func (p *Request) Type() PacketType {
 	return REQUEST
 }
-func (p *RequestPacket) String() string {
-	return fmt.Sprintf("RequestPacket{%s, %s, %d, %v, %d}", p.Method, p.Service, p.Flags, p.Headers, p.Serial)
+func (p *Request) String() string {
+	return fmt.Sprintf("Request{%s, %s, %d, %v, %d}", p.Method, p.Service, p.Flags, p.Headers, p.Serial)
 }
-func (p *RequestPacket) Equal(other Packet) bool {
+func (p *Request) Equal(other Packet) bool {
 	if other == nil {
 		return false
 	}
 	if p.Type() != other.Type() {
 		return false
 	}
-	o := other.(*RequestPacket)
+	o := other.(*Request)
 	return p.Method == o.Method &&
 		p.Service == o.Service &&
 		p.Flags == o.Flags &&
@@ -41,7 +39,7 @@ func (p *RequestPacket) Equal(other Packet) bool {
 		maps.Equal(p.Headers, o.Headers) &&
 		bytes.Equal(p.Body, o.Body)
 }
-func (p *RequestPacket) EncodeTo(w coder.Writer) error {
+func (p *Request) EncodeTo(w Encoder) error {
 	w.WriteUInt8(p.Flags)
 	w.WriteUInt64(p.Serial)
 	w.WriteString(p.Method)
@@ -50,7 +48,7 @@ func (p *RequestPacket) EncodeTo(w coder.Writer) error {
 	w.WriteBytes(p.Body)
 	return nil
 }
-func (p *RequestPacket) DecodeFrom(r coder.Reader) error {
+func (p *Request) DecodeFrom(r Decoder) error {
 	var err error
 	if p.Flags, err = r.ReadUInt8(); err != nil {
 		return err

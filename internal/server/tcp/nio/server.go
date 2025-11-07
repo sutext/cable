@@ -8,7 +8,6 @@ import (
 	"github.com/cloudwego/netpoll"
 	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
-	"sutext.github.io/cable/packet/coder"
 	"sutext.github.io/cable/server"
 )
 
@@ -17,8 +16,8 @@ type nioServer struct {
 	logger         logger.Logger
 	address        string
 	eventLoop      netpoll.EventLoop
+	connectHander  server.ConnectHandler
 	messageHandler server.MessageHandler
-	connectHandler server.ConnectHandler
 	requestHandler server.RequestHandler
 }
 
@@ -26,7 +25,7 @@ func NewNIO(address string, options *server.Options) *nioServer {
 	s := &nioServer{
 		address:        address,
 		logger:         options.Logger,
-		connectHandler: options.ConnectHandler,
+		connectHander:  options.ConnectHandler,
 		messageHandler: options.MessageHandler,
 		requestHandler: options.RequestHandler,
 	}
@@ -48,13 +47,6 @@ func (s *nioServer) Serve() error {
 	s.eventLoop = eventLoop
 	return eventLoop.Serve(ln)
 }
-func (s *nioServer) HandleConnect(handler server.ConnectHandler) {
-	s.connectHandler = handler
-}
-func (s *nioServer) HandleData(handler server.MessageHandler) {
-	s.messageHandler = handler
-}
-
 func (s *nioServer) GetConn(cid string) (server.Conn, error) {
 	if con, ok := s.conns.Load(cid); ok {
 		return con.(*conn), nil
@@ -84,17 +76,11 @@ func (s *nioServer) handlePacket(id *packet.Identity, p packet.Packet) {
 	conn := cn.(*conn)
 	switch p.Type() {
 	case packet.MESSAGE:
-		p := p.(*packet.MessagePacket)
-		if s.messageHandler == nil {
-			return
-		}
+		p := p.(*packet.Message)
 		s.messageHandler(p, id)
 
 	case packet.REQUEST:
-		p := p.(*packet.RequestPacket)
-		if s.requestHandler == nil {
-			return
-		}
+		p := p.(*packet.Request)
 		res, err := s.requestHandler(p, id)
 		if err != nil {
 			return
@@ -103,7 +89,7 @@ func (s *nioServer) handlePacket(id *packet.Identity, p packet.Packet) {
 			conn.sendPacket(res)
 		}
 	case packet.RESPONSE:
-		p := p.(*packet.ResponsePacket)
+		p := p.(*packet.Response)
 		conn.handleResponse(p)
 	case packet.PING:
 		conn.SendPong()
@@ -117,7 +103,7 @@ func (s *nioServer) onRequest(ctx context.Context, conn netpoll.Connection) erro
 	pkt, err := packet.ReadFrom(netpoll.NewIOReader(conn.Reader()))
 	if err != nil {
 		switch err.(type) {
-		case packet.Error, coder.Error:
+		case packet.Error:
 			s.close(conn, packet.CloseInvalidPacket)
 		default:
 			s.close(conn, packet.CloseInternalError)
@@ -134,19 +120,19 @@ func (s *nioServer) onConnect(ctx context.Context, c netpoll.Connection) context
 	pkt, err := packet.ReadFrom(netpoll.NewIOReader(c.Reader()))
 	if err != nil {
 		switch err.(type) {
-		case packet.Error, coder.Error:
+		case packet.Error:
 			s.close(c, packet.CloseInvalidPacket)
 		default:
 			s.close(c, packet.CloseInternalError)
 		}
 		return ctx
 	}
-	connPacket, ok := pkt.(*packet.ConnectPacket)
+	connPacket, ok := pkt.(*packet.Connect)
 	if !ok {
 		s.close(c, packet.CloseInternalError)
 		return ctx
 	}
-	code := s.connectHandler(connPacket)
+	code := s.connectHander(connPacket)
 	if code == packet.ConnectionAccepted {
 		cn := &conn{
 			Connection: c,

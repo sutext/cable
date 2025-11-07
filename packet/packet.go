@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"io"
 	"slices"
-
-	"sutext.github.io/cable/packet/coder"
 )
 
 const (
@@ -19,12 +17,21 @@ const (
 type Error uint8
 
 const (
-	ErrUnknownPacketType  Error = 1
-	ErrPacketSizeTooLarge Error = 2
+	ErrBufferTooShort     Error = 1
+	ErrVarintOverflow     Error = 2
+	ErrInvalidReadLen     Error = 3
+	ErrUnknownPacketType  Error = 4
+	ErrPacketSizeTooLarge Error = 5
 )
 
 func (e Error) Error() string {
 	switch e {
+	case ErrBufferTooShort:
+		return "buffer too short"
+	case ErrVarintOverflow:
+		return "varint overflow"
+	case ErrInvalidReadLen:
+		return "invalid length when read"
 	case ErrUnknownPacketType:
 		return "unknown packet type"
 	case ErrPacketSizeTooLarge:
@@ -73,7 +80,7 @@ func (t PacketType) String() string {
 
 type Packet interface {
 	fmt.Stringer
-	coder.Codable
+	Codable
 	Type() PacketType
 	Equal(Packet) bool
 }
@@ -100,10 +107,10 @@ func (p *pingpong) Equal(other Packet) bool {
 	}
 	return p.t == other.Type()
 }
-func (p *pingpong) EncodeTo(c coder.Writer) error {
+func (p *pingpong) EncodeTo(c Encoder) error {
 	return nil
 }
-func (p *pingpong) DecodeFrom(c coder.Reader) error {
+func (p *pingpong) DecodeFrom(c Decoder) error {
 	return nil
 }
 func ReadFrom(r io.Reader) (Packet, error) {
@@ -132,32 +139,32 @@ func ReadFrom(r io.Reader) (Packet, error) {
 	}
 	switch packetType {
 	case CONNECT:
-		conn := &ConnectPacket{}
-		if err := coder.Unmarshal(conn, data); err != nil {
+		conn := &Connect{}
+		if err := Unmarshal(conn, data); err != nil {
 			return nil, err
 		}
 		return conn, nil
 	case CONNACK:
-		connack := &ConnackPacket{}
-		if err := coder.Unmarshal(connack, data); err != nil {
+		connack := &Connack{}
+		if err := Unmarshal(connack, data); err != nil {
 			return nil, err
 		}
 		return connack, nil
 	case MESSAGE:
-		msg := &MessagePacket{}
-		if err := coder.Unmarshal(msg, data); err != nil {
+		msg := &Message{}
+		if err := Unmarshal(msg, data); err != nil {
 			return nil, err
 		}
 		return msg, nil
 	case REQUEST:
-		req := &RequestPacket{}
-		if err := coder.Unmarshal(req, data); err != nil {
+		req := &Request{}
+		if err := Unmarshal(req, data); err != nil {
 			return nil, err
 		}
 		return req, nil
 	case RESPONSE:
-		res := &ResponsePacket{}
-		if err := coder.Unmarshal(res, data); err != nil {
+		res := &Response{}
+		if err := Unmarshal(res, data); err != nil {
 			return nil, err
 		}
 		return res, nil
@@ -166,8 +173,8 @@ func ReadFrom(r io.Reader) (Packet, error) {
 	case PONG:
 		return NewPong(), nil
 	case CLOSE:
-		close := &ClosePacket{}
-		if err := coder.Unmarshal(close, data); err != nil {
+		close := &Close{}
+		if err := Unmarshal(close, data); err != nil {
 			return nil, err
 		}
 		return close, nil
@@ -177,7 +184,7 @@ func ReadFrom(r io.Reader) (Packet, error) {
 }
 func WriteTo(w io.Writer, p Packet) error {
 	bw := bufio.NewWriter(w)
-	data, err := coder.Marshal(p)
+	data, err := Marshal(p)
 	if err != nil {
 		return err
 	}

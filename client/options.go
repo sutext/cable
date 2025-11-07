@@ -10,16 +10,27 @@ import (
 	"sutext.github.io/cable/packet"
 )
 
+type Handler interface {
+	OnStatus(status Status)
+	OnMessage(p *packet.Message)
+	OnRequest(p *packet.Request) (*packet.Response, error)
+}
+type emptyHandler struct{}
+
+func (h *emptyHandler) OnStatus(status Status)      {}
+func (h *emptyHandler) OnMessage(p *packet.Message) {}
+func (h *emptyHandler) OnRequest(p *packet.Request) (*packet.Response, error) {
+	return nil, nil
+}
+
 type Options struct {
 	logger         logger.Logger
 	address        string
+	handler        Handler
 	retryLimit     int
-	retryBackoff   backoff.Backoff
 	pingTimeout    time.Duration
 	pingInterval   time.Duration
-	statusHandler  StatusHandler
-	messageHandler MessageHandler
-	requestHandler RequestHandler
+	retryBackoff   backoff.Backoff
 	requestTimeout time.Duration
 }
 
@@ -29,14 +40,12 @@ type Option struct {
 
 func newOptions(options ...Option) *Options {
 	opts := &Options{
-		logger:         logger.NewJSON(slog.LevelDebug),
-		retryLimit:     math.MaxInt,
-		retryBackoff:   backoff.Default(),
-		pingTimeout:    time.Second * 5,
-		pingInterval:   time.Second * 60,
-		statusHandler:  func(status Status) {},
-		messageHandler: func(p *packet.MessagePacket) error { return nil },
-		requestHandler: func(p *packet.RequestPacket) (*packet.ResponsePacket, error) { return nil, nil },
+		logger:       logger.NewJSON(slog.LevelDebug),
+		handler:      &emptyHandler{},
+		retryLimit:   math.MaxInt,
+		retryBackoff: backoff.Default(),
+		pingTimeout:  time.Second * 5,
+		pingInterval: time.Second * 60,
 	}
 	for _, o := range options {
 		o.f(opts)
@@ -65,19 +74,9 @@ func WithKeepAlive(timeout, interval time.Duration) Option {
 		o.pingInterval = interval
 	}}
 }
-func WithStatusHandler(handler StatusHandler) Option {
+func WithHandler(handler Handler) Option {
 	return Option{f: func(o *Options) {
-		o.statusHandler = handler
-	}}
-}
-func WithMessageHandler(handler MessageHandler) Option {
-	return Option{f: func(o *Options) {
-		o.messageHandler = handler
-	}}
-}
-func WithRequestHandler(handler RequestHandler) Option {
-	return Option{f: func(o *Options) {
-		o.requestHandler = handler
+		o.handler = handler
 	}}
 }
 func WithRequestTimeout(timeout time.Duration) Option {

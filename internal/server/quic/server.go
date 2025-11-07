@@ -15,8 +15,8 @@ type quicServer struct {
 	logger         logger.Logger
 	config         *qc.Config
 	address        string
+	connectHander  server.ConnectHandler
 	messageHandler server.MessageHandler
-	connectHandler server.ConnectHandler
 	requestHandler server.RequestHandler
 }
 
@@ -25,7 +25,7 @@ func NewQUIC(address string, options *server.Options) *quicServer {
 		config:         options.QuicConfig,
 		logger:         options.Logger,
 		address:        address,
-		connectHandler: options.ConnectHandler,
+		connectHander:  options.ConnectHandler,
 		messageHandler: options.MessageHandler,
 		requestHandler: options.RequestHandler,
 	}

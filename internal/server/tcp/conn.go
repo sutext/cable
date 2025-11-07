@@ -10,7 +10,6 @@ import (
 	"sutext.github.io/cable/internal/keepalive"
 	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
-	"sutext.github.io/cable/packet/coder"
 	"sutext.github.io/cable/server"
 )
 
@@ -38,14 +37,16 @@ func newConn(raw net.Conn, server *tcpServer) *conn {
 		c.SendPing()
 	})
 	c.keepAlive.TimeoutFunc(func() {
-		c.Close(packet.CloseNormal)
+		c.Close(packet.CloseNoHeartbeat)
 	})
 	return c
 }
 func (c *conn) ID() *packet.Identity {
 	return c.id
 }
-
+func (c *conn) IsActive() bool {
+	return c.raw != nil
+}
 func (c *conn) Close(code packet.CloseCode) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -58,9 +59,7 @@ func (c *conn) Close(code packet.CloseCode) {
 	close(c.authed)
 	c.clear()
 }
-func (c *conn) closed() bool {
-	return c.raw == nil
-}
+
 func (c *conn) clear() {
 	c.server.delConn(c)
 	c.mu = nil
@@ -86,7 +85,7 @@ func (c *conn) serve() {
 		p, err := packet.ReadFrom(c.raw)
 		if err != nil {
 			switch err.(type) {
-			case packet.Error, coder.Error:
+			case packet.Error:
 				c.Close(packet.CloseInvalidPacket)
 			default:
 				c.Close(packet.CloseInternalError)
@@ -97,21 +96,18 @@ func (c *conn) serve() {
 	}
 }
 
-func (c *conn) connack(code packet.ConnackCode) error {
-	return c.sendPacket(packet.NewConnack(code))
-}
 func (c *conn) SendPing() error {
 	return c.sendPacket(packet.NewPing())
 }
 func (c *conn) SendPong() error {
 	return c.sendPacket(packet.NewPong())
 }
-func (c *conn) SendMessage(p *packet.MessagePacket) error {
+func (c *conn) SendMessage(p *packet.Message) error {
 	return c.sendPacket(p)
 }
-func (c *conn) Request(ctx context.Context, p *packet.RequestPacket) (*packet.ResponsePacket, error) {
+func (c *conn) Request(ctx context.Context, p *packet.Request) (*packet.Response, error) {
 	c.sendPacket(p)
-	resp := make(chan *packet.ResponsePacket)
+	resp := make(chan *packet.Response)
 	c.tasks.Store(p.Serial, resp)
 	select {
 	case res := <-resp:
@@ -129,13 +125,13 @@ func (c *conn) sendPacket(p packet.Packet) error {
 	}
 	return packet.WriteTo(c.raw, p)
 }
-func (c *conn) doAuth(id *packet.ConnectPacket) packet.ConnackCode {
+func (c *conn) doAuth(id *packet.Connect) packet.ConnackCode {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.id != nil {
 		return packet.ConnectionAccepted
 	}
-	code := c.server.connectHandler(id)
+	code := c.server.connectHander(id)
 	if code == packet.ConnectionAccepted {
 		c.id = id.Identity
 		c.authed <- struct{}{}
@@ -146,24 +142,24 @@ func (c *conn) doAuth(id *packet.ConnectPacket) packet.ConnackCode {
 	return code
 }
 func (c *conn) handlePacket(p packet.Packet) {
-	if c.closed() {
+	if !c.IsActive() {
 		return
 	}
 	switch p.Type() {
 	case packet.CONNECT:
-		p := p.(*packet.ConnectPacket)
-		c.connack(c.doAuth(p))
+		p := p.(*packet.Connect)
+		c.sendPacket(packet.NewConnack(c.doAuth(p)))
 	case packet.MESSAGE:
 		if c.id == nil {
 			return
 		}
-		p := p.(*packet.MessagePacket)
+		p := p.(*packet.Message)
 		c.server.messageHandler(p, c.id)
 	case packet.REQUEST:
 		if c.id == nil {
 			return
 		}
-		p := p.(*packet.RequestPacket)
+		p := p.(*packet.Request)
 		res, err := c.server.requestHandler(p, c.id)
 		if err != nil {
 			return
@@ -172,9 +168,9 @@ func (c *conn) handlePacket(p packet.Packet) {
 			c.sendPacket(res)
 		}
 	case packet.RESPONSE:
-		p := p.(*packet.ResponsePacket)
+		p := p.(*packet.Response)
 		if resp, ok := c.tasks.LoadAndDelete(p.Serial); ok {
-			resp.(chan *packet.ResponsePacket) <- p
+			resp.(chan *packet.Response) <- p
 		}
 	case packet.PING:
 		c.SendPong()

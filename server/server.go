@@ -9,13 +9,13 @@ import (
 type Conn interface {
 	ID() *packet.Identity
 	Close(code packet.CloseCode)
-	Request(ctx context.Context, p *packet.RequestPacket) (*packet.ResponsePacket, error)
-	SendMessage(p *packet.MessagePacket) error
+	IsActive() bool
+	Request(ctx context.Context, p *packet.Request) (*packet.Response, error)
+	SendMessage(p *packet.Message) error
 }
-
-type ConnectHandler func(p *packet.ConnectPacket) packet.ConnackCode
-type MessageHandler func(p *packet.MessagePacket, id *packet.Identity) error
-type RequestHandler func(p *packet.RequestPacket, id *packet.Identity) (*packet.ResponsePacket, error)
+type ConnectHandler func(p *packet.Connect) packet.ConnackCode
+type MessageHandler func(p *packet.Message, id *packet.Identity) error
+type RequestHandler func(p *packet.Request, id *packet.Identity) (*packet.Response, error)
 
 type Server interface {
 	Serve() error
@@ -23,6 +23,7 @@ type Server interface {
 	KickConn(cid string) error
 	Shutdown(ctx context.Context) error
 }
+
 type Error uint8
 
 const (

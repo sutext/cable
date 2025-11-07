@@ -1,31 +1,10 @@
-package coder
+package packet
 
 import (
 	"encoding/binary"
 )
 
-type Error uint8
-
-func (e Error) Error() string {
-	switch e {
-	case ErrBufferTooShort:
-		return "buffer too short"
-	case ErrVarintOverflow:
-		return "varint overflow"
-	case ErrInvalidReadLen:
-		return "invalid length when read"
-	default:
-		return "unknown error"
-	}
-}
-
-const (
-	ErrBufferTooShort Error = 1
-	ErrVarintOverflow Error = 2
-	ErrInvalidReadLen Error = 3
-)
-
-type Writer interface {
+type Encoder interface {
 	WriteBytes(p []byte)
 	WriteUInt8(i uint8)
 	WriteUInt16(i uint16)
@@ -40,7 +19,7 @@ type Writer interface {
 	WriteString(s string)
 	WriteStrMap(m map[string]string)
 }
-type Reader interface {
+type Decoder interface {
 	ReadBytes(l uint64) ([]byte, error)
 	ReadUInt8() (uint8, error)
 	ReadUInt16() (uint16, error)
@@ -57,8 +36,8 @@ type Reader interface {
 	ReadAll() ([]byte, error)
 }
 type Codable interface {
-	EncodeTo(Writer) error
-	DecodeFrom(Reader) error
+	EncodeTo(Encoder) error
+	DecodeFrom(Decoder) error
 }
 type coder struct {
 	pos uint64
@@ -250,6 +229,8 @@ func (b *coder) ReadAll() ([]byte, error) {
 	return p, nil
 }
 
+// Marshal encodes the given Codable to bytes.
+// Use compact binary encoding for integers and varints.
 func Marshal(c Codable) ([]byte, error) {
 	cd := &coder{pos: 0, buf: make([]byte, 0, 512)}
 	if err := c.EncodeTo(cd); err != nil {
@@ -257,6 +238,8 @@ func Marshal(c Codable) ([]byte, error) {
 	}
 	return cd.buf, nil
 }
-func Unmarshal(c Codable, buf []byte) error {
-	return c.DecodeFrom(&coder{pos: 0, buf: buf})
+
+// Unmarshal decodes the given bytes into the given Codable object.
+func Unmarshal(c Codable, bytes []byte) error {
+	return c.DecodeFrom(&coder{pos: 0, buf: bytes})
 }

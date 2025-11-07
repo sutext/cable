@@ -12,9 +12,9 @@ type Option struct {
 	f func(*Options)
 }
 type Options struct {
-	Network        string
 	UseNIO         bool
 	Logger         logger.Logger
+	Network        string
 	QuicConfig     *quic.Config
 	ConnectHandler ConnectHandler
 	MessageHandler MessageHandler
@@ -26,14 +26,14 @@ func NewOptions(opts ...Option) *Options {
 		Network: "tcp",
 		UseNIO:  true,
 		Logger:  logger.NewJSON(slog.LevelInfo),
-		ConnectHandler: func(p *packet.ConnectPacket) packet.ConnackCode {
+		ConnectHandler: func(p *packet.Connect) packet.ConnackCode {
 			return packet.ConnectionAccepted
 		},
-		MessageHandler: func(p *packet.MessagePacket, id *packet.Identity) error {
+		MessageHandler: func(p *packet.Message, id *packet.Identity) error {
 			return nil
 		},
-		RequestHandler: func(p *packet.RequestPacket, id *packet.Identity) (*packet.ResponsePacket, error) {
-			return &packet.ResponsePacket{Serial: p.Serial, Body: p.Body}, nil
+		RequestHandler: func(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
+			return nil, nil
 		},
 	}
 	for _, o := range opts {
@@ -56,9 +56,12 @@ func WithNIO(useNIO bool) Option {
 func WithLogger(logger logger.Logger) Option {
 	return Option{f: func(o *Options) { o.Logger = logger }}
 }
-func WithConnectHandler(handler ConnectHandler) Option {
+func WithConnect(handler ConnectHandler) Option {
 	return Option{f: func(o *Options) { o.ConnectHandler = handler }}
 }
-func WithMessageHandler(handler MessageHandler) Option {
+func WithMessage(handler MessageHandler) Option {
 	return Option{f: func(o *Options) { o.MessageHandler = handler }}
+}
+func WithRequest(handler RequestHandler) Option {
+	return Option{f: func(o *Options) { o.RequestHandler = handler }}
 }

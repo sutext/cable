@@ -21,15 +21,12 @@ func (e Error) Error() string {
 	return [...]string{"ErrNotConnected", "ErrRequestTimeout"}[e]
 }
 
-type StatusHandler func(status Status)
-type MessageHandler func(p *packet.MessagePacket) error
-type RequestHandler func(p *packet.RequestPacket) (*packet.ResponsePacket, error)
 type Client interface {
 	ID() *packet.Identity
 	Status() Status
 	Connect(identity *packet.Identity)
-	Request(ctx context.Context, p *packet.RequestPacket) (*packet.ResponsePacket, error)
-	SendMessage(p *packet.MessagePacket) error
+	Request(ctx context.Context, p *packet.Request) (*packet.Response, error)
+	SendMessage(p *packet.Message) error
 }
 type client struct {
 	mu             *sync.RWMutex
@@ -39,12 +36,10 @@ type client struct {
 	logger         logger.Logger
 	address        string
 	retrier        *Retrier
+	handler        Handler
 	identity       *packet.Identity
 	retrying       bool
 	keepalive      *keepalive.KeepAlive
-	statusHandler  StatusHandler
-	messageHandler MessageHandler
-	requestHandler RequestHandler
 	requestTimeout time.Duration
 }
 
@@ -52,14 +47,12 @@ func New(address string, options ...Option) Client {
 	opts := newOptions(options...)
 	c := &client{
 		mu:             new(sync.RWMutex),
-		address:        address,
 		status:         StatusUnknown,
 		logger:         opts.logger,
+		address:        address,
 		retrier:        NewRetrier(opts.retryLimit, opts.retryBackoff),
+		handler:        opts.handler,
 		keepalive:      keepalive.New(opts.pingInterval, opts.pingTimeout),
-		statusHandler:  opts.statusHandler,
-		messageHandler: opts.messageHandler,
-		requestHandler: opts.requestHandler,
 		requestTimeout: opts.requestTimeout,
 	}
 	c.keepalive.PingFunc(func() {
@@ -141,12 +134,12 @@ func (c *client) SendPing() error {
 func (c *client) SendPong() error {
 	return c.sendPacket(packet.NewPong())
 }
-func (c *client) SendMessage(p *packet.MessagePacket) error {
+func (c *client) SendMessage(p *packet.Message) error {
 	return c.sendPacket(p)
 }
-func (c *client) Request(ctx context.Context, p *packet.RequestPacket) (*packet.ResponsePacket, error) {
+func (c *client) Request(ctx context.Context, p *packet.Request) (*packet.Response, error) {
 	c.sendPacket(p)
-	resp := make(chan *packet.ResponsePacket)
+	resp := make(chan *packet.Response)
 	c.tasks.Store(p.Serial, resp)
 	select {
 	case res := <-resp:
@@ -197,34 +190,25 @@ func (c *client) handlePacket(p packet.Packet) {
 	c.logger.Info("receive", "packet", p.String())
 	switch p.Type() {
 	case packet.CONNACK:
-		p := p.(*packet.ConnackPacket)
+		p := p.(*packet.Connack)
 		if p.Code != 0 {
 			return
 		}
 		c.safeSetStatus(StatusOpened)
 	case packet.MESSAGE:
-		p := p.(*packet.MessagePacket)
-		if c.messageHandler != nil {
-			err := c.messageHandler(p)
-			if err != nil {
-				c.logger.Error("data handler error", "error", err)
-			}
-		}
+		c.handler.OnMessage(p.(*packet.Message))
 	case packet.REQUEST:
-		p := p.(*packet.RequestPacket)
-		if c.requestHandler != nil {
-			res, err := c.requestHandler(p)
-			if err != nil {
-				c.logger.Error("request handler error", "error", err)
-			}
-			if res != nil {
-				c.sendPacket(res)
-			}
+		res, err := c.handler.OnRequest(p.(*packet.Request))
+		if err != nil {
+			c.logger.Error("request handler error", "error", err)
+		}
+		if res != nil {
+			c.sendPacket(res)
 		}
 	case packet.RESPONSE:
-		p := p.(*packet.ResponsePacket)
+		p := p.(*packet.Response)
 		if t, ok := c.tasks.LoadAndDelete(p.Serial); ok {
-			t.(chan *packet.ResponsePacket) <- p
+			t.(chan *packet.Response) <- p
 		} else {
 			c.logger.Error("response task not found", "serial", p.Serial)
 		}
@@ -233,7 +217,7 @@ func (c *client) handlePacket(p packet.Packet) {
 	case packet.PONG:
 		c.keepalive.HandlePong()
 	case packet.CLOSE:
-		c.tryClose(p.(*packet.ClosePacket).Code)
+		c.tryClose(p.(*packet.Close).Code)
 	default:
 
 	}
