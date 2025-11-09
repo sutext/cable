@@ -15,8 +15,8 @@ func TestPacket(t *testing.T) {
 	testp(t, NewPing())
 	testp(t, NewPong())
 	testp(t, NewClose(0))
-	testp(t, NewRequest())
-	testp(t, NewResponse())
+	testp(t, NewRequest("test"))
+	testp(t, NewResponse(1))
 }
 func SmallMessage() Packet {
 	return NewMessage([]byte("hello world"))

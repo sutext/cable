@@ -56,7 +56,9 @@ func New(address string, options ...Option) Client {
 		requestTimeout: opts.requestTimeout,
 	}
 	c.keepalive.PingFunc(func() {
-		c.sendPacket(packet.NewPing())
+		if err := c.sendPacket(packet.NewPing()); err != nil {
+			c.logger.Error("send ping error", "error", err)
+		}
 	})
 	c.keepalive.TimeoutFunc(func() {
 		c.tryClose(CloseReasonPingTimeout)
@@ -120,6 +122,7 @@ func (c *client) reconnect() {
 	c.conn = &conn{}
 	c.conn.onPacket(c.handlePacket)
 	c.conn.onError(c.tryClose)
+	c.logger.Info("start connecting to address", "address", c.address)
 	err := c.conn.connect(c.address)
 	if err != nil {
 		c.tryClose(err)
@@ -138,9 +141,10 @@ func (c *client) SendMessage(p *packet.Message) error {
 	return c.sendPacket(p)
 }
 func (c *client) Request(ctx context.Context, p *packet.Request) (*packet.Response, error) {
-	c.sendPacket(p)
 	resp := make(chan *packet.Response)
-	c.tasks.Store(p.Serial, resp)
+	defer close(resp)
+	c.tasks.Store(p.Seq, resp)
+	c.sendPacket(p)
 	select {
 	case res := <-resp:
 		return res, nil
@@ -187,7 +191,6 @@ func (c *client) setStatus(status Status) {
 	}
 }
 func (c *client) handlePacket(p packet.Packet) {
-	c.logger.Info("receive", "packet", p.String())
 	switch p.Type() {
 	case packet.CONNACK:
 		p := p.(*packet.Connack)
@@ -196,6 +199,7 @@ func (c *client) handlePacket(p packet.Packet) {
 		}
 		c.safeSetStatus(StatusOpened)
 	case packet.MESSAGE:
+		c.logger.Debug("receive message", "message", p.(*packet.Message))
 		c.handler.OnMessage(p.(*packet.Message))
 	case packet.REQUEST:
 		res, err := c.handler.OnRequest(p.(*packet.Request))
@@ -207,10 +211,10 @@ func (c *client) handlePacket(p packet.Packet) {
 		}
 	case packet.RESPONSE:
 		p := p.(*packet.Response)
-		if t, ok := c.tasks.LoadAndDelete(p.Serial); ok {
+		if t, ok := c.tasks.LoadAndDelete(p.Seq); ok {
 			t.(chan *packet.Response) <- p
 		} else {
-			c.logger.Error("response task not found", "serial", p.Serial)
+			c.logger.Error("response task not found", "seq", p.Seq)
 		}
 	case packet.PING:
 		c.SendPong()

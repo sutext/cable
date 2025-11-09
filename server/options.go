@@ -24,7 +24,7 @@ type Options struct {
 func NewOptions(opts ...Option) *Options {
 	var options = &Options{
 		Network: "tcp",
-		UseNIO:  true,
+		UseNIO:  false,
 		Logger:  logger.NewJSON(slog.LevelInfo),
 		ConnectHandler: func(p *packet.Connect) packet.ConnackCode {
 			return packet.ConnectionAccepted

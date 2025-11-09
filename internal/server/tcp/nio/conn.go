@@ -40,9 +40,10 @@ func (c *conn) SendMessage(p *packet.Message) error {
 	return c.sendPacket(p)
 }
 func (c *conn) Request(ctx context.Context, p *packet.Request) (*packet.Response, error) {
-	c.sendPacket(p)
 	resp := make(chan *packet.Response)
-	c.tasks.Store(p.Serial, resp)
+	defer close(resp)
+	c.tasks.Store(p.Seq, resp)
+	c.sendPacket(p)
 	select {
 	case res := <-resp:
 		return res, nil
@@ -53,7 +54,7 @@ func (c *conn) Request(ctx context.Context, p *packet.Request) (*packet.Response
 	}
 }
 func (c *conn) handleResponse(p *packet.Response) {
-	if resp, ok := c.tasks.LoadAndDelete(p.Serial); ok {
+	if resp, ok := c.tasks.LoadAndDelete(p.Seq); ok {
 		(resp.(chan *packet.Response)) <- p
 	}
 }

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"context"
 	"fmt"
+	"math"
 	"math/rand/v2"
 	"time"
 
@@ -12,30 +12,46 @@ import (
 )
 
 type Client struct {
+	id      *packet.Identity
 	cli     client.Client
-	userId  string
-	token   string
-	backoff backoff.Backoff
 	count   int
+	backoff backoff.Backoff
 }
 
-func RandomClient() *Client {
-	return &Client{
-		cli:     client.New("localhost:8080"),
-		userId:  fmt.Sprintf("user_%d", rand.Int()),
-		token:   fmt.Sprintf("access_token_%d", rand.Int()),
-		backoff: backoff.Random(time.Second*5, time.Second*10),
-		count:   0,
-	}
+func (c *Client) OnStatus(status client.Status) {
+
 }
+func (c *Client) OnMessage(msg *packet.Message) {
+	fmt.Printf("client %s receive message: %s\n", c.id.UserID, string(msg.Payload))
+}
+func (c *Client) OnRequest(req *packet.Request) (*packet.Response, error) {
+	return nil, fmt.Errorf("unsupported request")
+}
+func RandomClient() *Client {
+	result := &Client{}
+	addrs := []string{"localhost:8080", "localhost:8081", "localhost:8082", "localhost:8083"}
+	result.cli = client.New(addrs[rand.IntN(len(addrs))],
+		client.WithKeepAlive(time.Second*5, time.Second*60),
+		client.WithRetry(math.MaxInt, backoff.Exponential(2, 2)),
+		client.WithHandler(result),
+	)
+	result.id = &packet.Identity{UserID: fmt.Sprintf("user_%d", rand.Int()), ClientID: fmt.Sprintf("client_%d", rand.Int())}
+	result.backoff = backoff.Random(time.Second*3, time.Second*10)
+	return result
+}
+
+var channels = []string{"news", "sports", "tech", "music", "movies"}
+
 func (c *Client) Start() {
-	c.cli.Connect(&packet.Identity{Credential: c.userId, UserID: c.userId, ClientID: c.token})
+	c.cli.Connect(c.id)
 	for {
-		req := packet.NewRequest()
-		req.Body = []byte("hello world")
-		req.Serial = rand.Uint64()
-		res, _ := c.cli.Request(context.Background(), req)
-		fmt.Println("Request ok got:", string(res.Body))
+		channel := channels[rand.IntN(len(channels))]
+		msg := packet.NewMessage(fmt.Appendf(nil, "hello im client %s", c.id.UserID))
+		msg.Channel = channel
+		err := c.cli.SendMessage(msg)
+		if err != nil {
+			fmt.Printf("client %s send message error: %v\n", c.id.UserID, err)
+		}
 		time.Sleep(c.backoff.Next(c.count))
 		c.count++
 	}
@@ -46,7 +62,8 @@ func addClient(count uint) {
 		go c.Start()
 	}
 }
+
 func main() {
-	addClient(2)
+	addClient(10)
 	select {}
 }

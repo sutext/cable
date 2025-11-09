@@ -1,0 +1,63 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"log/slog"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"sutext.github.io/cable/broker"
+	"sutext.github.io/cable/internal/logger"
+)
+
+func main() {
+	ctx := context.Background()
+	logger := logger.NewJSON(slog.LevelError)
+
+	logger.Info("entry server start")
+	ctx, cancel := context.WithCancelCause(ctx)
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		<-sigs
+		logger.Info("entry signal received")
+		cancel(fmt.Errorf("entry signal received"))
+	}()
+	peers := []string{"broker1@localhost:4369", "broker2@localhost:4370", "broker3@localhost:4371", "broker4@localhost:4372"}
+	listeners := []broker.Listener{
+		{Address: ":8080", Network: "tcp"},
+		{Address: ":8081", Network: "tcp"},
+		{Address: ":8082", Network: "tcp"},
+		{Address: ":8083", Network: "tcp"},
+	}
+	brokers := make([]broker.Broker, 4)
+	for i := range 4 {
+		brokers[i] = broker.NewBroker(
+			broker.WithBrokerID(peers[i]),
+			broker.WithListeners(listeners[i]),
+			broker.WithPeers(peers),
+			broker.WithLogger(logger),
+		)
+		brokers[i].Start()
+	}
+	<-ctx.Done()
+	logger.Info("entry server start graceful shutdown")
+	done := make(chan struct{})
+	go func() {
+		for _, b := range brokers {
+			b.Shutdown()
+		}
+		close(done)
+	}()
+	timeout := time.NewTimer(time.Second * 15)
+	defer timeout.Stop()
+	select {
+	case <-timeout.C:
+		logger.Warn("entry server graceful shutdown timeout")
+	case <-done:
+		logger.Debug("entry server graceful shutdown")
+	}
+}

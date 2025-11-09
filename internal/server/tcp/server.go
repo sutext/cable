@@ -68,5 +68,8 @@ func (s *tcpServer) addConn(c *conn) {
 	}
 }
 func (s *tcpServer) delConn(c *conn) {
-	s.conns.Delete(c.ID().ClientID)
+	id := c.ID()
+	if id != nil {
+		s.conns.Delete(id.ClientID)
+	}
 }

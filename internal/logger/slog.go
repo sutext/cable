@@ -6,13 +6,15 @@ import (
 	"os"
 )
 
-func NewText(level slog.Level) Logger {
+type Level = slog.Level
+
+func NewText(level Level) Logger {
 	handler := slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
 		Level: level,
 	})
 	return slog.New(newRequestContextHandler(handler))
 }
-func NewJSON(level slog.Level) Logger {
+func NewJSON(level Level) Logger {
 	handler := slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
 		Level: level,
 	})

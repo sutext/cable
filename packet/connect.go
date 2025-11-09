@@ -79,6 +79,17 @@ const (
 	ConnectionRejected ConnackCode = 1
 )
 
+func (c ConnackCode) String() string {
+	switch c {
+	case ConnectionAccepted:
+		return "Connection Accepted"
+	case ConnectionRejected:
+		return "Connection Rejected"
+	default:
+		return "Unknown Connack Code"
+	}
+}
+
 type Connack struct {
 	Code ConnackCode
 }
@@ -89,7 +100,7 @@ func NewConnack(code ConnackCode) *Connack {
 	}
 }
 func (p *Connack) String() string {
-	return fmt.Sprintf("CONNACK(%d)", p.Code)
+	return fmt.Sprintf("CONNACK:%s", p.Code.String())
 }
 func (P *Connack) Type() PacketType {
 	return CONNACK

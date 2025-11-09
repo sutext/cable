@@ -40,12 +40,13 @@ type Option struct {
 
 func newOptions(options ...Option) *Options {
 	opts := &Options{
-		logger:       logger.NewJSON(slog.LevelDebug),
-		handler:      &emptyHandler{},
-		retryLimit:   math.MaxInt,
-		retryBackoff: backoff.Default(),
-		pingTimeout:  time.Second * 5,
-		pingInterval: time.Second * 60,
+		logger:         logger.NewJSON(slog.LevelDebug),
+		handler:        &emptyHandler{},
+		retryLimit:     math.MaxInt,
+		retryBackoff:   backoff.Default(),
+		pingTimeout:    time.Second * 5,
+		pingInterval:   time.Second * 60,
+		requestTimeout: time.Second * 5,
 	}
 	for _, o := range options {
 		o.f(opts)

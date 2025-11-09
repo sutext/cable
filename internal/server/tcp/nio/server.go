@@ -76,9 +76,7 @@ func (s *nioServer) handlePacket(id *packet.Identity, p packet.Packet) {
 	conn := cn.(*conn)
 	switch p.Type() {
 	case packet.MESSAGE:
-		p := p.(*packet.Message)
-		s.messageHandler(p, id)
-
+		s.messageHandler(p.(*packet.Message), id)
 	case packet.REQUEST:
 		p := p.(*packet.Request)
 		res, err := s.requestHandler(p, id)
@@ -138,7 +136,7 @@ func (s *nioServer) onConnect(ctx context.Context, c netpoll.Connection) context
 			Connection: c,
 			id:         connPacket.Identity,
 		}
-		if old, loaded := s.conns.LoadOrStore(connPacket.Identity.ClientID, cn); loaded {
+		if old, loaded := s.conns.Swap(connPacket.Identity.ClientID, cn); loaded {
 			old.(*conn).Close(packet.CloseDuplicateLogin)
 		}
 	}
