@@ -139,7 +139,7 @@ func (c *conn) doAuth(id *packet.Connect) packet.ConnackCode {
 	if c.id != nil {
 		return packet.ConnectionAccepted
 	}
-	code := c.server.connectHander(id)
+	code := c.server.connectHander(c.server, id)
 	if code == packet.ConnectionAccepted {
 		c.id = id.Identity
 		c.authed <- struct{}{}
@@ -162,14 +162,14 @@ func (c *conn) handlePacket(p packet.Packet) {
 			return
 		}
 		p := p.(*packet.Message)
-		c.server.messageHandler(p, c.id)
+		c.server.messageHandler(c.server, p, c.id)
 
 	case packet.REQUEST:
 		if c.id == nil {
 			return
 		}
 		p := p.(*packet.Request)
-		res, err := c.server.requestHandler(p, c.id)
+		res, err := c.server.requestHandler(c.server, p, c.id)
 		if err != nil {
 			return
 		}

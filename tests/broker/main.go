@@ -11,27 +11,25 @@ import (
 
 	"sutext.github.io/cable/broker"
 	"sutext.github.io/cable/internal/logger"
+	"sutext.github.io/cable/server"
 )
 
 func main() {
 	ctx := context.Background()
-	logger := logger.NewJSON(slog.LevelError)
-
-	logger.Info("entry server start")
+	logger := logger.NewText(slog.LevelDebug)
 	ctx, cancel := context.WithCancelCause(ctx)
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigs
-		logger.Info("entry signal received")
 		cancel(fmt.Errorf("entry signal received"))
 	}()
 	peers := []string{"broker1@localhost:4369", "broker2@localhost:4370", "broker3@localhost:4371", "broker4@localhost:4372"}
 	listeners := []broker.Listener{
-		{Address: ":8080", Network: "tcp"},
-		{Address: ":8081", Network: "tcp"},
-		{Address: ":8082", Network: "tcp"},
-		{Address: ":8083", Network: "tcp"},
+		{Address: ":8080", Network: server.NetworkTCP},
+		{Address: ":8081", Network: server.NetworkTCP},
+		{Address: ":8082", Network: server.NetworkTCP},
+		{Address: ":8083", Network: server.NetworkTCP},
 	}
 	brokers := make([]broker.Broker, 4)
 	for i := range 4 {
@@ -44,7 +42,6 @@ func main() {
 		brokers[i].Start()
 	}
 	<-ctx.Done()
-	logger.Info("entry server start graceful shutdown")
 	done := make(chan struct{})
 	go func() {
 		for _, b := range brokers {

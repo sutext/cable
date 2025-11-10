@@ -59,6 +59,9 @@ func (s *nioServer) Shutdown(ctx context.Context) error {
 	}
 	return nil
 }
+func (s *nioServer) Network() server.Network {
+	return server.NetworkTCP
+}
 func (s *nioServer) KickConn(cid string) error {
 	if cn, ok := s.conns.Load(cid); ok {
 		cn.(*conn).Close(packet.CloseKickedOut)
@@ -76,10 +79,10 @@ func (s *nioServer) handlePacket(id *packet.Identity, p packet.Packet) {
 	conn := cn.(*conn)
 	switch p.Type() {
 	case packet.MESSAGE:
-		s.messageHandler(p.(*packet.Message), id)
+		s.messageHandler(s, p.(*packet.Message), id)
 	case packet.REQUEST:
 		p := p.(*packet.Request)
-		res, err := s.requestHandler(p, id)
+		res, err := s.requestHandler(s, p, id)
 		if err != nil {
 			return
 		}
@@ -130,7 +133,7 @@ func (s *nioServer) onConnect(ctx context.Context, c netpoll.Connection) context
 		s.close(c, packet.CloseInternalError)
 		return ctx
 	}
-	code := s.connectHander(connPacket)
+	code := s.connectHander(s, connPacket)
 	if code == packet.ConnectionAccepted {
 		cn := &conn{
 			Connection: c,

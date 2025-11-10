@@ -40,7 +40,7 @@ type Option struct {
 
 func newOptions(options ...Option) *Options {
 	opts := &Options{
-		logger:         logger.NewJSON(slog.LevelDebug),
+		logger:         logger.NewText(slog.LevelDebug),
 		handler:        &emptyHandler{},
 		retryLimit:     math.MaxInt,
 		retryBackoff:   backoff.Default(),

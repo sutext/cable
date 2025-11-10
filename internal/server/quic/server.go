@@ -63,6 +63,9 @@ func (s *quicServer) KickConn(cid string) error {
 func (s *quicServer) Shutdown(ctx context.Context) error {
 	return nil
 }
+func (s *quicServer) Network() server.Network {
+	return server.NetworkQUIC
+}
 func (s *quicServer) addConn(c *conn) {
 	if cn, loaded := s.conns.LoadOrStore(c.ID().ClientID, c); loaded {
 		cn.(*conn).Close(packet.CloseDuplicateLogin)

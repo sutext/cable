@@ -41,6 +41,9 @@ func NewQueue(workerCount int, bufferSize int) *Queue {
 	}
 	return mq
 }
+func (mq *Queue) Count() int64 {
+	return mq.count.Load()
+}
 
 // Push submits a function to the queue.
 // Returns an error if the queue is stopped or if the queue is full.

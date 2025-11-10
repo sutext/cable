@@ -61,6 +61,9 @@ func (s *tcpServer) KickConn(cid string) error {
 func (s *tcpServer) Shutdown(ctx context.Context) error {
 	return nil
 }
+func (s *tcpServer) Network() server.Network {
+	return server.NetworkTCP
+}
 func (s *tcpServer) addConn(c *conn) {
 	if old, loaded := s.conns.Swap(c.ID().ClientID, c); loaded {
 		old.(*conn).Close(packet.CloseDuplicateLogin)

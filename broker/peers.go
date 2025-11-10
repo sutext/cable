@@ -2,6 +2,7 @@ package broker
 
 import (
 	"context"
+	"encoding/json"
 	"math"
 	"time"
 
@@ -10,13 +11,6 @@ import (
 	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
 )
-
-type Peer interface {
-	SendMessage(m *packet.Message) error
-	IsOnline(uid string) (bool, error)
-	KickConn(cid string) error
-	KickUser(uid string) error
-}
 
 type peer struct {
 	id     *packet.Identity
@@ -44,7 +38,7 @@ func (p *peer) ID() *packet.Identity {
 func (p *peer) Connect() {
 	p.client.Connect(p.id)
 }
-func (p *peer) SendMessage(ctx context.Context, m *packet.Message) error {
+func (p *peer) sendMessage(ctx context.Context, m *packet.Message) error {
 	body, err := packet.Marshal(m)
 	if err != nil {
 		return err
@@ -53,7 +47,7 @@ func (p *peer) SendMessage(ctx context.Context, m *packet.Message) error {
 	_, err = p.client.Request(ctx, req)
 	return err
 }
-func (p *peer) IsOnline(ctx context.Context, uid string) (bool, error) {
+func (p *peer) isOnline(ctx context.Context, uid string) (bool, error) {
 	req := packet.NewRequest("IsOnline", []byte(uid))
 	res, err := p.client.Request(ctx, req)
 	if err != nil {
@@ -61,13 +55,24 @@ func (p *peer) IsOnline(ctx context.Context, uid string) (bool, error) {
 	}
 	return res.Body[0] == 1, nil
 }
-func (p *peer) KickConn(ctx context.Context, cid string) error {
+func (p *peer) kickConn(ctx context.Context, cid string) error {
 	req := packet.NewRequest("KickConn", []byte(cid))
 	_, err := p.client.Request(ctx, req)
 	return err
 }
-func (p *peer) KickUser(ctx context.Context, uid string) error {
+func (p *peer) kickUser(ctx context.Context, uid string) error {
 	req := packet.NewRequest("KickUser", []byte(uid))
 	_, err := p.client.Request(ctx, req)
 	return err
+}
+func (p *peer) inspect(ctx context.Context) (isp Inspect, err error) {
+	req := packet.NewRequest("Inspect", nil)
+	res, err := p.client.Request(ctx, req)
+	if err != nil {
+		return isp, err
+	}
+	if err := json.Unmarshal(res.Body, &isp); err != nil {
+		return isp, nil
+	}
+	return isp, nil
 }

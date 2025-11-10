@@ -12,14 +12,14 @@ import (
 func NewServer(address string, opts ...server.Option) server.Server {
 	options := server.NewOptions(opts...)
 	switch options.Network {
-	case "tcp":
+	case server.NetworkTCP:
 		if options.UseNIO {
 			return nio.NewNIO(address, options)
 		}
 		return tcp.NewTCP(address, options)
-	case "quic":
+	case server.NetworkQUIC:
 		return quic.NewQUIC(address, options)
 	default:
-		panic(fmt.Sprintf("Network type %s not support!", options.Network))
+		panic(fmt.Sprintf("Transport type %s not support!", options.Network))
 	}
 }

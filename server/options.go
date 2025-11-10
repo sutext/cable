@@ -8,13 +8,21 @@ import (
 	"sutext.github.io/cable/packet"
 )
 
+type Network = uint8
+
+const (
+	NetworkWS Network = iota
+	NetworkTCP
+	NetworkQUIC
+)
+
 type Option struct {
 	f func(*Options)
 }
 type Options struct {
 	UseNIO         bool
 	Logger         logger.Logger
-	Network        string
+	Network        Network
 	QuicConfig     *quic.Config
 	ConnectHandler ConnectHandler
 	MessageHandler MessageHandler
@@ -23,16 +31,16 @@ type Options struct {
 
 func NewOptions(opts ...Option) *Options {
 	var options = &Options{
-		Network: "tcp",
+		Network: NetworkTCP,
 		UseNIO:  false,
-		Logger:  logger.NewJSON(slog.LevelInfo),
-		ConnectHandler: func(p *packet.Connect) packet.ConnackCode {
+		Logger:  logger.NewText(slog.LevelDebug),
+		ConnectHandler: func(s Server, p *packet.Connect) packet.ConnackCode {
 			return packet.ConnectionAccepted
 		},
-		MessageHandler: func(p *packet.Message, id *packet.Identity) error {
+		MessageHandler: func(s Server, p *packet.Message, id *packet.Identity) error {
 			return nil
 		},
-		RequestHandler: func(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
+		RequestHandler: func(s Server, p *packet.Request, id *packet.Identity) (*packet.Response, error) {
 			return nil, nil
 		},
 	}
@@ -43,12 +51,12 @@ func NewOptions(opts ...Option) *Options {
 }
 func WithQUIC(config *quic.Config) Option {
 	return Option{f: func(o *Options) {
-		o.Network = "quic"
+		o.Network = NetworkQUIC
 		o.QuicConfig = config
 	}}
 }
 func WithTCP() Option {
-	return Option{f: func(o *Options) { o.Network = "tcp" }}
+	return Option{f: func(o *Options) { o.Network = NetworkTCP }}
 }
 func WithNIO(useNIO bool) Option {
 	return Option{f: func(o *Options) { o.UseNIO = useNIO }}

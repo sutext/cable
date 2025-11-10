@@ -4,11 +4,12 @@ import (
 	"log/slog"
 
 	"sutext.github.io/cable/internal/logger"
+	"sutext.github.io/cable/server"
 )
 
 type Listener struct {
 	Address string
-	Network string
+	Network server.Network
 }
 
 type options struct {
@@ -22,7 +23,7 @@ type options struct {
 
 func newOptions(opts ...Option) *options {
 	options := &options{
-		logger:      logger.NewJSON(slog.LevelDebug),
+		logger:      logger.NewText(slog.LevelDebug),
 		queueWorker: 32,
 		queueBuffer: 100,
 	}
