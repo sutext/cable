@@ -31,7 +31,7 @@ func (c *Client) OnRequest(req *packet.Request) (*packet.Response, error) {
 }
 func RandomClient() *Client {
 	result := &Client{}
-	addrs := []string{"localhost:8080", "localhost:8081", "localhost:8082", "localhost:8083"}
+	addrs := []string{"172.16.2.123:8080", "172.16.2.123:8081", "172.16.2.123:8082", "172.16.2.123:8083"}
 	result.cli = client.New(addrs[rand.IntN(len(addrs))],
 		client.WithKeepAlive(time.Second*5, time.Second*60),
 		client.WithRetry(math.MaxInt, backoff.Exponential(2, 2)),
@@ -47,17 +47,17 @@ var channels = []string{"news", "sports", "tech", "music", "movies"}
 
 func (c *Client) Start() {
 	c.cli.Connect(c.id)
-	for {
-		channel := channels[rand.IntN(len(channels))]
-		msg := packet.NewMessage(fmt.Appendf(nil, "hello im client %s", c.id.UserID))
-		msg.Channel = channel
-		err := c.cli.SendMessage(msg)
-		if err != nil {
-			fmt.Printf("client %s send message error: %v\n", c.id.UserID, err)
-		}
-		time.Sleep(c.backoff.Next(c.count))
-		c.count++
-	}
+	// for {
+	// 	channel := channels[rand.IntN(len(channels))]
+	// 	msg := packet.NewMessage(fmt.Appendf(nil, "hello im client %s", c.id.UserID))
+	// 	msg.Channel = channel
+	// 	err := c.cli.SendMessage(msg)
+	// 	if err != nil {
+	// 		fmt.Printf("client %s send message error: %v\n", c.id.UserID, err)
+	// 	}
+	// 	time.Sleep(c.backoff.Next(c.count))
+	// 	c.count++
+	// }
 }
 func addClient(count uint) {
 	for range count {
@@ -67,6 +67,6 @@ func addClient(count uint) {
 }
 
 func main() {
-	addClient(100)
+	addClient(10)
 	select {}
 }

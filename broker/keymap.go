@@ -35,13 +35,13 @@ func (s *KeyMap) Range(key string, f func(string, uint8) bool) {
 		})
 	}
 }
-func (s *KeyMap) Dump() map[string]map[string]uint8 {
-	m := make(map[string]map[string]uint8)
+func (s *KeyMap) Dump() map[string]int {
+	m := make(map[string]int)
 	s.m.Range(func(k, v any) bool {
 		key := k.(string)
-		m[key] = make(map[string]uint8)
+		m[key] = 0
 		v.(*sync.Map).Range(func(k, v any) bool {
-			m[key][k.(string)] = v.(uint8)
+			m[key] += 1
 			return true
 		})
 		return true

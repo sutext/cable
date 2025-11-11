@@ -1,8 +1,8 @@
 package broker
 
 type Inspect struct {
-	ID       string                      `json:"id"`
-	Queue    int64                       `json:"queue"`
-	Clients  map[string]map[string]uint8 `json:"clients"`
-	Channels map[string]map[string]uint8 `json:"channels"`
+	ID       string         `json:"id"`
+	Queue    int64          `json:"queue"`
+	Clients  map[string]int `json:"clients"`
+	Channels map[string]int `json:"channels"`
 }
