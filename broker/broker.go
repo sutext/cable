@@ -19,7 +19,7 @@ import (
 type Broker interface {
 	Start() error
 	Shutdown() error
-	Inspects() ([]Inspect, error)
+	Inspects() ([]*Inspect, error)
 	IsOnline(ctx context.Context, uid string) (ok bool)
 	KickConn(ctx context.Context, cid string)
 	KickUser(ctx context.Context, uid string)
@@ -84,16 +84,18 @@ func (b *broker) Shutdown() error {
 	}
 	return b.peerServer.Shutdown(ctx)
 }
-func (b *broker) Inspects() ([]Inspect, error) {
+func (b *broker) Inspects() ([]*Inspect, error) {
 	ctx := context.Background()
-	inspects := make([]Inspect, len(b.peers)+1)
-	inspects[0] = b.inspect()
+	inspects := make([]*Inspect, len(b.peers)+2)
+	inspects[0] = NewInspect()
+	inspects[1] = b.inspect()
 	for i, p := range b.peers {
 		isp, err := p.inspect(ctx)
 		if err != nil {
 			return nil, err
 		}
-		inspects[i+1] = isp
+		inspects[0].merge(isp)
+		inspects[i+2] = isp
 	}
 	return inspects, nil
 }
@@ -270,11 +272,11 @@ func (b *broker) sendMessage(m *packet.Message) error {
 	})
 	return nil
 }
-func (b *broker) inspect() Inspect {
-	return Inspect{
+func (b *broker) inspect() *Inspect {
+	return &Inspect{
 		ID:       b.id,
 		Queue:    b.taskQueue.Count(),
-		Clients:  b.users.Dump(),
+		Clients:  len(b.users.Dump()),
 		Channels: b.channels.Dump(),
 	}
 }

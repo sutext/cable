@@ -67,6 +67,6 @@ func addClient(count uint) {
 }
 
 func main() {
-	addClient(10)
+	addClient(1000)
 	select {}
 }

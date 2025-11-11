@@ -65,14 +65,15 @@ func (p *peer) kickUser(ctx context.Context, uid string) error {
 	_, err := p.client.Request(ctx, req)
 	return err
 }
-func (p *peer) inspect(ctx context.Context) (isp Inspect, err error) {
+func (p *peer) inspect(ctx context.Context) (*Inspect, error) {
 	req := packet.NewRequest("Inspect", nil)
 	res, err := p.client.Request(ctx, req)
 	if err != nil {
-		return isp, err
+		return nil, err
 	}
+	var isp Inspect
 	if err := json.Unmarshal(res.Body, &isp); err != nil {
-		return isp, nil
+		return nil, err
 	}
-	return isp, nil
+	return &isp, nil
 }
