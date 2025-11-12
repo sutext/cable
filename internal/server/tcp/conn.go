@@ -2,9 +2,9 @@ package tcp
 
 import (
 	"context"
-	"errors"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"sutext.github.io/cable/internal/logger"
@@ -13,60 +13,50 @@ import (
 )
 
 type conn struct {
-	id     *packet.Identity
-	mu     *sync.RWMutex
-	raw    net.Conn
-	tasks  sync.Map
-	server *tcpServer
-	authed chan struct{}
-	logger logger.Logger
-	// keepAlive *keepalive.KeepAlive
+	id           *packet.Identity
+	closed       atomic.Bool
+	raw          net.Conn
+	server       *tcpServer
+	authed       chan struct{}
+	logger       logger.Logger
+	sendQueue    chan []byte
+	requestTasks sync.Map
 }
 
 func newConn(raw net.Conn, server *tcpServer) *conn {
 	c := &conn{
-		mu:     new(sync.RWMutex),
-		raw:    raw,
-		server: server,
-		logger: server.logger,
-		authed: make(chan struct{}),
+		raw:       raw,
+		server:    server,
+		logger:    server.logger,
+		authed:    make(chan struct{}),
+		sendQueue: make(chan []byte, 1024),
 	}
-	// c.keepAlive = keepalive.New(time.Second*60, time.Second*5)
-	// c.keepAlive.PingFunc(func() {
-	// 	c.SendPing()
-	// })
-	// c.keepAlive.TimeoutFunc(func() {
-	// 	c.Close(packet.CloseNoHeartbeat)
-	// })
 	return c
 }
 func (c *conn) ID() *packet.Identity {
 	return c.id
 }
 func (c *conn) IsActive() bool {
-	return c.raw != nil
+	return !c.closed.Load()
 }
 func (c *conn) Close(code packet.CloseCode) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.raw == nil {
-		return
-	}
 	c.sendPacket(packet.NewClose(code))
-	c.raw.Close()
-	// c.keepAlive.Stop()
-	close(c.authed)
-	c.clear()
+	c.close()
 }
 
-func (c *conn) clear() {
-	c.server.delConn(c)
-	c.mu = nil
-	c.raw = nil
-	// c.keepAlive = nil
-	c.server = nil
-	c.authed = nil
+func (c *conn) close() {
+	if c.closed.CompareAndSwap(false, true) {
+		c.server.delConn(c)
+		close(c.authed)
+		close(c.sendQueue)
+		c.raw.Close()
+		c.raw = nil
+		c.server = nil
+		c.authed = nil
+		c.sendQueue = nil
+	}
 }
+
 func (c *conn) serve() {
 	go func() {
 		timer := time.NewTimer(time.Second * 10)
@@ -77,6 +67,17 @@ func (c *conn) serve() {
 		case <-timer.C:
 			c.Close(packet.CloseAuthenticationTimeout)
 			return
+		}
+	}()
+	go func() {
+		for data := range c.sendQueue {
+			if c.closed.Load() {
+				return
+			}
+			if _, err := c.raw.Write(data); err != nil {
+				c.close()
+				return
+			}
 		}
 	}()
 	for {
@@ -93,7 +94,6 @@ func (c *conn) serve() {
 		go c.handlePacket(p)
 	}
 }
-
 func (c *conn) SendPing() error {
 	return c.sendPacket(packet.NewPing())
 }
@@ -106,39 +106,35 @@ func (c *conn) SendMessage(p *packet.Message) error {
 func (c *conn) Request(ctx context.Context, p *packet.Request) (*packet.Response, error) {
 	resp := make(chan *packet.Response)
 	defer close(resp)
-	c.tasks.Store(p.Seq, resp)
-	c.sendPacket(p)
+	c.requestTasks.Store(p.Seq, resp)
+	defer c.requestTasks.Delete(p.Seq)
+	if err := c.sendPacket(p); err != nil {
+		return nil, err
+	}
 	select {
 	case res := <-resp:
 		return res, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
 	case <-time.After(10 * time.Second):
-		return nil, errors.New("request timeout")
+		return nil, server.ErrRequestTimeout
 	}
 }
 
 func (c *conn) sendPacket(p packet.Packet) error {
-	if c.raw == nil {
+	if !c.IsActive() {
 		return server.ErrConnectionClosed
 	}
-	return packet.WriteTo(c.raw, p)
-}
-func (c *conn) doAuth(id *packet.Connect) packet.ConnackCode {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.id != nil {
-		return packet.ConnectionAccepted
+	data, err := packet.Pack(p)
+	if err != nil {
+		return err
 	}
-	code := c.server.connectHander(c.server, id)
-	if code == packet.ConnectionAccepted {
-		c.id = id.Identity
-		c.authed <- struct{}{}
-		go c.server.addConn(c)
-		// c.keepAlive.Start()
+	select {
+	case c.sendQueue <- data:
+		return nil
+	default:
+		return server.ErrSendingQueueFull
 	}
-
-	return code
 }
 func (c *conn) handlePacket(p packet.Packet) {
 	if !c.IsActive() {
@@ -147,13 +143,22 @@ func (c *conn) handlePacket(p packet.Packet) {
 	}
 	switch p.Type() {
 	case packet.CONNECT:
+		if c.id != nil {
+			c.sendPacket(packet.NewConnack(packet.ConnectionAccepted))
+			return
+		}
 		p := p.(*packet.Connect)
-		c.sendPacket(packet.NewConnack(c.doAuth(p)))
+		code := c.server.connectHander(c.server, p)
+		if code == packet.ConnectionAccepted {
+			c.id = p.Identity
+			c.authed <- struct{}{}
+			go c.server.addConn(c)
+		}
+		c.sendPacket(packet.NewConnack(code))
 	case packet.MESSAGE:
 		if c.id != nil {
 			c.server.messageHandler(c.server, p.(*packet.Message), c.id)
 		}
-
 	case packet.REQUEST:
 		if c.id == nil {
 			return
@@ -163,21 +168,20 @@ func (c *conn) handlePacket(p packet.Packet) {
 		if err != nil {
 			return
 		}
-		if res != nil {
-			c.sendPacket(res)
+		if err := c.sendPacket(res); err != nil {
+			c.logger.Debug("failed to send response", "error", err)
 		}
 	case packet.RESPONSE:
 		p := p.(*packet.Response)
-		if resp, ok := c.tasks.LoadAndDelete(p.Seq); ok {
+		if resp, ok := c.requestTasks.Load(p.Seq); ok {
 			resp.(chan *packet.Response) <- p
 		}
 	case packet.PING:
 		c.SendPong()
 	case packet.PONG:
-		// c.keepAlive.HandlePong()
 		break
 	case packet.CLOSE:
-		c.clear()
+		c.close()
 	default:
 		break
 	}

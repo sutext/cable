@@ -28,15 +28,21 @@ type Server interface {
 type Error uint8
 
 const (
+	ErrRequestTimeout    Error = 0
 	ErrConnectionClosed  Error = 1
-	ErrNetworkNotSupport Error = 2
-	ErrConnctionNotFound Error = 3
+	ErrSendingQueueFull  Error = 2
+	ErrNetworkNotSupport Error = 3
+	ErrConnctionNotFound Error = 4
 )
 
 func (e Error) Error() string {
 	switch e {
+	case ErrRequestTimeout:
+		return "Request Timeout"
 	case ErrConnectionClosed:
 		return "Connection Closed"
+	case ErrSendingQueueFull:
+		return "Sending Queue Full"
 	case ErrNetworkNotSupport:
 		return "Network Not Support"
 	case ErrConnctionNotFound:

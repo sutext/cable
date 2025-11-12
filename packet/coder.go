@@ -35,10 +35,7 @@ type Decoder interface {
 	ReadStrMap() (map[string]string, error)
 	ReadAll() ([]byte, error)
 }
-type Codable interface {
-	EncodeTo(Encoder) error
-	DecodeFrom(Decoder) error
-}
+
 type coder struct {
 	pos uint64
 	buf []byte
@@ -229,17 +226,28 @@ func (b *coder) ReadAll() ([]byte, error) {
 	return p, nil
 }
 
-// Marshal encodes the given Codable to bytes.
+// Marshal encodes the given Packet object to bytes.
 // Use compact binary encoding for integers and varints.
-func Marshal(c Codable) ([]byte, error) {
-	cd := &coder{pos: 0, buf: make([]byte, 0, 512)}
-	if err := c.EncodeTo(cd); err != nil {
+// NOTE: Marshal does not contain any header or length information.
+func Marshal(p Packet) ([]byte, error) {
+	var buf []byte
+	switch p.Type() {
+	case PING, PONG:
+		return nil, nil
+	case CLOSE, CONNACK:
+		buf = make([]byte, 1)
+	case CONNECT, REQUEST, RESPONSE, MESSAGE:
+		buf = make([]byte, 0, 256)
+	}
+	coder := &coder{pos: 0, buf: buf}
+	if err := p.EncodeTo(coder); err != nil {
 		return nil, err
 	}
-	return cd.buf, nil
+	return coder.buf, nil
 }
 
-// Unmarshal decodes the given bytes into the given Codable object.
-func Unmarshal(c Codable, bytes []byte) error {
-	return c.DecodeFrom(&coder{pos: 0, buf: bytes})
+// Unmarshal decodes the given bytes into the given Packet object.
+// NOTE: Unmarshal assumes that the bytes contain a complete packet.
+func Unmarshal(p Packet, bytes []byte) error {
+	return p.DecodeFrom(&coder{pos: 0, buf: bytes})
 }

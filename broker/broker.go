@@ -11,7 +11,6 @@ import (
 
 	"sutext.github.io/cable"
 	"sutext.github.io/cable/internal/logger"
-	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
 )
@@ -31,7 +30,6 @@ type broker struct {
 	users        KeyMap
 	logger       logger.Logger
 	channels     KeyMap
-	taskQueue    *queue.Queue
 	listeners    map[uint8]server.Server
 	peerServer   server.Server
 	inpectServer *http.Server
@@ -41,7 +39,6 @@ func NewBroker(opts ...Option) Broker {
 	options := newOptions(opts...)
 	b := &broker{id: options.brokerID}
 	b.logger = options.logger
-	b.taskQueue = queue.NewQueue(options.queueWorker, options.queueBuffer)
 	for _, p := range options.peers {
 		if p == b.id {
 			continue
@@ -122,16 +119,17 @@ func (b *broker) KickUser(ctx context.Context, uid string) {
 		p.kickUser(ctx, uid)
 	}
 }
-func (b *broker) SendMessage(ctx context.Context, m *packet.Message) error {
-	if err := b.sendMessage(m); err != nil {
-		return err
-	}
+func (b *broker) SendMessage(ctx context.Context, m *packet.Message) (t, s int, e error) {
+	total, success := b.sendMessage(m)
 	for _, p := range b.peers {
-		if err := p.sendMessage(ctx, m); err != nil {
-			return err
+		t, s, e := p.sendMessage(ctx, m)
+		if e != nil {
+			return 0, 0, e
 		}
+		total += t
+		success += s
 	}
-	return nil
+	return total, success, nil
 }
 func (b *broker) JoinChannel(uid string, channels ...string) error {
 	return b.JoinChannels(uid, channels)
@@ -173,9 +171,11 @@ func (b *broker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (b *broker) onUserMessage(s server.Server, p *packet.Message, id *packet.Identity) error {
-	err := b.SendMessage(context.Background(), p)
+	total, success, err := b.SendMessage(context.Background(), p)
 	if err != nil {
 		b.logger.Error("Failed to send message to broker", "error", err, "broker", b.id)
+	} else {
+		b.logger.Info("Sent message to broker", "total", total, "success", success)
 	}
 	return err
 }
@@ -198,10 +198,8 @@ func (b *broker) onPeerRequest(s server.Server, p *packet.Request, id *packet.Id
 		if err := packet.Unmarshal(msg, p.Body); err != nil {
 			return nil, err
 		}
-		if err := b.sendMessage(msg); err != nil {
-			return nil, err
-		}
-		return packet.NewResponse(p.Seq), nil
+		total, success := b.sendMessage(msg)
+		return packet.NewResponse(p.Seq, []byte(fmt.Sprintf("%d/%d", success, total))), nil
 	case "IsOnline":
 		online := b.isOnline(string(p.Body))
 		var r byte
@@ -254,28 +252,28 @@ func (b *broker) kickUser(uid string) {
 		return true
 	})
 }
-func (b *broker) sendMessage(m *packet.Message) error {
+func (b *broker) sendMessage(m *packet.Message) (total int, success int) {
 	b.channels.Range(m.Channel, func(cid string, net uint8) bool {
-		b.taskQueue.Push(func() {
-			l, ok := b.listeners[net]
-			if !ok {
-				b.logger.Error("Failed to find listener", "network", net)
-				return
+		total++
+		l, ok := b.listeners[net]
+		if !ok {
+			b.logger.Error("Failed to find listener", "network", net)
+			return true
+		}
+		if conn, err := l.GetConn(cid); err == nil {
+			if err = conn.SendMessage(m); err != nil {
+				b.logger.Error("Failed to send message to client", "error", err, "client", cid)
+			} else {
+				success++
 			}
-			if conn, err := l.GetConn(cid); err == nil {
-				if err = conn.SendMessage(m); err != nil {
-					b.logger.Error("Failed to send message to client", "error", err, "client", cid)
-				}
-			}
-		})
+		}
 		return true
 	})
-	return nil
+	return total, success
 }
 func (b *broker) inspect() *Inspect {
 	return &Inspect{
 		ID:       b.id,
-		Queue:    b.taskQueue.Count(),
 		Clients:  len(b.users.Dump()),
 		Channels: b.channels.Dump(),
 	}

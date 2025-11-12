@@ -2,7 +2,6 @@ package broker
 
 type Inspect struct {
 	ID       string         `json:"id"`
-	Queue    int64          `json:"queue"`
 	Clients  int            `json:"clients"`
 	Channels map[string]int `json:"channels"`
 }
@@ -14,7 +13,6 @@ func NewInspect() *Inspect {
 }
 func (i *Inspect) merge(o *Inspect) {
 	i.ID = "all"
-	i.Queue += o.Queue
 	i.Clients += o.Clients
 	for k, v := range o.Channels {
 		if _, ok := i.Channels[k]; !ok {

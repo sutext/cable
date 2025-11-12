@@ -1,7 +1,6 @@
 package packet
 
 import (
-	"bufio"
 	"fmt"
 	"io"
 	"slices"
@@ -80,9 +79,10 @@ func (t PacketType) String() string {
 
 type Packet interface {
 	fmt.Stringer
-	Codable
 	Type() PacketType
 	Equal(Packet) bool
+	EncodeTo(Encoder) error
+	DecodeFrom(Decoder) error
 }
 
 type pingpong struct {
@@ -116,8 +116,7 @@ func (p *pingpong) DecodeFrom(c Decoder) error {
 func ReadFrom(r io.Reader) (Packet, error) {
 	// read header
 	header := make([]byte, 2)
-	_, err := io.ReadFull(r, header)
-	if err != nil {
+	if _, err := io.ReadFull(r, header); err != nil {
 		return nil, err
 	}
 	packetType := PacketType(header[0] >> 5)
@@ -126,17 +125,64 @@ func ReadFrom(r io.Reader) (Packet, error) {
 	length := uint64(header[0]&0x07)<<8 | uint64(header[1])
 	if byteCount > 0 {
 		bs := make([]byte, byteCount)
-		io.ReadFull(r, bs)
+		if _, err := io.ReadFull(r, bs); err != nil {
+			return nil, err
+		}
 		for _, b := range bs {
 			length = length<<8 | uint64(b)
 		}
 	}
 	// read data
 	data := make([]byte, length)
-	_, err = io.ReadFull(r, data)
+	if _, err := io.ReadFull(r, data); err != nil {
+		return nil, err
+	}
+	return Unpack(packetType, data)
+}
+func WriteTo(w io.Writer, p Packet) error {
+	bytes, err := Pack(p)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(bytes)
+	return err
+}
+func Pack(p Packet) ([]byte, error) {
+	data, err := Marshal(p)
 	if err != nil {
 		return nil, err
 	}
+	length := len(data)
+	if length > MAX_LEN {
+		return nil, ErrPacketSizeTooLarge
+	}
+	var header []byte
+	if length > MID_LEN {
+		bs := make([]byte, 0, 5)
+		for length > 0 {
+			bs = append(bs, byte(length&0xff))
+			length >>= 8
+		}
+		slices.Reverse(bs)
+		if bs[0] > 7 {
+			header = make([]byte, len(bs)+1)
+			copy(header[1:], bs)
+		} else {
+			header = bs
+		}
+		header[0] = byte(p.Type()<<5) | byte(len(header)-2)<<3 | header[0]
+	} else {
+		header = make([]byte, 2)
+		header[0] = byte(p.Type()<<5) | byte(length>>8)
+		header[1] = byte(length)
+	}
+	hl := len(header)
+	bytes := make([]byte, hl+len(data))
+	copy(bytes, header)
+	copy(bytes[hl:], data)
+	return bytes, nil
+}
+func Unpack(packetType PacketType, data []byte) (Packet, error) {
 	switch packetType {
 	case CONNECT:
 		conn := &Connect{}
@@ -181,44 +227,4 @@ func ReadFrom(r io.Reader) (Packet, error) {
 	default:
 		return nil, ErrUnknownPacketType
 	}
-}
-func WriteTo(w io.Writer, p Packet) error {
-	bw := bufio.NewWriter(w)
-	data, err := Marshal(p)
-	if err != nil {
-		return err
-	}
-	length := len(data)
-	if length > MAX_LEN {
-		return ErrPacketSizeTooLarge
-	}
-	var header []byte
-	if length > MID_LEN {
-		bs := make([]byte, 0, 5)
-		for length > 0 {
-			bs = append(bs, byte(length&0xff))
-			length >>= 8
-		}
-		slices.Reverse(bs)
-		if bs[0] > 7 {
-			header = make([]byte, len(bs)+1)
-			copy(header[1:], bs)
-		} else {
-			header = bs
-		}
-		header[0] = byte(p.Type()<<5) | byte(len(header)-2)<<3 | header[0]
-	} else {
-		header = make([]byte, 2)
-		header[0] = byte(p.Type()<<5) | byte(length>>8)
-		header[1] = byte(length)
-	}
-	_, err = bw.Write(header)
-	if err != nil {
-		return err
-	}
-	_, err = bw.Write(data)
-	if err != nil {
-		return err
-	}
-	return bw.Flush()
 }

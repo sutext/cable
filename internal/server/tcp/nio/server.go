@@ -86,8 +86,8 @@ func (s *nioServer) handlePacket(id *packet.Identity, p packet.Packet) {
 		if err != nil {
 			return
 		}
-		if res != nil {
-			conn.sendPacket(res)
+		if err := conn.sendPacket(res); err != nil {
+			s.logger.Error("send response error: %v", err)
 		}
 	case packet.RESPONSE:
 		p := p.(*packet.Response)

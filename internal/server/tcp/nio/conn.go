@@ -29,12 +29,13 @@ func (c *conn) SendPing() error {
 func (c *conn) SendPong() error {
 	return c.sendPacket(packet.NewPong())
 }
-func (c *conn) SendData(data []byte) error {
-	return c.sendPacket(packet.NewMessage(data))
-}
-
 func (c *conn) sendPacket(p packet.Packet) error {
-	return packet.WriteTo(c.Connection, p)
+	w := c.Connection.Writer()
+	err := packet.WriteTo(netpoll.NewIOWriter(w), p)
+	if err != nil {
+		return err
+	}
+	return w.Flush()
 }
 func (c *conn) SendMessage(p *packet.Message) error {
 	return c.sendPacket(p)
@@ -43,7 +44,9 @@ func (c *conn) Request(ctx context.Context, p *packet.Request) (*packet.Response
 	resp := make(chan *packet.Response)
 	defer close(resp)
 	c.tasks.Store(p.Seq, resp)
-	c.sendPacket(p)
+	if err := c.sendPacket(p); err != nil {
+		return nil, err
+	}
 	select {
 	case res := <-resp:
 		return res, nil

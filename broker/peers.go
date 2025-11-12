@@ -38,14 +38,22 @@ func (p *peer) ID() *packet.Identity {
 func (p *peer) Connect() {
 	p.client.Connect(p.id)
 }
-func (p *peer) sendMessage(ctx context.Context, m *packet.Message) error {
+func (p *peer) sendMessage(ctx context.Context, m *packet.Message) (total, success int, err error) {
 	body, err := packet.Marshal(m)
 	if err != nil {
-		return err
+		return
 	}
 	req := packet.NewRequest("SendMessage", body)
-	_, err = p.client.Request(ctx, req)
-	return err
+	res, err := p.client.Request(ctx, req)
+	if err != nil {
+		return
+	}
+	if len(res.Body) < 2 {
+
+	}
+	total = int(res.Body[0])
+	success = int(res.Body[1])
+	return
 }
 func (p *peer) isOnline(ctx context.Context, uid string) (bool, error) {
 	req := packet.NewRequest("IsOnline", []byte(uid))
