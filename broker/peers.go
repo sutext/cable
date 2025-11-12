@@ -38,7 +38,7 @@ func (p *peer) ID() *packet.Identity {
 func (p *peer) Connect() {
 	p.client.Connect(p.id)
 }
-func (p *peer) sendMessage(ctx context.Context, m *packet.Message) (total, success int, err error) {
+func (p *peer) sendMessage(ctx context.Context, m *packet.Message) (total, success uint64, err error) {
 	body, err := packet.Marshal(m)
 	if err != nil {
 		return
@@ -48,11 +48,13 @@ func (p *peer) sendMessage(ctx context.Context, m *packet.Message) (total, succe
 	if err != nil {
 		return
 	}
-	if len(res.Body) < 2 {
-
+	decoder := packet.NewDecoder(res.Body)
+	if total, err = decoder.ReadVarint(); err != nil {
+		return 0, 0, err
 	}
-	total = int(res.Body[0])
-	success = int(res.Body[1])
+	if success, err = decoder.ReadVarint(); err != nil {
+		return 0, 0, err
+	}
 	return
 }
 func (p *peer) isOnline(ctx context.Context, uid string) (bool, error) {

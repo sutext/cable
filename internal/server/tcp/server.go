@@ -44,11 +44,11 @@ func (s *tcpServer) Serve() error {
 		go c.serve()
 	}
 }
-func (s *tcpServer) GetConn(cid string) (server.Conn, error) {
+func (s *tcpServer) GetConn(cid string) (server.Conn, bool) {
 	if cn, ok := s.conns.Load(cid); ok {
-		return cn.(*conn), nil
+		return cn.(*conn), true
 	}
-	return nil, server.ErrConnctionNotFound
+	return nil, false
 }
 func (s *tcpServer) KickConn(cid string) error {
 	if cn, ok := s.conns.Load(cid); ok {

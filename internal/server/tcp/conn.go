@@ -14,12 +14,13 @@ import (
 
 type conn struct {
 	id           *packet.Identity
-	closed       atomic.Bool
 	raw          net.Conn
+	closed       atomic.Bool
+	authed       atomic.Bool
 	server       *tcpServer
-	authed       chan struct{}
 	logger       logger.Logger
-	sendQueue    chan []byte
+	authChan     chan struct{}
+	sendQueue    chan packet.Packet
 	requestTasks sync.Map
 }
 
@@ -28,8 +29,8 @@ func newConn(raw net.Conn, server *tcpServer) *conn {
 		raw:       raw,
 		server:    server,
 		logger:    server.logger,
-		authed:    make(chan struct{}),
-		sendQueue: make(chan []byte, 1024),
+		authChan:  make(chan struct{}),
+		sendQueue: make(chan packet.Packet, 1024),
 	}
 	return c
 }
@@ -47,22 +48,26 @@ func (c *conn) Close(code packet.CloseCode) {
 func (c *conn) close() {
 	if c.closed.CompareAndSwap(false, true) {
 		c.server.delConn(c)
-		close(c.authed)
 		close(c.sendQueue)
 		c.raw.Close()
-		c.raw = nil
 		c.server = nil
-		c.authed = nil
 		c.sendQueue = nil
 	}
 }
-
+func (c *conn) setAuthed(id *packet.Identity) {
+	if c.authed.CompareAndSwap(false, true) {
+		c.id = id
+		c.authChan <- struct{}{}
+		close(c.authChan)
+		c.authChan = nil
+	}
+}
 func (c *conn) serve() {
 	go func() {
 		timer := time.NewTimer(time.Second * 10)
 		defer timer.Stop()
 		select {
-		case <-c.authed:
+		case <-c.authChan:
 			return
 		case <-timer.C:
 			c.Close(packet.CloseAuthenticationTimeout)
@@ -71,12 +76,13 @@ func (c *conn) serve() {
 	}()
 	go func() {
 		for data := range c.sendQueue {
-			if c.closed.Load() {
-				return
-			}
-			if _, err := c.raw.Write(data); err != nil {
-				c.close()
-				return
+			if err := packet.WriteTo(c.raw, data); err != nil {
+				c.logger.Debug("failed to send packet", "error", err)
+				switch err.(type) {
+				case net.Error:
+					c.close()
+					return
+				}
 			}
 		}
 	}()
@@ -122,47 +128,27 @@ func (c *conn) Request(ctx context.Context, p *packet.Request) (*packet.Response
 }
 
 func (c *conn) sendPacket(p packet.Packet) error {
-	if !c.IsActive() {
-		return server.ErrConnectionClosed
-	}
-	data, err := packet.Pack(p)
-	if err != nil {
-		return err
-	}
 	select {
-	case c.sendQueue <- data:
+	case c.sendQueue <- p:
 		return nil
 	default:
 		return server.ErrSendingQueueFull
 	}
 }
+
 func (c *conn) handlePacket(p packet.Packet) {
-	if !c.IsActive() {
-		c.logger.Debug("connection closed when handling packet", "packetType", p.Type())
-		return
-	}
 	switch p.Type() {
 	case packet.CONNECT:
-		if c.id != nil {
-			c.sendPacket(packet.NewConnack(packet.ConnectionAccepted))
-			return
-		}
 		p := p.(*packet.Connect)
 		code := c.server.connectHander(c.server, p)
 		if code == packet.ConnectionAccepted {
-			c.id = p.Identity
-			c.authed <- struct{}{}
+			c.setAuthed(c.id)
 			go c.server.addConn(c)
 		}
 		c.sendPacket(packet.NewConnack(code))
 	case packet.MESSAGE:
-		if c.id != nil {
-			c.server.messageHandler(c.server, p.(*packet.Message), c.id)
-		}
+		c.server.messageHandler(c.server, p.(*packet.Message), c.id)
 	case packet.REQUEST:
-		if c.id == nil {
-			return
-		}
 		p := p.(*packet.Request)
 		res, err := c.server.requestHandler(c.server, p, c.id)
 		if err != nil {

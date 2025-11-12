@@ -113,50 +113,28 @@ func (p *pingpong) EncodeTo(c Encoder) error {
 func (p *pingpong) DecodeFrom(c Decoder) error {
 	return nil
 }
-func ReadFrom(r io.Reader) (Packet, error) {
-	// read header
-	header := make([]byte, 2)
-	if _, err := io.ReadFull(r, header); err != nil {
-		return nil, err
-	}
-	packetType := PacketType(header[0] >> 5)
-	//read length
-	byteCount := (header[0] >> 3) & 0x03
-	length := uint64(header[0]&0x07)<<8 | uint64(header[1])
-	if byteCount > 0 {
-		bs := make([]byte, byteCount)
-		if _, err := io.ReadFull(r, bs); err != nil {
-			return nil, err
-		}
-		for _, b := range bs {
-			length = length<<8 | uint64(b)
-		}
-	}
-	// read data
-	data := make([]byte, length)
-	if _, err := io.ReadFull(r, data); err != nil {
-		return nil, err
-	}
-	return Unpack(packetType, data)
-}
+
 func WriteTo(w io.Writer, p Packet) error {
-	bytes, err := Pack(p)
+	header, data, err := Pack(p)
 	if err != nil {
 		return err
 	}
+	hl := len(header)
+	bytes := make([]byte, hl+len(data))
+	copy(bytes, header)
+	copy(bytes[hl:], data)
 	_, err = w.Write(bytes)
 	return err
 }
-func Pack(p Packet) ([]byte, error) {
-	data, err := Marshal(p)
+func Pack(p Packet) (header, data []byte, err error) {
+	data, err = Marshal(p)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	length := len(data)
 	if length > MAX_LEN {
-		return nil, ErrPacketSizeTooLarge
+		return nil, nil, ErrPacketSizeTooLarge
 	}
-	var header []byte
 	if length > MID_LEN {
 		bs := make([]byte, 0, 5)
 		for length > 0 {
@@ -176,13 +154,35 @@ func Pack(p Packet) ([]byte, error) {
 		header[0] = byte(p.Type()<<5) | byte(length>>8)
 		header[1] = byte(length)
 	}
-	hl := len(header)
-	bytes := make([]byte, hl+len(data))
-	copy(bytes, header)
-	copy(bytes[hl:], data)
-	return bytes, nil
+	return header, data, nil
 }
-func Unpack(packetType PacketType, data []byte) (Packet, error) {
+func ReadFrom(r io.Reader) (Packet, error) {
+	// read header
+	header := make([]byte, 2)
+	if _, err := io.ReadFull(r, header); err != nil {
+		return nil, err
+	}
+	//read length
+	byteCount := (header[0] >> 3) & 0x03
+	length := uint64(header[0]&0x07)<<8 | uint64(header[1])
+	if byteCount > 0 {
+		bs := make([]byte, byteCount)
+		if _, err := io.ReadFull(r, bs); err != nil {
+			return nil, err
+		}
+		for _, b := range bs {
+			length = length<<8 | uint64(b)
+		}
+	}
+	// read data
+	data := make([]byte, length)
+	if _, err := io.ReadFull(r, data); err != nil {
+		return nil, err
+	}
+	return Unpack(header, data)
+}
+func Unpack(header, data []byte) (Packet, error) {
+	packetType := PacketType(header[0] >> 5)
 	switch packetType {
 	case CONNECT:
 		conn := &Connect{}

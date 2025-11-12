@@ -5,6 +5,7 @@ import (
 )
 
 type Encoder interface {
+	Bytes() []byte
 	WriteBytes(p []byte)
 	WriteUInt8(i uint8)
 	WriteUInt16(i uint16)
@@ -36,9 +37,20 @@ type Decoder interface {
 	ReadAll() ([]byte, error)
 }
 
+func NewEncoder() Encoder {
+	return &coder{pos: 0, buf: make([]byte, 0, 256)}
+}
+func NewDecoder(bytes []byte) Decoder {
+	return &coder{pos: 0, buf: bytes}
+}
+
 type coder struct {
 	pos uint64
 	buf []byte
+}
+
+func (b *coder) Bytes() []byte {
+	return b.buf
 }
 
 // Write bytes directly

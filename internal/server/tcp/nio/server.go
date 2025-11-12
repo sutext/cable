@@ -47,11 +47,11 @@ func (s *nioServer) Serve() error {
 	s.eventLoop = eventLoop
 	return eventLoop.Serve(ln)
 }
-func (s *nioServer) GetConn(cid string) (server.Conn, error) {
+func (s *nioServer) GetConn(cid string) (server.Conn, bool) {
 	if con, ok := s.conns.Load(cid); ok {
-		return con.(*conn), nil
+		return con.(*conn), true
 	}
-	return nil, server.ErrConnctionNotFound
+	return nil, false
 }
 func (s *nioServer) Shutdown(ctx context.Context) error {
 	if s.eventLoop != nil {

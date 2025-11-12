@@ -20,7 +20,7 @@ type RequestHandler func(s Server, p *packet.Request, id *packet.Identity) (*pac
 type Server interface {
 	Serve() error
 	Network() Network
-	GetConn(cid string) (Conn, error)
+	GetConn(cid string) (Conn, bool)
 	KickConn(cid string) error
 	Shutdown(ctx context.Context) error
 }

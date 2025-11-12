@@ -8,13 +8,26 @@ import (
 	"sutext.github.io/cable/packet"
 )
 
-type Network = uint8
+type Network uint8
 
 const (
 	NetworkWS Network = iota
 	NetworkTCP
 	NetworkQUIC
 )
+
+func (n Network) String() string {
+	switch n {
+	case NetworkWS:
+		return "WebSocket"
+	case NetworkTCP:
+		return "TCP"
+	case NetworkQUIC:
+		return "QUIC"
+	default:
+		return "Unknown"
+	}
+}
 
 type Option struct {
 	f func(*Options)

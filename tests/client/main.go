@@ -17,7 +17,6 @@ import (
 type Client struct {
 	id      *packet.Identity
 	cli     client.Client
-	count   int
 	backoff backoff.Backoff
 }
 
@@ -45,26 +44,10 @@ func RandomClient() *Client {
 	return result
 }
 
-var channels = []string{"news", "sports", "tech", "music", "movies"}
-
-func (c *Client) Start() {
-	c.cli.Connect(c.id)
-	for {
-		channel := channels[rand.IntN(len(channels))]
-		msg := packet.NewMessage(fmt.Appendf(nil, "hello im client %s", c.id.UserID))
-		msg.Channel = channel
-		err := c.cli.SendMessage(msg)
-		if err != nil {
-			fmt.Printf("client %s send message error: %v\n", c.id.UserID, err)
-		}
-		time.Sleep(c.backoff.Next(c.count))
-		c.count++
-	}
-}
 func addClient(count uint) {
 	for range count {
 		c := RandomClient()
-		go c.Start()
+		go c.cli.Connect(c.id)
 	}
 }
 
@@ -77,7 +60,7 @@ func main() {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			addClient(100)
+			addClient(1)
 		}
 	}
 }

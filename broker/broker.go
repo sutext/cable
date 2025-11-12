@@ -22,17 +22,17 @@ type Broker interface {
 	IsOnline(ctx context.Context, uid string) (ok bool)
 	KickConn(ctx context.Context, cid string)
 	KickUser(ctx context.Context, uid string)
-	SendMessage(ctx context.Context, m *packet.Message) error
+	SendMessage(ctx context.Context, m *packet.Message) (total, success uint64, err error)
 }
 type broker struct {
-	id           string
-	peers        []*peer
-	users        KeyMap
-	logger       logger.Logger
-	channels     KeyMap
-	listeners    map[uint8]server.Server
-	peerServer   server.Server
-	inpectServer *http.Server
+	id         string
+	peers      []*peer
+	users      KeyMap
+	logger     logger.Logger
+	channels   KeyMap
+	listeners  map[server.Network]server.Server
+	peerServer server.Server
+	mux        *http.ServeMux
 }
 
 func NewBroker(opts ...Option) Broker {
@@ -49,7 +49,7 @@ func NewBroker(opts ...Option) Broker {
 		}
 		b.peers = append(b.peers, newPeer(b.id, strs[1], options.logger))
 	}
-	b.listeners = make(map[uint8]server.Server, len(options.listeners))
+	b.listeners = make(map[server.Network]server.Server, len(options.listeners))
 	for _, l := range options.listeners {
 		b.listeners[l.Network] = cable.NewServer(l.Address,
 			server.WithConnect(b.onUserConnect),
@@ -58,7 +58,10 @@ func NewBroker(opts ...Option) Broker {
 		)
 	}
 	b.peerServer = cable.NewServer(strings.Split(b.id, "@")[1], server.WithRequest(b.onPeerRequest))
-	b.inpectServer = &http.Server{Addr: ":8888", Handler: b}
+	b.mux = http.NewServeMux()
+	b.mux.HandleFunc("/inspect", b.handleInspect)
+	b.mux.HandleFunc("/kickout", b.handleKickout)
+	b.mux.HandleFunc("/message", b.handleMessage)
 	return b
 }
 func (b *broker) Start() error {
@@ -71,7 +74,8 @@ func (b *broker) Start() error {
 			p.Connect()
 		}
 	})
-	go b.inpectServer.ListenAndServe()
+	s := &http.Server{Addr: ":8888", Handler: b.mux}
+	go s.ListenAndServe()
 	return nil
 }
 func (b *broker) Shutdown() error {
@@ -119,15 +123,15 @@ func (b *broker) KickUser(ctx context.Context, uid string) {
 		p.kickUser(ctx, uid)
 	}
 }
-func (b *broker) SendMessage(ctx context.Context, m *packet.Message) (t, s int, e error) {
-	total, success := b.sendMessage(m)
+func (b *broker) SendMessage(ctx context.Context, m *packet.Message) (total, success uint64, err error) {
+	total, success = b.sendMessage(m)
 	for _, p := range b.peers {
-		t, s, e := p.sendMessage(ctx, m)
-		if e != nil {
-			return 0, 0, e
+		if t, s, err := p.sendMessage(ctx, m); err == nil {
+			total += t
+			success += s
+		} else {
+			return total, success, err
 		}
-		total += t
-		success += s
 	}
 	return total, success, nil
 }
@@ -136,7 +140,7 @@ func (b *broker) JoinChannel(uid string, channels ...string) error {
 }
 func (b *broker) JoinChannels(uid string, channels []string) error {
 	for _, c := range channels {
-		b.users.Range(uid, func(cid string, net uint8) bool {
+		b.users.Range(uid, func(cid string, net server.Network) bool {
 			b.channels.Set(c, cid, net)
 			return true
 		})
@@ -148,26 +152,12 @@ func (b *broker) LeaveChannel(uid string, channels ...string) error {
 }
 func (b *broker) LeaveChannels(uid string, channels []string) error {
 	for _, c := range channels {
-		b.users.Range(uid, func(cid string, net uint8) bool {
+		b.users.Range(uid, func(cid string, net server.Network) bool {
 			b.channels.Delete(c, cid)
 			return true
 		})
 	}
 	return nil
-}
-func (b *broker) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	isps, err := b.Inspects()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	data, err := json.MarshalIndent(isps, "", "\t")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
 }
 
 func (b *broker) onUserMessage(s server.Server, p *packet.Message, id *packet.Identity) error {
@@ -199,7 +189,10 @@ func (b *broker) onPeerRequest(s server.Server, p *packet.Request, id *packet.Id
 			return nil, err
 		}
 		total, success := b.sendMessage(msg)
-		return packet.NewResponse(p.Seq, []byte(fmt.Sprintf("%d/%d", success, total))), nil
+		encoder := packet.NewEncoder()
+		encoder.WriteVarint(total)
+		encoder.WriteVarint(success)
+		return packet.NewResponse(p.Seq, encoder.Bytes()), nil
 	case "IsOnline":
 		online := b.isOnline(string(p.Body))
 		var r byte
@@ -224,12 +217,12 @@ func (b *broker) onPeerRequest(s server.Server, p *packet.Request, id *packet.Id
 	return nil, fmt.Errorf("unsupported request method: %s", p.Path)
 }
 func (b *broker) isOnline(uid string) (ok bool) {
-	b.users.Range(uid, func(cid string, net uint8) bool {
+	b.users.Range(uid, func(cid string, net server.Network) bool {
 		l, ok := b.listeners[net]
 		if !ok {
 			return true
 		}
-		if conn, err := l.GetConn(cid); err == nil {
+		if conn, ok := l.GetConn(cid); ok {
 			if conn.IsActive() {
 				ok = true
 				return false
@@ -245,23 +238,23 @@ func (b *broker) kickConn(cid string) {
 	}
 }
 func (b *broker) kickUser(uid string) {
-	b.users.Range(uid, func(cid string, net uint8) bool {
+	b.users.Range(uid, func(cid string, net server.Network) bool {
 		if l, ok := b.listeners[net]; ok {
 			l.KickConn(cid)
 		}
 		return true
 	})
 }
-func (b *broker) sendMessage(m *packet.Message) (total int, success int) {
-	b.channels.Range(m.Channel, func(cid string, net uint8) bool {
+func (b *broker) sendMessage(m *packet.Message) (total, success uint64) {
+	b.channels.Range(m.Channel, func(cid string, net server.Network) bool {
 		total++
 		l, ok := b.listeners[net]
 		if !ok {
 			b.logger.Error("Failed to find listener", "network", net)
 			return true
 		}
-		if conn, err := l.GetConn(cid); err == nil {
-			if err = conn.SendMessage(m); err != nil {
+		if conn, ok := l.GetConn(cid); ok {
+			if err := conn.SendMessage(m); err != nil {
 				b.logger.Error("Failed to send message to client", "error", err, "client", cid)
 			} else {
 				success++
@@ -270,11 +263,4 @@ func (b *broker) sendMessage(m *packet.Message) (total int, success int) {
 		return true
 	})
 	return total, success
-}
-func (b *broker) inspect() *Inspect {
-	return &Inspect{
-		ID:       b.id,
-		Clients:  len(b.users.Dump()),
-		Channels: b.channels.Dump(),
-	}
 }
