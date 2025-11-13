@@ -9,6 +9,7 @@ import (
 
 type Inspect struct {
 	ID       string         `json:"id"`
+	Peers    int            `json:"peers"`
 	Clients  int            `json:"clients"`
 	Channels map[string]int `json:"channels"`
 }
@@ -21,6 +22,7 @@ func NewInspect() *Inspect {
 func (i *Inspect) merge(o *Inspect) {
 	i.ID = "all"
 	i.Clients += o.Clients
+	i.Peers += o.Peers
 	for k, v := range o.Channels {
 		if _, ok := i.Channels[k]; !ok {
 			i.Channels[k] = 0
@@ -29,8 +31,15 @@ func (i *Inspect) merge(o *Inspect) {
 	}
 }
 func (b *broker) inspect() *Inspect {
+	peers := 0
+	for _, p := range b.peers {
+		if p.IsReady() {
+			peers++
+		}
+	}
 	return &Inspect{
 		ID:       b.id,
+		Peers:    peers,
 		Clients:  len(b.users.Dump()),
 		Channels: b.channels.Dump(),
 	}

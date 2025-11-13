@@ -16,6 +16,11 @@ type conn struct {
 	tasks sync.Map
 }
 
+func newConn(c netpoll.Connection) *conn {
+	return &conn{
+		Connection: c,
+	}
+}
 func (c *conn) ID() *packet.Identity {
 	return c.id
 }

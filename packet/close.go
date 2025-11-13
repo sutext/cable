@@ -7,20 +7,22 @@ import (
 type CloseCode uint8
 
 const (
-	CloseNormal                CloseCode = 0
-	CloseKickedOut             CloseCode = 1
-	CloseNoHeartbeat           CloseCode = 2
-	CloseInvalidPacket         CloseCode = 3
-	CloseInternalError         CloseCode = 4
-	CloseDuplicateLogin        CloseCode = 5
-	CloseAuthenticationFailure CloseCode = 6
-	CloseAuthenticationTimeout CloseCode = 7
+	CloseNormal                CloseCode = 1
+	CloseKickedOut             CloseCode = 2
+	CloseNoHeartbeat           CloseCode = 3
+	CloseInvalidPacket         CloseCode = 4
+	ClosePintTimeOut           CloseCode = 5
+	CloseInternalError         CloseCode = 6
+	CloseDuplicateLogin        CloseCode = 7
+	CloseAuthenticationFailure CloseCode = 8
+	CloseAuthenticationTimeout CloseCode = 9
 )
 
 var closeCodeMap = map[CloseCode]string{
 	CloseNormal:                "Normal",
 	CloseKickedOut:             "Kicked Out",
 	CloseNoHeartbeat:           "No Heartbeat",
+	ClosePintTimeOut:           "Pint Time Out",
 	CloseInvalidPacket:         "Invalid Packet",
 	CloseInternalError:         "Internal Error",
 	CloseDuplicateLogin:        "Duplicate Login",

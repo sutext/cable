@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/cloudwego/netpoll"
 	"sutext.github.io/cable/internal/logger"
@@ -118,37 +119,42 @@ func (s *nioServer) onPrepare(conn netpoll.Connection) context.Context {
 	return context.Background()
 }
 func (s *nioServer) onConnect(ctx context.Context, c netpoll.Connection) context.Context {
-	pkt, err := packet.ReadFrom(netpoll.NewIOReader(c.Reader()))
+	conn := newConn(c)
+	timer := time.AfterFunc(time.Second*10, func() {
+		c.Close()
+	})
+	code := s.waitConnect(conn)
+	timer.Stop()
+	if code != 0 {
+		conn.Close(code)
+		return ctx
+	}
+	return context.WithValue(ctx, identityKey, conn.id)
+}
+func (s *nioServer) waitConnect(c *conn) packet.CloseCode {
+	pkt, err := packet.ReadFrom(c)
 	if err != nil {
 		switch err.(type) {
 		case packet.Error:
-			s.close(c, packet.CloseInvalidPacket)
+			return packet.CloseInvalidPacket
 		default:
-			s.close(c, packet.CloseInternalError)
+			return packet.CloseInternalError
 		}
-		return ctx
 	}
 	connPacket, ok := pkt.(*packet.Connect)
 	if !ok {
-		s.close(c, packet.CloseInternalError)
-		return ctx
+		return packet.CloseInternalError
 	}
 	code := s.connectHander(s, connPacket)
-	if code == packet.ConnectionAccepted {
-		cn := &conn{
-			Connection: c,
-			id:         connPacket.Identity,
-		}
-		if old, loaded := s.conns.Swap(connPacket.Identity.ClientID, cn); loaded {
-			old.(*conn).Close(packet.CloseDuplicateLogin)
-		}
-	}
-	s.send(c, packet.NewConnack(code))
 	if code != packet.ConnectionAccepted {
-		s.close(c, packet.CloseAuthenticationFailure)
-		return ctx
+		return packet.CloseAuthenticationFailure
 	}
-	return context.WithValue(ctx, identityKey, connPacket.Identity)
+	c.id = connPacket.Identity
+	if old, loaded := s.conns.Swap(connPacket.Identity.ClientID, c); loaded {
+		old.(*conn).Close(packet.CloseDuplicateLogin)
+	}
+	c.sendPacket(packet.NewConnack(packet.ConnectionAccepted))
+	return 0
 }
 func (s *nioServer) close(conn netpoll.Connection, code packet.CloseCode) {
 	s.send(conn, packet.NewClose(code))

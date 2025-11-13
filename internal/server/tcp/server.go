@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"sync"
+	"time"
 
 	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
@@ -41,7 +42,16 @@ func (s *tcpServer) Serve() error {
 			return err
 		}
 		c := newConn(conn, s)
-		go c.serve()
+		timer := time.AfterFunc(time.Second*10, func() {
+			c.Close(packet.CloseAuthenticationTimeout)
+		})
+		code := s.waitConnect(c)
+		timer.Stop()
+		if code != 0 {
+			c.Close(code)
+			return code
+		}
+		go c.recv()
 	}
 }
 func (s *tcpServer) GetConn(cid string) (server.Conn, bool) {
@@ -64,11 +74,30 @@ func (s *tcpServer) Shutdown(ctx context.Context) error {
 func (s *tcpServer) Network() server.Network {
 	return server.NetworkTCP
 }
-func (s *tcpServer) addConn(c *conn) {
-	if old, loaded := s.conns.Swap(c.ID().ClientID, c); loaded {
-		old.(*conn).Close(packet.CloseDuplicateLogin)
-		return
+func (s *tcpServer) waitConnect(c *conn) packet.CloseCode {
+	pkt, err := packet.ReadFrom(c.raw)
+	if err != nil {
+		switch err.(type) {
+		case packet.Error:
+			return packet.CloseInvalidPacket
+		default:
+			return packet.CloseInternalError
+		}
 	}
+	connPacket, ok := pkt.(*packet.Connect)
+	if !ok {
+		return packet.CloseInternalError
+	}
+	code := s.connectHander(s, connPacket)
+	if code != packet.ConnectionAccepted {
+		return packet.CloseAuthenticationFailure
+	}
+	c.id = connPacket.Identity
+	if old, loaded := s.conns.Swap(c.id.ClientID, c); loaded {
+		old.(*conn).Close(packet.CloseDuplicateLogin)
+	}
+	c.sendPacket(packet.NewConnack(packet.ConnectionAccepted))
+	return 0
 }
 func (s *tcpServer) delConn(c *conn) {
 	id := c.ID()

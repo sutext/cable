@@ -35,7 +35,7 @@ func newConn(raw *qc.Conn, server *quicServer) *conn {
 		c.SendPing()
 	})
 	c.keepAlive.TimeoutFunc(func() {
-		c.Close(packet.CloseNormal)
+		c.Close(packet.ClosePintTimeOut)
 	})
 	return c
 }

@@ -69,7 +69,7 @@ func (b *broker) Start() error {
 		go l.Serve()
 	}
 	go b.peerServer.Serve()
-	time.AfterFunc(time.Second*5, func() {
+	time.AfterFunc(time.Second*2, func() {
 		for _, p := range b.peers {
 			p.Connect()
 		}

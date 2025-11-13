@@ -75,8 +75,9 @@ func (p *Connect) DecodeFrom(r Decoder) error {
 type ConnackCode uint8
 
 const (
-	ConnectionAccepted ConnackCode = 0
-	ConnectionRejected ConnackCode = 1
+	ConnectionAccepted  ConnackCode = 0
+	ConnectionRejected  ConnackCode = 1
+	ConnectionDuplicate ConnackCode = 2
 )
 
 func (c ConnackCode) String() string {
@@ -85,9 +86,14 @@ func (c ConnackCode) String() string {
 		return "Connection Accepted"
 	case ConnectionRejected:
 		return "Connection Rejected"
+	case ConnectionDuplicate:
+		return "Connection Duplicate"
 	default:
 		return "Unknown Connack Code"
 	}
+}
+func (c ConnackCode) Error() string {
+	return c.String()
 }
 
 type Connack struct {

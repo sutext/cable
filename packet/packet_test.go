@@ -7,16 +7,16 @@ import (
 )
 
 func TestPacket(t *testing.T) {
-	// identity := Identity{"1", "2", "tok"}
-	// testp(t, NewConnect(&identity))
-	// testp(t, NewConnack(0))
-	// testp(t, SmallMessage())
+	identity := Identity{"1", "2", "tok"}
+	testp(t, NewConnect(&identity))
+	testp(t, NewConnack(0))
+	testp(t, SmallMessage())
 	testp(t, BigMessage())
-	// testp(t, NewPing())
-	// testp(t, NewPong())
-	// testp(t, NewClose(0))
-	// testp(t, NewRequest("test"))
-	// testp(t, NewResponse(1))
+	testp(t, NewPing())
+	testp(t, NewPong())
+	testp(t, NewClose(0))
+	testp(t, NewRequest("test"))
+	testp(t, NewResponse(1))
 }
 func SmallMessage() Packet {
 	return NewMessage([]byte("hello world"))

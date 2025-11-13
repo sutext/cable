@@ -34,7 +34,9 @@ func newPeer(id, address string, logger logger.Logger) *peer {
 func (p *peer) ID() *packet.Identity {
 	return p.id
 }
-
+func (p *peer) IsReady() bool {
+	return p.client.Status() == client.StatusOpened
+}
 func (p *peer) Connect() {
 	p.client.Connect(p.id)
 }

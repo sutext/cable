@@ -2,11 +2,13 @@ package client
 
 import (
 	"context"
+	"net"
 	"sync"
 	"time"
 
 	"sutext.github.io/cable/internal/keepalive"
 	"sutext.github.io/cable/internal/logger"
+	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
 )
 
@@ -15,10 +17,11 @@ type Error uint8
 const (
 	ErrNotConnected Error = iota
 	ErrRequestTimeout
+	ErrConntionFailed
 )
 
 func (e Error) Error() string {
-	return [...]string{"ErrNotConnected", "ErrRequestTimeout"}[e]
+	return [...]string{"ErrNotConnected", "ErrRequestTimeout", "ErrConntionFailed"}[e]
 }
 
 type Client interface {
@@ -29,16 +32,17 @@ type Client interface {
 	SendMessage(p *packet.Message) error
 }
 type client struct {
+	id             *packet.Identity
 	mu             *sync.RWMutex
-	conn           *conn
+	conn           net.Conn
 	tasks          sync.Map
 	status         Status
 	logger         logger.Logger
 	address        string
 	retrier        *Retrier
 	handler        Handler
-	identity       *packet.Identity
 	retrying       bool
+	recvQueue      *queue.Queue
 	keepalive      *keepalive.KeepAlive
 	requestTimeout time.Duration
 }
@@ -52,6 +56,7 @@ func New(address string, options ...Option) Client {
 		address:        address,
 		retrier:        NewRetrier(opts.retryLimit, opts.retryBackoff),
 		handler:        opts.handler,
+		recvQueue:      queue.New(128, 4),
 		keepalive:      keepalive.New(opts.pingInterval, opts.pingTimeout),
 		requestTimeout: opts.requestTimeout,
 	}
@@ -66,28 +71,30 @@ func New(address string, options ...Option) Client {
 	return c
 }
 func (c *client) ID() *packet.Identity {
-	return c.identity
+	return c.id
 }
 func (c *client) Connect(identity *packet.Identity) {
-	c.identity = identity
+	c.id = identity
 	switch c.Status() {
 	case StatusOpened, StatusOpening:
 		return
 	}
 	c.setStatus(StatusOpening)
-	c.reconnect()
+	if err := c.reconnect(); err != nil {
+		c.tryClose(err)
+	}
 }
 func (c *client) tryClose(err error) {
-	c.logger.Error("try close", "reason", err)
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if c.identity == nil {
-		return
-	}
-	if c.status == StatusClosed || c.status == StatusClosing {
-		return
-	}
 	if c.retrying {
+		return
+	}
+	if c.id == nil {
+		return
+	}
+	c.logger.Error("try close", "reason", err)
+	if c.status == StatusClosed || c.status == StatusClosing {
 		return
 	}
 	if code, ok := err.(CloseReason); ok {
@@ -107,28 +114,39 @@ func (c *client) tryClose(err error) {
 	}
 	c.retrying = true
 	c.setStatus(StatusOpening)
-	c.logger.Info("will retry after", "delay", delay.String())
 	c.retrier.retry(delay, func() {
+		err := c.reconnect()
 		c.retrying = false
-		c.reconnect()
+		if err != nil {
+			c.tryClose(err)
+		}
 	})
-
 }
-func (c *client) reconnect() {
+func (c *client) reconnect() error {
 	if c.conn != nil {
-		c.conn.close()
+		c.conn.Close()
 		c.conn = nil
 	}
-	c.conn = &conn{}
-	c.conn.onPacket(c.handlePacket)
-	c.conn.onError(c.tryClose)
-	c.logger.Info("start connecting to address", "address", c.address)
-	err := c.conn.connect(c.address)
+	conn, err := net.Dial("tcp", c.address)
 	if err != nil {
-		c.tryClose(err)
-		return
+		return err
 	}
-	c.sendPacket(packet.NewConnect(c.identity))
+	c.conn = conn
+	if err := c.sendPacket(packet.NewConnect(c.id)); err != nil {
+		return err
+	}
+	p, err := packet.ReadFrom(c.conn)
+	if err != nil {
+		return err
+	}
+	if p.Type() != packet.CONNACK {
+		return ErrConntionFailed
+	}
+	if p.(*packet.Connack).Code != packet.ConnectionAccepted {
+		return ErrConntionFailed
+	}
+	c.setStatus(StatusOpened)
+	return nil
 }
 
 func (c *client) SendPing() error {
@@ -144,31 +162,31 @@ func (c *client) Request(ctx context.Context, p *packet.Request) (*packet.Respon
 	resp := make(chan *packet.Response)
 	defer close(resp)
 	c.tasks.Store(p.Seq, resp)
-	c.sendPacket(p)
+	if err := c.sendPacket(p); err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.requestTimeout)
+	defer cancel()
 	select {
 	case res := <-resp:
 		return res, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
-	case <-time.After(c.requestTimeout):
-		return nil, ErrRequestTimeout
 	}
 }
 func (c *client) sendPacket(p packet.Packet) error {
 	if c.conn == nil {
 		return ErrNotConnected
 	}
-	return c.conn.sendPacket(p)
+	if p.Type() != packet.CONNECT && c.status != StatusOpened {
+		return ErrNotConnected
+	}
+	return packet.WriteTo(c.conn, p)
 }
 func (c *client) Status() Status {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.status
-}
-func (c *client) safeSetStatus(status Status) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.setStatus(status)
 }
 func (c *client) setStatus(status Status) {
 	if c.status == status {
@@ -181,23 +199,30 @@ func (c *client) setStatus(status Status) {
 		c.keepalive.Stop()
 		c.retrier.cancel()
 		if c.conn != nil {
-			c.conn.close()
+			c.conn.Close()
 			c.conn = nil
 		}
 	case StatusOpening, StatusClosing:
 		c.keepalive.Stop()
 	case StatusOpened:
 		c.keepalive.Start()
+		go c.receive()
+	}
+}
+func (c *client) receive() {
+	for {
+		p, err := packet.ReadFrom(c.conn)
+		if err != nil {
+			c.tryClose(err)
+			return
+		}
+		c.recvQueue.Push(func() {
+			c.handlePacket(p)
+		})
 	}
 }
 func (c *client) handlePacket(p packet.Packet) {
 	switch p.Type() {
-	case packet.CONNACK:
-		p := p.(*packet.Connack)
-		if p.Code != 0 {
-			return
-		}
-		c.safeSetStatus(StatusOpened)
 	case packet.MESSAGE:
 		c.logger.Debug("receive message", "message", p.(*packet.Message))
 		c.handler.OnMessage(p.(*packet.Message))

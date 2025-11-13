@@ -25,6 +25,7 @@ func main() {
 		// 	MaxBidiRemoteStreams: 1,
 		// 	MaxUniRemoteStreams:  1,
 		// }),
+		server.WithNIO(false),
 		server.WithLogger(logger),
 	)
 	logger.Info("entry server start")
