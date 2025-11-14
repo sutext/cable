@@ -14,7 +14,7 @@ type Conn interface {
 	SendMessage(p *packet.Message) error
 }
 type ConnectHandler func(s Server, p *packet.Connect) packet.ConnackCode
-type MessageHandler func(s Server, p *packet.Message, id *packet.Identity) error
+type MessageHandler func(s Server, p *packet.Message, id *packet.Identity)
 type RequestHandler func(s Server, p *packet.Request, id *packet.Identity) (*packet.Response, error)
 
 type Server interface {

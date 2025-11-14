@@ -37,6 +37,14 @@ func (s *KeyMap) Range(key string, f func(string, server.Network) bool) {
 		})
 	}
 }
+func (s *KeyMap) Keys() []string {
+	var keys []string
+	s.m.Range(func(k, v any) bool {
+		keys = append(keys, k.(string))
+		return true
+	})
+	return keys
+}
 func (s *KeyMap) Dump() map[string]int {
 	m := make(map[string]int)
 	s.m.Range(func(k, v any) bool {

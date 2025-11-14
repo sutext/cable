@@ -35,14 +35,14 @@ func (c *Client) OnRequest(req *packet.Request) (*packet.Response, error) {
 }
 func RandomClient() *Client {
 	result := &Client{}
-	// addrs := []string{"127.0.0.1:8080", "127.0.0.1:8081", "127.0.0.1:8082", "127.0.0.1:8083"}
-	addrs := []string{"127.0.0.1:8080"}
+	addrs := []string{"127.0.0.1:8080", "127.0.0.1:8081", "127.0.0.1:8082", "127.0.0.1:8083"}
+	// addrs := []string{"127.0.0.1:8080"}
 	// addrs := []string{"172.16.2.123:8080", "172.16.2.123:8081", "172.16.2.123:8082", "172.16.2.123:8083"}
 	result.cli = client.New(addrs[rand.IntN(len(addrs))],
 		client.WithKeepAlive(time.Second*5, time.Second*60),
 		client.WithRetry(math.MaxInt, backoff.Exponential(2, 2)),
 		client.WithHandler(result),
-		client.WithLogger(logger.NewText(slog.LevelDebug)),
+		client.WithLogger(logger.NewText(slog.LevelError)),
 	)
 	result.id = &packet.Identity{UserID: fmt.Sprintf("u%d", rand.Int()), ClientID: fmt.Sprintf("c%d", rand.Int())}
 	result.backoff = backoff.Random(time.Second*3, time.Second*10)
@@ -67,15 +67,16 @@ func runBrokerClients() {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			addClient(10)
+			addClient(20)
 		}
 	}
 }
-func runServerClietn() {
-	c := RandomClient()
-	clients.Store(c.id.ClientID, c)
-	c.Connect()
-}
+
+//	func runServerClietn() {
+//		c := RandomClient()
+//		clients.Store(c.id.ClientID, c)
+//		c.Connect()
+//	}
 func main() {
 	runBrokerClients()
 	select {}

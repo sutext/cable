@@ -50,8 +50,8 @@ func NewOptions(opts ...Option) *Options {
 		ConnectHandler: func(s Server, p *packet.Connect) packet.ConnackCode {
 			return packet.ConnectionAccepted
 		},
-		MessageHandler: func(s Server, p *packet.Message, id *packet.Identity) error {
-			return nil
+		MessageHandler: func(s Server, p *packet.Message, id *packet.Identity) {
+
 		},
 		RequestHandler: func(s Server, p *packet.Request, id *packet.Identity) (*packet.Response, error) {
 			return nil, nil

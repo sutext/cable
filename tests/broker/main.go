@@ -16,7 +16,7 @@ import (
 
 func main() {
 	ctx := context.Background()
-	logger := logger.NewText(slog.LevelDebug)
+	logger := logger.NewText(slog.LevelError)
 	ctx, cancel := context.WithCancelCause(ctx)
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)

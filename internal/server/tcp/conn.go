@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"context"
+	"io"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -12,22 +13,28 @@ import (
 	"sutext.github.io/cable/packet"
 )
 
+type connHandler interface {
+	onClose(c *conn)
+	onConnect(c *conn, p *packet.Connect) packet.ConnackCode
+	onMessage(c *conn, p *packet.Message)
+	onRequest(c *conn, p *packet.Request)
+}
 type conn struct {
 	id           *packet.Identity
 	raw          net.Conn
 	closed       atomic.Bool
-	server       *tcpServer
 	logger       logger.Logger
+	handler      connHandler
 	sendQueue    *queue.Queue
 	recvQueue    *queue.Queue
 	requestTasks sync.Map
 }
 
-func newConn(raw net.Conn, server *tcpServer) *conn {
+func newConn(raw net.Conn, logger logger.Logger, handler connHandler) *conn {
 	c := &conn{
 		raw:       raw,
-		server:    server,
-		logger:    server.logger,
+		logger:    logger,
+		handler:   handler,
 		sendQueue: queue.New(512),
 		recvQueue: queue.New(512, 32),
 	}
@@ -44,33 +51,6 @@ func (c *conn) Close(code packet.CloseCode) {
 	c.close()
 }
 
-func (c *conn) close() {
-	if c.closed.CompareAndSwap(false, true) {
-		c.sendQueue.Stop()
-		c.recvQueue.Stop()
-		c.server.delConn(c)
-		c.raw.Close()
-		c.raw = nil
-		c.server = nil
-	}
-}
-func (c *conn) recv() {
-	for {
-		p, err := packet.ReadFrom(c.raw)
-		if err != nil {
-			switch err.(type) {
-			case packet.Error:
-				c.Close(packet.CloseInvalidPacket)
-			default:
-				c.Close(packet.CloseInternalError)
-			}
-			return
-		}
-		c.recvQueue.Push(func() {
-			c.handlePacket(p)
-		})
-	}
-}
 func (c *conn) SendPing() error {
 	return c.sendPacket(packet.NewPing())
 }
@@ -97,7 +77,93 @@ func (c *conn) Request(ctx context.Context, p *packet.Request) (*packet.Response
 		return nil, ctx.Err()
 	}
 }
+func (c *conn) close() {
+	if c.closed.CompareAndSwap(false, true) {
+		c.sendQueue.Stop()
+		c.recvQueue.Stop()
+		c.handler.onClose(c)
+		c.raw.Close()
+		c.handler = nil
+	}
+}
+func (c *conn) recv() {
+	timer := time.AfterFunc(time.Second*10, func() {
+		c.Close(packet.CloseAuthenticationTimeout)
+	})
+	code := c.waitConnect()
+	timer.Stop()
+	if code != 0 {
+		c.Close(code)
+		return
+	}
+	for {
+		p, err := packet.ReadFrom(c.raw)
+		if err != nil {
+			c.logger.Error("failed to read packet", "error", err)
+			if err == io.EOF {
+				c.close()
+				return
+			}
+			switch err.(type) {
+			case packet.Error:
+				c.Close(packet.CloseInvalidPacket)
+			default:
+				c.Close(packet.CloseInternalError)
+			}
+			return
+		}
+		c.recvQueue.Push(func() {
+			c.handlePacket(p)
+		})
+	}
+}
 
+func (c *conn) handlePacket(p packet.Packet) {
+	switch p.Type() {
+	case packet.MESSAGE:
+		c.handler.onMessage(c, p.(*packet.Message))
+	case packet.REQUEST:
+		c.handler.onRequest(c, p.(*packet.Request))
+	case packet.RESPONSE:
+		p := p.(*packet.Response)
+		if resp, ok := c.requestTasks.Load(p.Seq); ok {
+			resp.(chan *packet.Response) <- p
+		} else {
+			c.logger.Error("unexpected response packet")
+		}
+	case packet.PING:
+		c.SendPong()
+	case packet.PONG:
+		break
+	case packet.CLOSE:
+		c.close()
+	default:
+		break
+	}
+}
+
+func (c *conn) waitConnect() packet.CloseCode {
+	pkt, err := packet.ReadFrom(c.raw)
+	if err != nil {
+		switch err.(type) {
+		case packet.Error:
+			return packet.CloseInvalidPacket
+		default:
+			return packet.CloseInternalError
+		}
+	}
+	connPacket, ok := pkt.(*packet.Connect)
+	if !ok {
+		return packet.CloseInternalError
+	}
+	code := c.handler.onConnect(c, connPacket)
+	if code != packet.ConnectionAccepted {
+		return packet.CloseAuthenticationFailure
+	}
+	c.id = connPacket.Identity
+	c.sendPacket(packet.NewConnack(packet.ConnectionAccepted))
+	return 0
+}
 func (c *conn) sendPacket(p packet.Packet) error {
 	return c.sendQueue.Push(func() {
 		if err := packet.WriteTo(c.raw, p); err != nil {
@@ -108,41 +174,4 @@ func (c *conn) sendPacket(p packet.Packet) error {
 			}
 		}
 	})
-}
-
-func (c *conn) handlePacket(p packet.Packet) {
-	switch p.Type() {
-	case packet.MESSAGE:
-		c.server.messageHandler(c.server, p.(*packet.Message), c.id)
-	case packet.REQUEST:
-		c.handleRequest(p.(*packet.Request))
-	case packet.RESPONSE:
-		c.handleResponse(p.(*packet.Response))
-	case packet.PING:
-		c.SendPong()
-	case packet.PONG:
-		break
-	case packet.CLOSE:
-		c.close()
-		c.logger.Debug("close packet received")
-	default:
-		break
-	}
-}
-
-func (c *conn) handleRequest(p *packet.Request) {
-	res, err := c.server.requestHandler(c.server, p, c.id)
-	if err != nil {
-		return
-	}
-	if err := c.sendPacket(res); err != nil {
-		c.logger.Debug("failed to send response", "error", err)
-	}
-}
-func (c *conn) handleResponse(p *packet.Response) {
-	if resp, ok := c.requestTasks.Load(p.Seq); ok {
-		resp.(chan *packet.Response) <- p
-	} else {
-		c.logger.Debug("unexpected response packet")
-	}
 }

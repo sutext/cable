@@ -1,17 +1,22 @@
 package broker
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/server"
 )
 
 type Inspect struct {
-	ID       string         `json:"id"`
-	Peers    int            `json:"peers"`
-	Clients  int            `json:"clients"`
-	Channels map[string]int `json:"channels"`
+	ID            string         `json:"id"`
+	Peers         int            `json:"peers"`
+	Users         int            `json:"users"`
+	Clients       int            `json:"clients"`
+	Channels      map[string]int `json:"channels"`
+	OnlienUsers   int            `json:"online_users"`
+	OnlineClients int            `json:"online_clients"`
 }
 
 func NewInspect() *Inspect {
@@ -21,8 +26,11 @@ func NewInspect() *Inspect {
 }
 func (i *Inspect) merge(o *Inspect) {
 	i.ID = "all"
-	i.Clients += o.Clients
 	i.Peers += o.Peers
+	i.Users += o.Users
+	i.Clients += o.Clients
+	i.OnlienUsers += o.OnlienUsers
+	i.OnlineClients += o.OnlineClients
 	for k, v := range o.Channels {
 		if _, ok := i.Channels[k]; !ok {
 			i.Channels[k] = 0
@@ -37,11 +45,31 @@ func (b *broker) inspect() *Inspect {
 			peers++
 		}
 	}
+	users := 0
+	clients := 0
+	OnlienUsers := 0
+	onlineClients := 0
+	for _, cid := range b.users.Keys() {
+		users++
+		if b.isOnline(cid) {
+			OnlienUsers++
+		}
+		b.users.Range(cid, func(cid string, net server.Network) bool {
+			clients++
+			if b.isActive(cid, net) {
+				onlineClients++
+			}
+			return true
+		})
+	}
 	return &Inspect{
-		ID:       b.id,
-		Peers:    peers,
-		Clients:  len(b.users.Dump()),
-		Channels: b.channels.Dump(),
+		ID:            b.id,
+		Peers:         peers,
+		Users:         users,
+		Clients:       clients,
+		Channels:      b.channels.Dump(),
+		OnlienUsers:   OnlienUsers,
+		OnlineClients: onlineClients,
 	}
 }
 func (b *broker) handleInspect(w http.ResponseWriter, r *http.Request) {
@@ -50,7 +78,7 @@ func (b *broker) handleInspect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	data, err := json.MarshalIndent(isps, "", "\t")
+	data, err := json.MarshalIndent(isps, "", "  ")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -95,11 +123,27 @@ func (b *broker) handleMessage(w http.ResponseWriter, r *http.Request) {
 		"total":   total,
 		"success": success,
 	}
-	data, err := json.MarshalIndent(resp, "", "\t")
+	data, err := json.MarshalIndent(resp, "", "  ")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(data)
+}
+func (b *broker) Inspects() ([]*Inspect, error) {
+	ctx := context.Background()
+	inspects := make([]*Inspect, len(b.peers)+2)
+	inspects[0] = NewInspect()
+	inspects[1] = b.inspect()
+	inspects[0].merge(inspects[1])
+	for i, p := range b.peers {
+		isp, err := p.inspect(ctx)
+		if err != nil {
+			return nil, err
+		}
+		inspects[0].merge(isp)
+		inspects[i+2] = isp
+	}
+	return inspects, nil
 }

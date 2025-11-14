@@ -4,7 +4,6 @@ import (
 	"context"
 	"net"
 	"sync"
-	"time"
 
 	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
@@ -41,16 +40,7 @@ func (s *tcpServer) Serve() error {
 		if err != nil {
 			return err
 		}
-		c := newConn(conn, s)
-		timer := time.AfterFunc(time.Second*10, func() {
-			c.Close(packet.CloseAuthenticationTimeout)
-		})
-		code := s.waitConnect(c)
-		timer.Stop()
-		if code != 0 {
-			c.Close(code)
-			return code
-		}
+		c := newConn(conn, s.logger, s)
 		go c.recv()
 	}
 }
@@ -74,34 +64,32 @@ func (s *tcpServer) Shutdown(ctx context.Context) error {
 func (s *tcpServer) Network() server.Network {
 	return server.NetworkTCP
 }
-func (s *tcpServer) waitConnect(c *conn) packet.CloseCode {
-	pkt, err := packet.ReadFrom(c.raw)
-	if err != nil {
-		switch err.(type) {
-		case packet.Error:
-			return packet.CloseInvalidPacket
-		default:
-			return packet.CloseInternalError
-		}
-	}
-	connPacket, ok := pkt.(*packet.Connect)
-	if !ok {
-		return packet.CloseInternalError
-	}
-	code := s.connectHander(s, connPacket)
-	if code != packet.ConnectionAccepted {
-		return packet.CloseAuthenticationFailure
-	}
-	c.id = connPacket.Identity
-	if old, loaded := s.conns.Swap(c.id.ClientID, c); loaded {
-		old.(*conn).Close(packet.CloseDuplicateLogin)
-	}
-	c.sendPacket(packet.NewConnack(packet.ConnectionAccepted))
-	return 0
-}
-func (s *tcpServer) delConn(c *conn) {
+
+func (s *tcpServer) onClose(c *conn) {
 	id := c.ID()
 	if id != nil {
 		s.conns.Delete(id.ClientID)
+	}
+}
+func (s *tcpServer) onConnect(c *conn, p *packet.Connect) packet.ConnackCode {
+	code := s.connectHander(s, p)
+	if code == packet.ConnectionAccepted {
+		if old, loaded := s.conns.Swap(p.Identity.ClientID, c); loaded {
+			old.(*conn).Close(packet.CloseDuplicateLogin)
+		}
+	}
+	return code
+}
+func (s *tcpServer) onMessage(c *conn, p *packet.Message) {
+	s.messageHandler(s, p, c.id)
+}
+func (s *tcpServer) onRequest(c *conn, p *packet.Request) {
+	res, err := s.requestHandler(s, p, c.id)
+	if err != nil {
+		c.logger.Error("failed to handle request", "error", err)
+		return
+	}
+	if err := c.sendPacket(res); err != nil {
+		c.logger.Error("failed to send response", "error", err)
 	}
 }

@@ -85,21 +85,7 @@ func (b *broker) Shutdown() error {
 	}
 	return b.peerServer.Shutdown(ctx)
 }
-func (b *broker) Inspects() ([]*Inspect, error) {
-	ctx := context.Background()
-	inspects := make([]*Inspect, len(b.peers)+2)
-	inspects[0] = NewInspect()
-	inspects[1] = b.inspect()
-	for i, p := range b.peers {
-		isp, err := p.inspect(ctx)
-		if err != nil {
-			return nil, err
-		}
-		inspects[0].merge(isp)
-		inspects[i+2] = isp
-	}
-	return inspects, nil
-}
+
 func (b *broker) IsOnline(ctx context.Context, uid string) (ok bool) {
 	if ok = b.isOnline(uid); ok {
 		return true
@@ -160,14 +146,13 @@ func (b *broker) LeaveChannels(uid string, channels []string) error {
 	return nil
 }
 
-func (b *broker) onUserMessage(s server.Server, p *packet.Message, id *packet.Identity) error {
+func (b *broker) onUserMessage(s server.Server, p *packet.Message, id *packet.Identity) {
 	total, success, err := b.SendMessage(context.Background(), p)
 	if err != nil {
 		b.logger.Error("Failed to send message to broker", "error", err, "broker", b.id)
 	} else {
 		b.logger.Info("Sent message to broker", "total", total, "success", success)
 	}
-	return err
 }
 func (b *broker) onUserConnect(s server.Server, p *packet.Connect) packet.ConnackCode {
 	if net, ok := b.users.Get(p.Identity.UserID, p.Identity.ClientID); ok {
@@ -218,19 +203,23 @@ func (b *broker) onPeerRequest(s server.Server, p *packet.Request, id *packet.Id
 }
 func (b *broker) isOnline(uid string) (ok bool) {
 	b.users.Range(uid, func(cid string, net server.Network) bool {
-		l, ok := b.listeners[net]
-		if !ok {
-			return true
-		}
-		if conn, ok := l.GetConn(cid); ok {
-			if conn.IsActive() {
-				ok = true
-				return false
-			}
+		if b.isActive(cid, net) {
+			ok = true
+			return false
 		}
 		return true
 	})
 	return ok
+}
+func (b *broker) isActive(cid string, net server.Network) (ok bool) {
+	if l, ok := b.listeners[net]; ok {
+		if c, ok := l.GetConn(cid); ok {
+			if c.IsActive() {
+				return true
+			}
+		}
+	}
+	return false
 }
 func (b *broker) kickConn(cid string) {
 	for _, l := range b.listeners {
