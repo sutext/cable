@@ -44,7 +44,9 @@ func RandomClient() *Client {
 		client.WithHandler(result),
 		client.WithLogger(logger.NewText(slog.LevelError)),
 	)
-	result.id = &packet.Identity{UserID: fmt.Sprintf("u%d", rand.Int()), ClientID: fmt.Sprintf("c%d", rand.Int())}
+	uid := fmt.Sprintf("u%d", rand.IntN(300))
+	cid := fmt.Sprintf("%s_%d", uid, rand.Int())
+	result.id = &packet.Identity{UserID: uid, ClientID: cid}
 	result.backoff = backoff.Random(time.Second*3, time.Second*10)
 	return result
 }
@@ -60,24 +62,26 @@ func addClient(count uint) {
 }
 func runBrokerClients() {
 	ctx := context.Background()
-	ticker := time.NewTicker(time.Second * 1)
+	ticker := time.NewTicker(time.Millisecond * 100)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			addClient(20)
+			addClient(10)
 		}
 	}
 }
 
-//	func runServerClietn() {
-//		c := RandomClient()
-//		clients.Store(c.id.ClientID, c)
-//		c.Connect()
-//	}
+func runServerClietn() {
+	c := RandomClient()
+	clients.Store(c.id.ClientID, c)
+	c.Connect()
+}
 func main() {
 	runBrokerClients()
+	// runServerClietn()
+	// addClient(1000)
 	select {}
 }

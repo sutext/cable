@@ -45,7 +45,7 @@ func (c *conn) sendPacket(p packet.Packet) error {
 func (c *conn) SendMessage(p *packet.Message) error {
 	return c.sendPacket(p)
 }
-func (c *conn) Request(ctx context.Context, p *packet.Request) (*packet.Response, error) {
+func (c *conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {
 	resp := make(chan *packet.Response)
 	defer close(resp)
 	c.tasks.Store(p.Seq, resp)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
@@ -47,31 +48,60 @@ func (b *broker) inspect() *Inspect {
 	}
 	users := 0
 	clients := 0
-	OnlienUsers := 0
+	onlienUsers := 0
 	onlineClients := 0
-	for _, cid := range b.users.Keys() {
-		users++
+	b.users.Range(func(cid string) bool {
 		if b.isOnline(cid) {
-			OnlienUsers++
+			onlienUsers++
 		}
-		b.users.Range(cid, func(cid string, net server.Network) bool {
+		oldClients := clients
+		b.users.RangeKey(cid, func(cid string, net server.Network) bool {
 			clients++
 			if b.isActive(cid, net) {
 				onlineClients++
 			}
 			return true
 		})
+		if oldClients != clients {
+			users++
+		} else {
+			b.users.Delete(cid)
+		}
+		return true
+	})
+	channels := b.channels.GetCounts()
+	for k, v := range channels {
+		if v == 0 {
+			b.channels.Delete(k)
+		}
 	}
 	return &Inspect{
 		ID:            b.id,
 		Peers:         peers,
 		Users:         users,
 		Clients:       clients,
-		Channels:      b.channels.Dump(),
-		OnlienUsers:   OnlienUsers,
+		Channels:      channels,
+		OnlienUsers:   onlienUsers,
 		OnlineClients: onlineClients,
 	}
 }
+func (b *broker) Inspects() ([]*Inspect, error) {
+	ctx := context.Background()
+	inspects := make([]*Inspect, len(b.peers)+2)
+	inspects[0] = NewInspect()
+	inspects[1] = b.inspect()
+	inspects[0].merge(inspects[1])
+	for i, p := range b.peers {
+		isp, err := p.inspect(ctx)
+		if err != nil {
+			return nil, err
+		}
+		inspects[0].merge(isp)
+		inspects[i+2] = isp
+	}
+	return inspects, nil
+}
+
 func (b *broker) handleInspect(w http.ResponseWriter, r *http.Request) {
 	isps, err := b.Inspects()
 	if err != nil {
@@ -131,19 +161,31 @@ func (b *broker) handleMessage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(data)
 }
-func (b *broker) Inspects() ([]*Inspect, error) {
-	ctx := context.Background()
-	inspects := make([]*Inspect, len(b.peers)+2)
-	inspects[0] = NewInspect()
-	inspects[1] = b.inspect()
-	inspects[0].merge(inspects[1])
-	for i, p := range b.peers {
-		isp, err := p.inspect(ctx)
-		if err != nil {
-			return nil, err
-		}
-		inspects[0].merge(isp)
-		inspects[i+2] = isp
+func (b *broker) handleJoin(w http.ResponseWriter, r *http.Request) {
+	uid := r.URL.Query().Get("uid")
+	if uid == "" {
+		http.Error(w, "uid is required", http.StatusBadRequest)
+		return
 	}
-	return inspects, nil
+	chs := r.URL.Query().Get("channels")
+	if chs == "" {
+		http.Error(w, "channels is required", http.StatusBadRequest)
+		return
+	}
+	channels := strings.Split(chs, ",")
+	count, err := b.JoinChannel(r.Context(), uid, channels...)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	resp := map[string]uint64{
+		"count": count,
+	}
+	data, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
 }

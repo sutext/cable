@@ -15,27 +15,25 @@ import (
 type Error uint8
 
 const (
-	ErrNotConnected Error = iota
-	ErrRequestTimeout
-	ErrConntionFailed
+	ErrRequestTimeout Error = 1
+	ErrConntionFailed Error = 2
 )
 
 func (e Error) Error() string {
-	return [...]string{"ErrNotConnected", "ErrRequestTimeout", "ErrConntionFailed"}[e]
+	return [...]string{"ErrRequestTimeout", "ErrConntionFailed"}[e]
 }
 
 type Client interface {
 	ID() *packet.Identity
 	Status() Status
 	Connect(identity *packet.Identity)
-	Request(ctx context.Context, p *packet.Request) (*packet.Response, error)
 	SendMessage(p *packet.Message) error
+	SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error)
 }
 type client struct {
 	id             *packet.Identity
 	mu             *sync.RWMutex
 	conn           net.Conn
-	tasks          sync.Map
 	status         Status
 	logger         logger.Logger
 	address        string
@@ -43,7 +41,9 @@ type client struct {
 	handler        Handler
 	retrying       bool
 	recvQueue      *queue.Queue
+	sendQueue      *queue.Queue
 	keepalive      *keepalive.KeepAlive
+	requestTasks   sync.Map
 	requestTimeout time.Duration
 }
 
@@ -56,7 +56,8 @@ func New(address string, options ...Option) Client {
 		address:        address,
 		retrier:        NewRetrier(opts.retryLimit, opts.retryBackoff),
 		handler:        opts.handler,
-		recvQueue:      queue.New(128, 4),
+		recvQueue:      queue.New(1024),
+		sendQueue:      queue.New(1024),
 		keepalive:      keepalive.New(opts.pingInterval, opts.pingTimeout),
 		requestTimeout: opts.requestTimeout,
 	}
@@ -79,7 +80,7 @@ func (c *client) Connect(identity *packet.Identity) {
 	case StatusOpened, StatusOpening:
 		return
 	}
-	c.setStatus(StatusOpening)
+	c._setStatus(StatusOpening)
 	if err := c.reconnect(); err != nil {
 		c.tryClose(err)
 	}
@@ -99,21 +100,21 @@ func (c *client) tryClose(err error) {
 	}
 	if code, ok := err.(CloseReason); ok {
 		if code == CloseReasonNormal {
-			c.setStatus(StatusClosed)
+			c._setStatus(StatusClosed)
 			return
 		}
 	}
 	if c.retrier == nil {
-		c.setStatus(StatusClosed)
+		c._setStatus(StatusClosed)
 		return
 	}
 	delay, ok := c.retrier.can(err)
 	if !ok {
-		c.setStatus(StatusClosed)
+		c._setStatus(StatusClosed)
 		return
 	}
 	c.retrying = true
-	c.setStatus(StatusOpening)
+	c._setStatus(StatusOpening)
 	c.retrier.retry(delay, func() {
 		err := c.reconnect()
 		c.retrying = false
@@ -132,7 +133,7 @@ func (c *client) reconnect() error {
 		return err
 	}
 	c.conn = conn
-	if err := c.sendPacket(packet.NewConnect(c.id)); err != nil {
+	if err := packet.WriteTo(conn, packet.NewConnect(c.id)); err != nil {
 		return err
 	}
 	p, err := packet.ReadFrom(c.conn)
@@ -158,10 +159,11 @@ func (c *client) SendPong() error {
 func (c *client) SendMessage(p *packet.Message) error {
 	return c.sendPacket(p)
 }
-func (c *client) Request(ctx context.Context, p *packet.Request) (*packet.Response, error) {
+func (c *client) SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {
 	resp := make(chan *packet.Response)
 	defer close(resp)
-	c.tasks.Store(p.Seq, resp)
+	c.requestTasks.Store(p.Seq, resp)
+	defer c.requestTasks.Delete(p.Seq)
 	if err := c.sendPacket(p); err != nil {
 		return nil, err
 	}
@@ -171,17 +173,20 @@ func (c *client) Request(ctx context.Context, p *packet.Request) (*packet.Respon
 	case res := <-resp:
 		return res, nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, context.Cause(ctx)
 	}
 }
 func (c *client) sendPacket(p packet.Packet) error {
-	if c.conn == nil {
-		return ErrNotConnected
-	}
-	if p.Type() != packet.CONNECT && c.status != StatusOpened {
-		return ErrNotConnected
-	}
-	return packet.WriteTo(c.conn, p)
+	return c.sendQueue.AddTask(func() {
+		if c.Status() != StatusOpened {
+			return
+		}
+		if err := packet.WriteTo(c.conn, p); err != nil {
+			c.tryClose(err)
+			return
+		}
+		c.keepalive.UpdateTime()
+	})
 }
 func (c *client) Status() Status {
 	c.mu.RLock()
@@ -189,10 +194,15 @@ func (c *client) Status() Status {
 	return c.status
 }
 func (c *client) setStatus(status Status) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c._setStatus(status)
+}
+func (c *client) _setStatus(status Status) {
 	if c.status == status {
 		return
 	}
-	c.logger.Info("status change", "from", c.status.String(), "to", status.String())
+	c.logger.Debug("status change", "from", c.status.String(), "to", status.String())
 	c.status = status
 	switch status {
 	case StatusClosed:
@@ -216,8 +226,9 @@ func (c *client) receive() {
 			c.tryClose(err)
 			return
 		}
-		c.recvQueue.Push(func() {
+		c.recvQueue.AddTask(func() {
 			c.handlePacket(p)
+			c.keepalive.UpdateTime()
 		})
 	}
 }
@@ -236,7 +247,7 @@ func (c *client) handlePacket(p packet.Packet) {
 		}
 	case packet.RESPONSE:
 		p := p.(*packet.Response)
-		if t, ok := c.tasks.LoadAndDelete(p.Seq); ok {
+		if t, ok := c.requestTasks.Load(p.Seq); ok {
 			t.(chan *packet.Response) <- p
 		} else {
 			c.logger.Error("response task not found", "seq", p.Seq)

@@ -3,7 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"log/slog"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
@@ -16,10 +19,13 @@ import (
 
 func main() {
 	ctx := context.Background()
-	logger := logger.NewText(slog.LevelError)
+	logger := logger.NewText(slog.LevelDebug)
 	ctx, cancel := context.WithCancelCause(ctx)
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		log.Println(http.ListenAndServe("localhost:6060", nil))
+	}()
 	go func() {
 		<-sigs
 		cancel(fmt.Errorf("entry signal received"))

@@ -4,6 +4,7 @@ import (
 	"log/slog"
 
 	"sutext.github.io/cable/internal/logger"
+	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
 )
 
@@ -11,10 +12,33 @@ type Listener struct {
 	Address string
 	Network server.Network
 }
+type Handler interface {
+	OnClosed(id *packet.Identity)
+	OnConnect(p *packet.Connect) (code packet.ConnackCode)
+	OnMessage(p *packet.Message, id *packet.Identity)
+	OnRequest(p *packet.Request, id *packet.Identity) (res *packet.Response, err error)
+	GetChannels(uid string) (channels []string, err error)
+}
+type emptyHandler struct{}
+
+func (h *emptyHandler) OnClosed(id *packet.Identity) {
+}
+func (h *emptyHandler) OnConnect(p *packet.Connect) (code packet.ConnackCode) {
+	return packet.ConnectionAccepted
+}
+func (h *emptyHandler) OnMessage(p *packet.Message, id *packet.Identity) {
+}
+func (h *emptyHandler) OnRequest(p *packet.Request, id *packet.Identity) (res *packet.Response, err error) {
+	return nil, nil
+}
+func (h *emptyHandler) GetChannels(uid string) (channels []string, err error) {
+	return nil, nil
+}
 
 type options struct {
 	peers       []string
 	logger      logger.Logger
+	handler     Handler
 	brokerID    string
 	listeners   []Listener
 	queueWorker int
@@ -24,6 +48,7 @@ type options struct {
 func newOptions(opts ...Option) *options {
 	options := &options{
 		logger:      logger.NewText(slog.LevelDebug),
+		handler:     &emptyHandler{},
 		queueWorker: 32,
 		queueBuffer: 100,
 	}
@@ -48,6 +73,11 @@ func WithPeers(peers []string) Option {
 func WithLogger(l logger.Logger) Option {
 	return Option{func(o *options) {
 		o.logger = l
+	}}
+}
+func WithHandler(h Handler) Option {
+	return Option{func(o *options) {
+		o.handler = h
 	}}
 }
 

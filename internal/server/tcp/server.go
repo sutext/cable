@@ -14,6 +14,7 @@ type tcpServer struct {
 	conns          sync.Map
 	logger         logger.Logger
 	address        string
+	closeHandler   server.ClosedHandler
 	connectHander  server.ConnectHandler
 	messageHandler server.MessageHandler
 	requestHandler server.RequestHandler
@@ -23,6 +24,7 @@ func NewTCP(address string, options *server.Options) *tcpServer {
 	s := &tcpServer{
 		address:        address,
 		logger:         options.Logger,
+		closeHandler:   options.CloseHandler,
 		connectHander:  options.ConnectHandler,
 		messageHandler: options.MessageHandler,
 		requestHandler: options.RequestHandler,
@@ -50,13 +52,13 @@ func (s *tcpServer) GetConn(cid string) (server.Conn, bool) {
 	}
 	return nil, false
 }
-func (s *tcpServer) KickConn(cid string) error {
+func (s *tcpServer) KickConn(cid string) bool {
 	if cn, ok := s.conns.Load(cid); ok {
 		cn.(*conn).Close(packet.CloseKickedOut)
 		s.conns.Delete(cid)
-		return nil
+		return true
 	}
-	return server.ErrConnctionNotFound
+	return false
 }
 func (s *tcpServer) Shutdown(ctx context.Context) error {
 	return nil
@@ -69,6 +71,7 @@ func (s *tcpServer) onClose(c *conn) {
 	id := c.ID()
 	if id != nil {
 		s.conns.Delete(id.ClientID)
+		s.closeHandler(s, id)
 	}
 }
 func (s *tcpServer) onConnect(c *conn, p *packet.Connect) packet.ConnackCode {

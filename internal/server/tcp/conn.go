@@ -35,8 +35,8 @@ func newConn(raw net.Conn, logger logger.Logger, handler connHandler) *conn {
 		raw:       raw,
 		logger:    logger,
 		handler:   handler,
-		sendQueue: queue.New(512),
-		recvQueue: queue.New(512, 32),
+		sendQueue: queue.New(1024),
+		recvQueue: queue.New(1024),
 	}
 	return c
 }
@@ -60,7 +60,7 @@ func (c *conn) SendPong() error {
 func (c *conn) SendMessage(p *packet.Message) error {
 	return c.sendPacket(p)
 }
-func (c *conn) Request(ctx context.Context, p *packet.Request) (*packet.Response, error) {
+func (c *conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {
 	resp := make(chan *packet.Response)
 	defer close(resp)
 	c.requestTasks.Store(p.Seq, resp)
@@ -74,13 +74,13 @@ func (c *conn) Request(ctx context.Context, p *packet.Request) (*packet.Response
 	case res := <-resp:
 		return res, nil
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, context.Cause(ctx)
 	}
 }
 func (c *conn) close() {
 	if c.closed.CompareAndSwap(false, true) {
-		c.sendQueue.Stop()
-		c.recvQueue.Stop()
+		c.sendQueue.Close()
+		c.recvQueue.Close()
 		c.handler.onClose(c)
 		c.raw.Close()
 		c.handler = nil
@@ -112,7 +112,7 @@ func (c *conn) recv() {
 			}
 			return
 		}
-		c.recvQueue.Push(func() {
+		c.recvQueue.AddTask(func() {
 			c.handlePacket(p)
 		})
 	}
@@ -161,14 +161,17 @@ func (c *conn) waitConnect() packet.CloseCode {
 		return packet.CloseAuthenticationFailure
 	}
 	c.id = connPacket.Identity
-	c.sendPacket(packet.NewConnack(packet.ConnectionAccepted))
+	packet.WriteTo(c.raw, packet.NewConnack(packet.ConnectionAccepted))
 	return 0
 }
 func (c *conn) sendPacket(p packet.Packet) error {
-	return c.sendQueue.Push(func() {
+	return c.sendQueue.AddTask(func() {
+		if c.closed.Load() {
+			return
+		}
 		if err := packet.WriteTo(c.raw, p); err != nil {
-			c.logger.Debug("failed to send packet", "error", err)
-			if _, ok := err.(net.Error); ok {
+			c.logger.Error("failed to send packet", "error", err)
+			if _, ok := err.(packet.Error); !ok {
 				c.close()
 				return
 			}

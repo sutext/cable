@@ -19,6 +19,7 @@ type Encoder interface {
 	WriteData(data []byte)
 	WriteString(s string)
 	WriteStrMap(m map[string]string)
+	WriteStrings(ss []string)
 }
 type Decoder interface {
 	ReadBytes(l uint64) ([]byte, error)
@@ -34,6 +35,7 @@ type Decoder interface {
 	ReadData() ([]byte, error)
 	ReadString() (string, error)
 	ReadStrMap() (map[string]string, error)
+	ReadStrings() ([]string, error)
 	ReadAll() ([]byte, error)
 }
 
@@ -110,6 +112,12 @@ func (b *coder) WriteStrMap(m map[string]string) {
 	for k, v := range m {
 		b.WriteString(k)
 		b.WriteString(v)
+	}
+}
+func (b *coder) WriteStrings(ss []string) {
+	b.WriteVarint(uint64(len(ss)))
+	for _, s := range ss {
+		b.WriteString(s)
 	}
 }
 
@@ -227,6 +235,21 @@ func (b *coder) ReadStrMap() (map[string]string, error) {
 		m[k] = v
 	}
 	return m, nil
+}
+func (b *coder) ReadStrings() ([]string, error) {
+	l, err := b.ReadVarint()
+	if err != nil {
+		return nil, err
+	}
+	ss := make([]string, l)
+	for i := 0; i < int(l); i++ {
+		s, err := b.ReadString()
+		if err != nil {
+			return nil, err
+		}
+		ss[i] = s
+	}
+	return ss, nil
 }
 func (b *coder) ReadAll() ([]byte, error) {
 	l := uint64(len(b.buf))

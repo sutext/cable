@@ -114,7 +114,7 @@ func (c *conn) SendData(data []byte) error {
 func (c *conn) SendMessage(p *packet.Message) error {
 	return c.sendPacket(p)
 }
-func (c *conn) Request(ctx context.Context, p *packet.Request) (*packet.Response, error) {
+func (c *conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {
 	c.sendPacket(p)
 	resp := make(chan *packet.Response)
 	c.tasks.Store(p.Seq, resp)

@@ -37,6 +37,7 @@ type Options struct {
 	Logger         logger.Logger
 	Network        Network
 	QuicConfig     *quic.Config
+	CloseHandler   ClosedHandler
 	ConnectHandler ConnectHandler
 	MessageHandler MessageHandler
 	RequestHandler RequestHandler
@@ -47,6 +48,9 @@ func NewOptions(opts ...Option) *Options {
 		Network: NetworkTCP,
 		UseNIO:  false,
 		Logger:  logger.NewText(slog.LevelDebug),
+		CloseHandler: func(s Server, p *packet.Identity) {
+
+		},
 		ConnectHandler: func(s Server, p *packet.Connect) packet.ConnackCode {
 			return packet.ConnectionAccepted
 		},
@@ -76,6 +80,9 @@ func WithNIO(useNIO bool) Option {
 }
 func WithLogger(logger logger.Logger) Option {
 	return Option{f: func(o *Options) { o.Logger = logger }}
+}
+func WithClose(handler ClosedHandler) Option {
+	return Option{f: func(o *Options) { o.CloseHandler = handler }}
 }
 func WithConnect(handler ConnectHandler) Option {
 	return Option{f: func(o *Options) { o.ConnectHandler = handler }}

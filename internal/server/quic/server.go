@@ -52,13 +52,13 @@ func (s *quicServer) GetConn(cid string) (server.Conn, bool) {
 	}
 	return nil, false
 }
-func (s *quicServer) KickConn(cid string) error {
+func (s *quicServer) KickConn(cid string) bool {
 	if cn, ok := s.conns.Load(cid); ok {
 		cn.(*conn).Close(packet.CloseKickedOut)
 		s.conns.Delete(cid)
-		return nil
+		return true
 	}
-	return server.ErrConnctionNotFound
+	return false
 }
 func (s *quicServer) Shutdown(ctx context.Context) error {
 	return nil

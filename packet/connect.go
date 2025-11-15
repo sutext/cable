@@ -5,9 +5,9 @@ import (
 )
 
 type Identity struct {
-	UserID     string
-	ClientID   string
-	Credential string
+	UserID   string
+	ClientID string
+	Password string
 }
 type Connect struct {
 	Version  uint8
@@ -32,17 +32,15 @@ func (p *Connect) Equal(other Packet) bool {
 		return false
 	}
 	otherP := other.(*Connect)
-	return p.Version == otherP.Version && p.Identity.Credential == otherP.Identity.Credential &&
+	return p.Version == otherP.Version && p.Identity.Password == otherP.Identity.Password &&
 		p.Identity.UserID == otherP.Identity.UserID &&
 		p.Identity.ClientID == otherP.Identity.ClientID
 }
 func (p *Connect) EncodeTo(w Encoder) error {
 	w.WriteUInt8(p.Version)
-	if p.Identity != nil {
-		w.WriteString(p.Identity.Credential)
-		w.WriteString(p.Identity.UserID)
-		w.WriteString(p.Identity.ClientID)
-	}
+	w.WriteString(p.Identity.Password)
+	w.WriteString(p.Identity.UserID)
+	w.WriteString(p.Identity.ClientID)
 	return nil
 }
 
@@ -65,9 +63,9 @@ func (p *Connect) DecodeFrom(r Decoder) error {
 		return err
 	}
 	p.Identity = &Identity{
-		Credential: token,
-		UserID:     userID,
-		ClientID:   clientID,
+		Password: token,
+		UserID:   userID,
+		ClientID: clientID,
 	}
 	return nil
 }

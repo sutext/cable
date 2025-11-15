@@ -63,13 +63,13 @@ func (s *nioServer) Shutdown(ctx context.Context) error {
 func (s *nioServer) Network() server.Network {
 	return server.NetworkTCP
 }
-func (s *nioServer) KickConn(cid string) error {
+func (s *nioServer) KickConn(cid string) bool {
 	if cn, ok := s.conns.Load(cid); ok {
 		cn.(*conn).Close(packet.CloseKickedOut)
 		s.conns.Delete(cid)
-		return nil
+		return true
 	}
-	return server.ErrConnctionNotFound
+	return false
 }
 
 func (s *nioServer) handlePacket(id *packet.Identity, p packet.Packet) {

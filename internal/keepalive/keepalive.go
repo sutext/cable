@@ -6,26 +6,31 @@ import (
 )
 
 type KeepAlive struct {
-	mu          *sync.Mutex
-	interval    time.Duration
-	timeout     time.Duration
-	sendFunc    func()
-	timeoutFunc func()
-	stop        chan struct{}
-	pong        chan struct{}
+	mu             *sync.Mutex
+	stop           chan struct{}
+	pong           chan struct{}
+	timeout        time.Duration
+	interval       time.Duration
+	sendFunc       func()
+	timeoutFunc    func()
+	lastPacketTime time.Time
 }
 
 func New(interval time.Duration, timeout time.Duration) *KeepAlive {
 	return &KeepAlive{
-		mu:       new(sync.Mutex),
-		interval: interval,
-		timeout:  timeout,
+		mu:             new(sync.Mutex),
+		interval:       interval,
+		timeout:        timeout,
+		lastPacketTime: time.Now(),
 	}
 }
 func (k *KeepAlive) Start() {
 	k.mu.Lock()
+	defer k.mu.Unlock()
+	if k.stop != nil {
+		return
+	}
 	k.stop = make(chan struct{})
-	k.mu.Unlock()
 	go func() {
 		ticker := time.NewTicker(k.interval)
 		for {
@@ -47,6 +52,9 @@ func (k *KeepAlive) Stop() {
 		k.stop = nil
 	}
 }
+func (k *KeepAlive) UpdateTime() {
+	k.lastPacketTime = time.Now()
+}
 func (k *KeepAlive) PingFunc(f func()) {
 	k.sendFunc = f
 }
@@ -62,18 +70,19 @@ func (k *KeepAlive) TimeoutFunc(f func()) {
 	k.timeoutFunc = f
 }
 func (k *KeepAlive) sendPing() {
+	if k.lastPacketTime.Add(k.interval).After(time.Now()) {
+		return
+	}
 	k.mu.Lock()
 	k.pong = make(chan struct{})
 	k.mu.Unlock()
 	k.sendFunc()
-	timer := time.NewTimer(k.timeout)
-	defer timer.Stop()
 	select {
 	case <-k.stop:
 		return
 	case <-k.pong:
 		return
-	case <-timer.C:
+	case <-time.After(k.timeout):
 		k.timeoutFunc()
 	}
 }
