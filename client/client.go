@@ -162,8 +162,8 @@ func (c *client) SendMessage(p *packet.Message) error {
 func (c *client) SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {
 	resp := make(chan *packet.Response)
 	defer close(resp)
-	c.requestTasks.Store(p.Seq, resp)
-	defer c.requestTasks.Delete(p.Seq)
+	c.requestTasks.Store(p.ID, resp)
+	defer c.requestTasks.Delete(p.ID)
 	if err := c.sendPacket(p); err != nil {
 		return nil, err
 	}
@@ -247,10 +247,10 @@ func (c *client) handlePacket(p packet.Packet) {
 		}
 	case packet.RESPONSE:
 		p := p.(*packet.Response)
-		if t, ok := c.requestTasks.Load(p.Seq); ok {
+		if t, ok := c.requestTasks.Load(p.ID); ok {
 			t.(chan *packet.Response) <- p
 		} else {
-			c.logger.Error("response task not found", "seq", p.Seq)
+			c.logger.Error("response task not found", "seq", p.ID)
 		}
 	case packet.PING:
 		c.SendPong()

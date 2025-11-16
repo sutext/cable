@@ -117,7 +117,7 @@ func (c *conn) SendMessage(p *packet.Message) error {
 func (c *conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {
 	c.sendPacket(p)
 	resp := make(chan *packet.Response)
-	c.tasks.Store(p.Seq, resp)
+	c.tasks.Store(p.ID, resp)
 	select {
 	case res := <-resp:
 		return res, nil
@@ -139,7 +139,7 @@ func (c *conn) doAuth(id *packet.Connect) packet.ConnackCode {
 	if c.id != nil {
 		return packet.ConnectionAccepted
 	}
-	code := c.server.connectHander(c.server, id)
+	code := c.server.connectHander(id)
 	if code == packet.ConnectionAccepted {
 		c.id = id.Identity
 		c.authed <- struct{}{}
@@ -162,14 +162,14 @@ func (c *conn) handlePacket(p packet.Packet) {
 			return
 		}
 		p := p.(*packet.Message)
-		c.server.messageHandler(c.server, p, c.id)
+		c.server.messageHandler(p, c.id)
 
 	case packet.REQUEST:
 		if c.id == nil {
 			return
 		}
 		p := p.(*packet.Request)
-		res, err := c.server.requestHandler(c.server, p, c.id)
+		res, err := c.server.requestHandler(p, c.id)
 		if err != nil {
 			return
 		}
@@ -178,7 +178,7 @@ func (c *conn) handlePacket(p packet.Packet) {
 		}
 	case packet.RESPONSE:
 		p := p.(*packet.Response)
-		if resp, ok := c.tasks.LoadAndDelete(p.Seq); ok {
+		if resp, ok := c.tasks.LoadAndDelete(p.ID); ok {
 			(resp.(chan *packet.Response)) <- p
 		}
 	case packet.PING:

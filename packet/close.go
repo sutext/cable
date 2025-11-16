@@ -2,6 +2,8 @@ package packet
 
 import (
 	"fmt"
+
+	"sutext.github.io/cable/coder"
 )
 
 type CloseCode uint8
@@ -64,11 +66,11 @@ func (p *Close) Equal(other Packet) bool {
 	return p.Code == otherClose.Code
 }
 
-func (p *Close) EncodeTo(w Encoder) error {
+func (p *Close) WriteTo(w coder.Encoder) error {
 	w.WriteUInt8(uint8(p.Code))
 	return nil
 }
-func (p *Close) DecodeFrom(r Decoder) error {
+func (p *Close) ReadFrom(r coder.Decoder) error {
 	code, err := r.ReadUInt8()
 	if err != nil {
 		return err

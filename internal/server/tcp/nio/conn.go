@@ -48,7 +48,7 @@ func (c *conn) SendMessage(p *packet.Message) error {
 func (c *conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {
 	resp := make(chan *packet.Response)
 	defer close(resp)
-	c.tasks.Store(p.Seq, resp)
+	c.tasks.Store(p.ID, resp)
 	if err := c.sendPacket(p); err != nil {
 		return nil, err
 	}
@@ -62,7 +62,7 @@ func (c *conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Resp
 	}
 }
 func (c *conn) handleResponse(p *packet.Response) {
-	if resp, ok := c.tasks.LoadAndDelete(p.Seq); ok {
+	if resp, ok := c.tasks.LoadAndDelete(p.ID); ok {
 		(resp.(chan *packet.Response)) <- p
 	}
 }

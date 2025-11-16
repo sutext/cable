@@ -80,10 +80,10 @@ func (s *nioServer) handlePacket(id *packet.Identity, p packet.Packet) {
 	conn := cn.(*conn)
 	switch p.Type() {
 	case packet.MESSAGE:
-		s.messageHandler(s, p.(*packet.Message), id)
+		s.messageHandler(p.(*packet.Message), id)
 	case packet.REQUEST:
 		p := p.(*packet.Request)
-		res, err := s.requestHandler(s, p, id)
+		res, err := s.requestHandler(p, id)
 		if err != nil {
 			return
 		}
@@ -145,7 +145,7 @@ func (s *nioServer) waitConnect(c *conn) packet.CloseCode {
 	if !ok {
 		return packet.CloseInternalError
 	}
-	code := s.connectHander(s, connPacket)
+	code := s.connectHander(connPacket)
 	if code != packet.ConnectionAccepted {
 		return packet.CloseAuthenticationFailure
 	}

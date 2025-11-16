@@ -3,8 +3,11 @@ package packet
 import (
 	"bytes"
 	"fmt"
+
+	"sutext.github.io/cable/coder"
 )
 
+// Message represents a message packet.
 type Message struct {
 	Flags   uint8
 	Channel string
@@ -33,13 +36,13 @@ func (p *Message) Equal(other Packet) bool {
 	return bytes.Equal(p.Payload, otherData.Payload)
 }
 
-func (p *Message) EncodeTo(w Encoder) error {
+func (p *Message) WriteTo(w coder.Encoder) error {
 	w.WriteUInt8(p.Flags)
 	w.WriteString(p.Channel)
 	w.WriteBytes(p.Payload)
 	return nil
 }
-func (p *Message) DecodeFrom(r Decoder) error {
+func (p *Message) ReadFrom(r coder.Decoder) error {
 	flags, err := r.ReadUInt8()
 	if err != nil {
 		return err

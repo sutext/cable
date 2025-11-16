@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
@@ -63,8 +64,8 @@ func (c *conn) SendMessage(p *packet.Message) error {
 func (c *conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {
 	resp := make(chan *packet.Response)
 	defer close(resp)
-	c.requestTasks.Store(p.Seq, resp)
-	defer c.requestTasks.Delete(p.Seq)
+	c.requestTasks.Store(p.ID, resp)
+	defer c.requestTasks.Delete(p.ID)
 	if err := c.sendPacket(p); err != nil {
 		return nil, err
 	}
@@ -107,6 +108,8 @@ func (c *conn) recv() {
 			switch err.(type) {
 			case packet.Error:
 				c.Close(packet.CloseInvalidPacket)
+			case coder.Error:
+				c.Close(packet.CloseInvalidPacket)
 			default:
 				c.Close(packet.CloseInternalError)
 			}
@@ -126,7 +129,7 @@ func (c *conn) handlePacket(p packet.Packet) {
 		c.handler.onRequest(c, p.(*packet.Request))
 	case packet.RESPONSE:
 		p := p.(*packet.Response)
-		if resp, ok := c.requestTasks.Load(p.Seq); ok {
+		if resp, ok := c.requestTasks.Load(p.ID); ok {
 			resp.(chan *packet.Response) <- p
 		} else {
 			c.logger.Error("unexpected response packet")
@@ -171,9 +174,11 @@ func (c *conn) sendPacket(p packet.Packet) error {
 		}
 		if err := packet.WriteTo(c.raw, p); err != nil {
 			c.logger.Error("failed to send packet", "error", err)
-			if _, ok := err.(packet.Error); !ok {
+			switch err.(type) {
+			case packet.Error, coder.Error:
+				break
+			default:
 				c.close()
-				return
 			}
 		}
 	})

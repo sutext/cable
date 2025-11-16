@@ -8,6 +8,7 @@ import (
 
 	"sutext.github.io/cable/backoff"
 	"sutext.github.io/cable/client"
+	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
 )
@@ -47,7 +48,7 @@ func (p *peer) sendMessage(ctx context.Context, m *packet.Message) (total, succe
 	if err != nil {
 		return
 	}
-	decoder := packet.NewDecoder(res.Body)
+	decoder := coder.NewDecoder(res.Content)
 	if total, err = decoder.ReadVarint(); err != nil {
 		return 0, 0, err
 	}
@@ -62,7 +63,7 @@ func (p *peer) isOnline(ctx context.Context, uid string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	return res.Body[0] == 1, nil
+	return res.Content[0] == 1, nil
 }
 func (p *peer) kickConn(ctx context.Context, cid string) error {
 	req := packet.NewRequest("KickConn", []byte(cid))
@@ -81,14 +82,14 @@ func (p *peer) inspect(ctx context.Context) (*Inspect, error) {
 		return nil, err
 	}
 	var isp Inspect
-	if err := json.Unmarshal(res.Body, &isp); err != nil {
+	if err := json.Unmarshal(res.Content, &isp); err != nil {
 		return nil, err
 	}
 	return &isp, nil
 }
 
 func (p *peer) joinChannel(ctx context.Context, uid string, channels []string) (count uint64, err error) {
-	encoder := packet.NewEncoder()
+	encoder := coder.NewEncoder()
 	encoder.WriteString(uid)
 	encoder.WriteStrings(channels)
 	req := packet.NewRequest("JoinChannel", encoder.Bytes())
@@ -96,7 +97,7 @@ func (p *peer) joinChannel(ctx context.Context, uid string, channels []string) (
 	if err != nil {
 		return 0, err
 	}
-	decoder := packet.NewDecoder(res.Body)
+	decoder := coder.NewDecoder(res.Content)
 	if count, err = decoder.ReadVarint(); err != nil {
 		return 0, err
 	}
@@ -104,7 +105,7 @@ func (p *peer) joinChannel(ctx context.Context, uid string, channels []string) (
 }
 
 func (p *peer) leaveChannel(ctx context.Context, uid string, channels []string) (count uint64, err error) {
-	encoder := packet.NewEncoder()
+	encoder := coder.NewEncoder()
 	encoder.WriteString(uid)
 	encoder.WriteStrings(channels)
 	req := packet.NewRequest("LeaveChannel", encoder.Bytes())
@@ -112,7 +113,7 @@ func (p *peer) leaveChannel(ctx context.Context, uid string, channels []string) 
 	if err != nil {
 		return 0, err
 	}
-	decoder := packet.NewDecoder(res.Body)
+	decoder := coder.NewDecoder(res.Content)
 	if count, err = decoder.ReadVarint(); err != nil {
 		return 0, err
 	}

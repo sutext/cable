@@ -2,6 +2,8 @@ package packet
 
 import (
 	"fmt"
+
+	"sutext.github.io/cable/coder"
 )
 
 type Identity struct {
@@ -9,6 +11,39 @@ type Identity struct {
 	ClientID string
 	Password string
 }
+
+func (i *Identity) WriteTo(w coder.Encoder) error {
+	w.WriteString(i.UserID)
+	w.WriteString(i.ClientID)
+	w.WriteString(i.Password)
+	return nil
+}
+
+func (i *Identity) ReadFrom(r coder.Decoder) error {
+	userID, err := r.ReadString()
+	if err != nil {
+		return err
+	}
+	clientID, err := r.ReadString()
+	if err != nil {
+		return err
+	}
+	password, err := r.ReadString()
+	if err != nil {
+		return err
+	}
+	i.UserID = userID
+	i.ClientID = clientID
+	i.Password = password
+	return nil
+}
+func (i *Identity) Equal(other *Identity) bool {
+	if other == nil {
+		return false
+	}
+	return i.UserID == other.UserID && i.ClientID == other.ClientID && i.Password == other.Password
+}
+
 type Connect struct {
 	Version  uint8
 	Identity *Identity
@@ -32,41 +67,25 @@ func (p *Connect) Equal(other Packet) bool {
 		return false
 	}
 	otherP := other.(*Connect)
-	return p.Version == otherP.Version && p.Identity.Password == otherP.Identity.Password &&
-		p.Identity.UserID == otherP.Identity.UserID &&
-		p.Identity.ClientID == otherP.Identity.ClientID
+	return p.Version == otherP.Version && p.Identity.Equal(otherP.Identity)
 }
-func (p *Connect) EncodeTo(w Encoder) error {
+func (p *Connect) WriteTo(w coder.Encoder) error {
 	w.WriteUInt8(p.Version)
-	w.WriteString(p.Identity.Password)
-	w.WriteString(p.Identity.UserID)
-	w.WriteString(p.Identity.ClientID)
-	return nil
+	return p.Identity.WriteTo(w)
 }
 
-func (p *Connect) DecodeFrom(r Decoder) error {
-	if version, err := r.ReadUInt8(); err != nil {
+func (p *Connect) ReadFrom(r coder.Decoder) error {
+	version, err := r.ReadUInt8()
+	if err != nil {
 		return nil
-	} else {
-		p.Version = version
 	}
-	token, err := r.ReadString()
+	var identity Identity
+	err = identity.ReadFrom(r)
 	if err != nil {
 		return err
 	}
-	userID, err := r.ReadString()
-	if err != nil {
-		return err
-	}
-	clientID, err := r.ReadString()
-	if err != nil {
-		return err
-	}
-	p.Identity = &Identity{
-		Password: token,
-		UserID:   userID,
-		ClientID: clientID,
-	}
+	p.Version = version
+	p.Identity = &identity
 	return nil
 }
 
@@ -120,11 +139,11 @@ func (p *Connack) Equal(other Packet) bool {
 	return p.Code == otherP.Code
 }
 
-func (p *Connack) EncodeTo(w Encoder) error {
+func (p *Connack) WriteTo(w coder.Encoder) error {
 	w.WriteUInt8(uint8(p.Code))
 	return nil
 }
-func (p *Connack) DecodeFrom(r Decoder) error {
+func (p *Connack) ReadFrom(r coder.Decoder) error {
 	code, err := r.ReadUInt8()
 	if err != nil {
 		return err

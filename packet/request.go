@@ -5,47 +5,33 @@ import (
 	"fmt"
 	"maps"
 	"math/rand/v2"
+
+	"sutext.github.io/cable/coder"
 )
 
 type Request struct {
-	Seq     uint64
-	Path    string
-	Body    []byte
-	headers map[string]string
+	ID      uint64
+	Method  string
+	Headers map[string]string
+	Content []byte
 }
 
-func NewRequest(path string, body ...[]byte) *Request {
+func NewRequest(path string, content ...[]byte) *Request {
 	var b []byte
-	if len(body) > 0 {
-		b = body[0]
+	if len(content) > 0 {
+		b = content[0]
 	}
 	return &Request{
-		Seq:  rand.Uint64(),
-		Path: path,
-		Body: b,
+		ID:      rand.Uint64(),
+		Method:  path,
+		Content: b,
 	}
-}
-func (p *Request) Headers() map[string]string {
-	return p.headers
-}
-func (p *Request) SetHeader(key, value string) {
-	if p.headers == nil {
-		p.headers = make(map[string]string)
-	}
-	p.headers[key] = value
-}
-func (p *Request) GetHeader(key string) (string, bool) {
-	if p.headers == nil {
-		return "", false
-	}
-	value, ok := p.headers[key]
-	return value, ok
 }
 func (p *Request) Type() PacketType {
 	return REQUEST
 }
 func (p *Request) String() string {
-	return fmt.Sprintf("REQUEST(seq=%d, path=%s, body_len=%d)", p.Seq, p.Path, len(p.Body))
+	return fmt.Sprintf("REQUEST(seq=%d, path=%s, body_len=%d)", p.ID, p.Method, len(p.Content))
 }
 func (p *Request) Equal(other Packet) bool {
 	if other == nil {
@@ -55,30 +41,30 @@ func (p *Request) Equal(other Packet) bool {
 		return false
 	}
 	o := other.(*Request)
-	return p.Seq == o.Seq &&
-		p.Path == o.Path &&
-		maps.Equal(p.headers, o.headers) &&
-		bytes.Equal(p.Body, o.Body)
+	return p.ID == o.ID &&
+		p.Method == o.Method &&
+		maps.Equal(p.Headers, o.Headers) &&
+		bytes.Equal(p.Content, o.Content)
 }
-func (p *Request) EncodeTo(w Encoder) error {
-	w.WriteUInt64(p.Seq)
-	w.WriteString(p.Path)
-	w.WriteStrMap(p.headers)
-	w.WriteBytes(p.Body)
+func (p *Request) WriteTo(w coder.Encoder) error {
+	w.WriteUInt64(p.ID)
+	w.WriteString(p.Method)
+	w.WriteStrMap(p.Headers)
+	w.WriteBytes(p.Content)
 	return nil
 }
-func (p *Request) DecodeFrom(r Decoder) error {
+func (p *Request) ReadFrom(r coder.Decoder) error {
 	var err error
-	if p.Seq, err = r.ReadUInt64(); err != nil {
+	if p.ID, err = r.ReadUInt64(); err != nil {
 		return err
 	}
-	if p.Path, err = r.ReadString(); err != nil {
+	if p.Method, err = r.ReadString(); err != nil {
 		return err
 	}
-	if p.headers, err = r.ReadStrMap(); err != nil {
+	if p.Headers, err = r.ReadStrMap(); err != nil {
 		return err
 	}
-	if p.Body, err = r.ReadAll(); err != nil {
+	if p.Content, err = r.ReadAll(); err != nil {
 		return err
 	}
 	return nil

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"sutext.github.io/cable"
+	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/internal/keymap"
 	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
@@ -59,7 +60,9 @@ func NewBroker(opts ...Option) Broker {
 	for _, l := range options.listeners {
 		b.listeners[l.Network] = cable.NewServer(l.Address,
 			server.WithClose(b.onUserClosed),
-			server.WithConnect(b.onUserConnect),
+			server.WithConnect(func(p *packet.Connect) packet.ConnackCode {
+				return b.onUserConnect(p, l.Network)
+			}),
 			server.WithMessage(b.onUserMessage),
 			server.WithRequest(b.onUserRequest),
 			server.WithLogger(options.logger),
@@ -153,7 +156,7 @@ func (b *broker) JoinCluster(ctx context.Context, id BrokerID) {
 		p.joinCluster(ctx, id)
 	}
 }
-func (b *broker) onUserClosed(s server.Server, id *packet.Identity) {
+func (b *broker) onUserClosed(id *packet.Identity) {
 	b.users.DeleteKey(id.UserID, id.ClientID)
 	b.channels.DeleteKey("all", id.ClientID)
 	b.clients.RangeKey(id.ClientID, func(channel string, net server.Network) bool {
@@ -163,7 +166,7 @@ func (b *broker) onUserClosed(s server.Server, id *packet.Identity) {
 	b.clients.Delete(id.ClientID)
 	b.handler.OnClosed(id)
 }
-func (b *broker) onUserConnect(s server.Server, p *packet.Connect) packet.ConnackCode {
+func (b *broker) onUserConnect(p *packet.Connect, net server.Network) packet.ConnackCode {
 	code := b.handler.OnConnect(p)
 	if code != packet.ConnectionAccepted {
 		return code
@@ -171,56 +174,56 @@ func (b *broker) onUserConnect(s server.Server, p *packet.Connect) packet.Connac
 	for _, peer := range b.peers { // kick old connections at other peers
 		peer.kickConn(context.Background(), p.Identity.ClientID)
 	}
-	b.users.SetKey(p.Identity.UserID, p.Identity.ClientID, s.Network())
-	b.channels.SetKey("all", p.Identity.ClientID, s.Network())
+	b.users.SetKey(p.Identity.UserID, p.Identity.ClientID, net)
+	b.channels.SetKey("all", p.Identity.ClientID, net)
 	if chs, err := b.handler.GetChannels(p.Identity.UserID); err == nil {
 		for _, ch := range chs {
-			b.clients.SetKey(p.Identity.ClientID, ch, s.Network())
-			b.channels.SetKey(ch, p.Identity.ClientID, s.Network())
+			b.clients.SetKey(p.Identity.ClientID, ch, net)
+			b.channels.SetKey(ch, p.Identity.ClientID, net)
 		}
 	}
 	return packet.ConnectionAccepted
 }
-func (b *broker) onUserMessage(s server.Server, p *packet.Message, id *packet.Identity) {
+func (b *broker) onUserMessage(p *packet.Message, id *packet.Identity) {
 	b.handler.OnMessage(p, id)
 }
-func (b *broker) onUserRequest(s server.Server, p *packet.Request, id *packet.Identity) (*packet.Response, error) {
+func (b *broker) onUserRequest(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
 	return b.handler.OnRequest(p, id)
 }
-func (b *broker) onPeerRequest(s server.Server, p *packet.Request, id *packet.Identity) (*packet.Response, error) {
-	switch p.Path {
+func (b *broker) onPeerRequest(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
+	switch p.Method {
 	case "SendMessage":
 		msg := &packet.Message{}
-		if err := packet.Unmarshal(msg, p.Body); err != nil {
+		if err := packet.Unmarshal(msg, p.Content); err != nil {
 			return nil, err
 		}
 		total, success := b.sendMessage(msg)
-		encoder := packet.NewEncoder()
+		encoder := coder.NewEncoder()
 		encoder.WriteVarint(total)
 		encoder.WriteVarint(success)
-		return packet.NewResponse(p.Seq, encoder.Bytes()), nil
+		return packet.NewResponse(p.ID, encoder.Bytes()), nil
 	case "IsOnline":
-		online := b.isOnline(string(p.Body))
+		online := b.isOnline(string(p.Content))
 		var r byte
 		if online {
 			r = 1
 		}
-		return packet.NewResponse(p.Seq, []byte{r}), nil
+		return packet.NewResponse(p.ID, []byte{r}), nil
 	case "KickConn":
-		b.kickConn(string(p.Body))
-		return packet.NewResponse(p.Seq), nil
+		b.kickConn(string(p.Content))
+		return packet.NewResponse(p.ID), nil
 	case "KickUser":
-		b.kickUser(string(p.Body))
-		return packet.NewResponse(p.Seq), nil
+		b.kickUser(string(p.Content))
+		return packet.NewResponse(p.ID), nil
 	case "Inspect":
 		isp := b.inspect()
 		data, err := json.Marshal(isp)
 		if err != nil {
 			return nil, err
 		}
-		return packet.NewResponse(p.Seq, data), nil
+		return packet.NewResponse(p.ID, data), nil
 	case "JoinChannel":
-		decoder := packet.NewDecoder(p.Body)
+		decoder := coder.NewDecoder(p.Content)
 		uid, err := decoder.ReadString()
 		if err != nil {
 			return nil, err
@@ -230,11 +233,11 @@ func (b *broker) onPeerRequest(s server.Server, p *packet.Request, id *packet.Id
 			return nil, err
 		}
 		count := b.joinChannel(uid, chs)
-		encoder := packet.NewEncoder()
+		encoder := coder.NewEncoder()
 		encoder.WriteVarint(count)
-		return packet.NewResponse(p.Seq, encoder.Bytes()), nil
+		return packet.NewResponse(p.ID, encoder.Bytes()), nil
 	case "LeaveChannel":
-		decoder := packet.NewDecoder(p.Body)
+		decoder := coder.NewDecoder(p.Content)
 		uid, err := decoder.ReadString()
 		if err != nil {
 			return nil, err
@@ -244,15 +247,15 @@ func (b *broker) onPeerRequest(s server.Server, p *packet.Request, id *packet.Id
 			return nil, err
 		}
 		count := b.leaveChannel(uid, chs)
-		encoder := packet.NewEncoder()
+		encoder := coder.NewEncoder()
 		encoder.WriteVarint(count)
-		return packet.NewResponse(p.Seq, encoder.Bytes()), nil
+		return packet.NewResponse(p.ID, encoder.Bytes()), nil
 	case "JoinCluster":
-		brokerID := BrokerID(p.Body)
+		brokerID := BrokerID(p.Content)
 		b.joinCluster(brokerID)
-		return packet.NewResponse(p.Seq), nil
+		return packet.NewResponse(p.ID), nil
 	default:
-		return nil, fmt.Errorf("unsupported request path: %s", p.Path)
+		return nil, fmt.Errorf("unsupported request path: %s", p.Method)
 	}
 }
 func (b *broker) isOnline(uid string) (ok bool) {

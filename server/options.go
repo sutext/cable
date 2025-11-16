@@ -11,19 +11,19 @@ import (
 type Network uint8
 
 const (
-	NetworkWS Network = iota
-	NetworkTCP
+	NetworkTCP Network = iota
 	NetworkQUIC
+	NetworkWebSocket
 )
 
 func (n Network) String() string {
 	switch n {
-	case NetworkWS:
-		return "WebSocket"
 	case NetworkTCP:
 		return "TCP"
 	case NetworkQUIC:
 		return "QUIC"
+	case NetworkWebSocket:
+		return "WebSocket"
 	default:
 		return "Unknown"
 	}
@@ -48,16 +48,16 @@ func NewOptions(opts ...Option) *Options {
 		Network: NetworkTCP,
 		UseNIO:  false,
 		Logger:  logger.NewText(slog.LevelDebug),
-		CloseHandler: func(s Server, p *packet.Identity) {
+		CloseHandler: func(p *packet.Identity) {
 
 		},
-		ConnectHandler: func(s Server, p *packet.Connect) packet.ConnackCode {
+		ConnectHandler: func(p *packet.Connect) packet.ConnackCode {
 			return packet.ConnectionAccepted
 		},
-		MessageHandler: func(s Server, p *packet.Message, id *packet.Identity) {
+		MessageHandler: func(p *packet.Message, id *packet.Identity) {
 
 		},
-		RequestHandler: func(s Server, p *packet.Request, id *packet.Identity) (*packet.Response, error) {
+		RequestHandler: func(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
 			return nil, nil
 		},
 	}
@@ -66,17 +66,17 @@ func NewOptions(opts ...Option) *Options {
 	}
 	return options
 }
-func WithQUIC(config *quic.Config) Option {
-	return Option{f: func(o *Options) {
-		o.Network = NetworkQUIC
-		o.QuicConfig = config
-	}}
-}
 func WithTCP() Option {
 	return Option{f: func(o *Options) { o.Network = NetworkTCP }}
 }
 func WithNIO(useNIO bool) Option {
 	return Option{f: func(o *Options) { o.UseNIO = useNIO }}
+}
+func WithQUIC(config *quic.Config) Option {
+	return Option{f: func(o *Options) {
+		o.Network = NetworkQUIC
+		o.QuicConfig = config
+	}}
 }
 func WithLogger(logger logger.Logger) Option {
 	return Option{f: func(o *Options) { o.Logger = logger }}

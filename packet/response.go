@@ -4,45 +4,31 @@ import (
 	"bytes"
 	"fmt"
 	"maps"
+
+	"sutext.github.io/cable/coder"
 )
 
 type Response struct {
-	Seq     uint64
-	Body    []byte
-	headers map[string]string
+	ID      uint64
+	Headers map[string]string
+	Content []byte
 }
 
-func NewResponse(seq uint64, body ...[]byte) *Response {
+func NewResponse(seq uint64, content ...[]byte) *Response {
 	var b []byte
-	if len(body) > 0 {
-		b = body[0]
+	if len(content) > 0 {
+		b = content[0]
 	}
 	return &Response{
-		Seq:  seq,
-		Body: b,
+		ID:      seq,
+		Content: b,
 	}
-}
-func (p *Response) Headers() map[string]string {
-	return p.headers
-}
-func (p *Response) SetHeader(key, value string) {
-	if p.headers == nil {
-		p.headers = make(map[string]string)
-	}
-	p.headers[key] = value
-}
-func (p *Response) GetHeader(key string) (string, bool) {
-	if p.headers == nil {
-		return "", false
-	}
-	value, ok := p.headers[key]
-	return value, ok
 }
 func (p *Response) Type() PacketType {
 	return RESPONSE
 }
 func (p *Response) String() string {
-	return fmt.Sprintf("RESPONSE(seq=%d, body_len=%d)", p.Seq, len(p.Body))
+	return fmt.Sprintf("RESPONSE(seq=%d, body_len=%d)", p.ID, len(p.Content))
 }
 func (p *Response) Equal(other Packet) bool {
 	if other == nil {
@@ -52,26 +38,26 @@ func (p *Response) Equal(other Packet) bool {
 		return false
 	}
 	o := other.(*Response)
-	return p.Seq == o.Seq &&
-		bytes.Equal(p.Body, o.Body) &&
-		maps.Equal(p.headers, o.headers)
+	return p.ID == o.ID &&
+		bytes.Equal(p.Content, o.Content) &&
+		maps.Equal(p.Headers, o.Headers)
 }
 
-func (p *Response) EncodeTo(w Encoder) error {
-	w.WriteUInt64(p.Seq)
-	w.WriteStrMap(p.headers)
-	w.WriteBytes(p.Body)
+func (p *Response) WriteTo(w coder.Encoder) error {
+	w.WriteUInt64(p.ID)
+	w.WriteStrMap(p.Headers)
+	w.WriteBytes(p.Content)
 	return nil
 }
-func (p *Response) DecodeFrom(r Decoder) error {
+func (p *Response) ReadFrom(r coder.Decoder) error {
 	var err error
-	if p.Seq, err = r.ReadUInt64(); err != nil {
+	if p.ID, err = r.ReadUInt64(); err != nil {
 		return err
 	}
-	if p.headers, err = r.ReadStrMap(); err != nil {
+	if p.Headers, err = r.ReadStrMap(); err != nil {
 		return err
 	}
-	if p.Body, err = r.ReadAll(); err != nil {
+	if p.Content, err = r.ReadAll(); err != nil {
 		return err
 	}
 	return nil

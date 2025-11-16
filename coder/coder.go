@@ -1,11 +1,10 @@
-package packet
+package coder
 
 import (
 	"encoding/binary"
 )
 
 type Encoder interface {
-	Bytes() []byte
 	WriteBytes(p []byte)
 	WriteUInt8(i uint8)
 	WriteUInt16(i uint16)
@@ -20,6 +19,7 @@ type Encoder interface {
 	WriteString(s string)
 	WriteStrMap(m map[string]string)
 	WriteStrings(ss []string)
+	Bytes() []byte
 }
 type Decoder interface {
 	ReadBytes(l uint64) ([]byte, error)
@@ -39,7 +39,10 @@ type Decoder interface {
 	ReadAll() ([]byte, error)
 }
 
-func NewEncoder() Encoder {
+func NewEncoder(cap ...int) Encoder {
+	if len(cap) > 0 && cap[0] > 0 {
+		return &coder{pos: 0, buf: make([]byte, 0, cap[0])}
+	}
 	return &coder{pos: 0, buf: make([]byte, 0, 256)}
 }
 func NewDecoder(bytes []byte) Decoder {
@@ -120,7 +123,6 @@ func (b *coder) WriteStrings(ss []string) {
 		b.WriteString(s)
 	}
 }
-
 func (b *coder) ReadBytes(l uint64) ([]byte, error) {
 	if l == 0 {
 		return nil, nil
@@ -259,30 +261,4 @@ func (b *coder) ReadAll() ([]byte, error) {
 	p := b.buf[b.pos:]
 	b.pos = l
 	return p, nil
-}
-
-// Marshal encodes the given Packet object to bytes.
-// Use compact binary encoding for integers and varints.
-// NOTE: Marshal does not contain any header or length information.
-func Marshal(p Packet) ([]byte, error) {
-	var buf []byte
-	switch p.Type() {
-	case PING, PONG:
-		return nil, nil
-	case CLOSE, CONNACK:
-		buf = make([]byte, 1)
-	case CONNECT, REQUEST, RESPONSE, MESSAGE:
-		buf = make([]byte, 0, 256)
-	}
-	coder := &coder{pos: 0, buf: buf}
-	if err := p.EncodeTo(coder); err != nil {
-		return nil, err
-	}
-	return coder.buf, nil
-}
-
-// Unmarshal decodes the given bytes into the given Packet object.
-// NOTE: Unmarshal assumes that the bytes contain a complete packet.
-func Unmarshal(p Packet, bytes []byte) error {
-	return p.DecodeFrom(&coder{pos: 0, buf: bytes})
 }

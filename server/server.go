@@ -13,10 +13,10 @@ type Conn interface {
 	SendMessage(p *packet.Message) error
 	SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error)
 }
-type ClosedHandler func(s Server, p *packet.Identity)
-type ConnectHandler func(s Server, p *packet.Connect) packet.ConnackCode
-type MessageHandler func(s Server, p *packet.Message, id *packet.Identity)
-type RequestHandler func(s Server, p *packet.Request, id *packet.Identity) (*packet.Response, error)
+type ClosedHandler func(p *packet.Identity)
+type ConnectHandler func(p *packet.Connect) packet.ConnackCode
+type MessageHandler func(p *packet.Message, id *packet.Identity)
+type RequestHandler func(p *packet.Request, id *packet.Identity) (*packet.Response, error)
 
 type Server interface {
 	Serve() error

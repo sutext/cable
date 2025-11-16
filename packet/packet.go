@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"slices"
+
+	"sutext.github.io/cable/coder"
 )
 
 const (
@@ -16,19 +18,13 @@ const (
 type Error uint8
 
 const (
-	ErrBufferTooShort     Error = 1
-	ErrVarintOverflow     Error = 2
-	ErrInvalidReadLen     Error = 3
-	ErrUnknownPacketType  Error = 4
-	ErrPacketSizeTooLarge Error = 5
+	ErrInvalidReadLen     Error = 1
+	ErrUnknownPacketType  Error = 2
+	ErrPacketSizeTooLarge Error = 3
 )
 
 func (e Error) Error() string {
 	switch e {
-	case ErrBufferTooShort:
-		return "buffer too short"
-	case ErrVarintOverflow:
-		return "varint overflow"
 	case ErrInvalidReadLen:
 		return "invalid length when read"
 	case ErrUnknownPacketType:
@@ -79,10 +75,9 @@ func (t PacketType) String() string {
 
 type Packet interface {
 	fmt.Stringer
+	coder.Codable
 	Type() PacketType
 	Equal(Packet) bool
-	EncodeTo(Encoder) error
-	DecodeFrom(Decoder) error
 }
 
 type pingpong struct {
@@ -107,10 +102,10 @@ func (p *pingpong) Equal(other Packet) bool {
 	}
 	return p.t == other.Type()
 }
-func (p *pingpong) EncodeTo(c Encoder) error {
+func (p *pingpong) WriteTo(c coder.Encoder) error {
 	return nil
 }
-func (p *pingpong) DecodeFrom(c Decoder) error {
+func (p *pingpong) ReadFrom(c coder.Decoder) error {
 	return nil
 }
 
@@ -126,6 +121,32 @@ func WriteTo(w io.Writer, p Packet) error {
 	_, err = w.Write(bytes)
 	return err
 }
+func ReadFrom(r io.Reader) (Packet, error) {
+	// read header
+	header := make([]byte, 2)
+	if _, err := io.ReadFull(r, header); err != nil {
+		return nil, err
+	}
+	//read length
+	byteCount := (header[0] >> 3) & 0x03
+	length := uint64(header[0]&0x07)<<8 | uint64(header[1])
+	if byteCount > 0 {
+		bs := make([]byte, byteCount)
+		if _, err := io.ReadFull(r, bs); err != nil {
+			return nil, err
+		}
+		for _, b := range bs {
+			length = length<<8 | uint64(b)
+		}
+	}
+	// read data
+	data := make([]byte, length)
+	if _, err := io.ReadFull(r, data); err != nil {
+		return nil, err
+	}
+	return Unpack(header, data)
+}
+
 func Pack(p Packet) (header, data []byte, err error) {
 	data, err = Marshal(p)
 	if err != nil {
@@ -156,31 +177,7 @@ func Pack(p Packet) (header, data []byte, err error) {
 	}
 	return header, data, nil
 }
-func ReadFrom(r io.Reader) (Packet, error) {
-	// read header
-	header := make([]byte, 2)
-	if _, err := io.ReadFull(r, header); err != nil {
-		return nil, err
-	}
-	//read length
-	byteCount := (header[0] >> 3) & 0x03
-	length := uint64(header[0]&0x07)<<8 | uint64(header[1])
-	if byteCount > 0 {
-		bs := make([]byte, byteCount)
-		if _, err := io.ReadFull(r, bs); err != nil {
-			return nil, err
-		}
-		for _, b := range bs {
-			length = length<<8 | uint64(b)
-		}
-	}
-	// read data
-	data := make([]byte, length)
-	if _, err := io.ReadFull(r, data); err != nil {
-		return nil, err
-	}
-	return Unpack(header, data)
-}
+
 func Unpack(header, data []byte) (Packet, error) {
 	packetType := PacketType(header[0] >> 5)
 	switch packetType {
@@ -227,4 +224,30 @@ func Unpack(header, data []byte) (Packet, error) {
 	default:
 		return nil, ErrUnknownPacketType
 	}
+}
+
+// Marshal encodes the given Packet object to bytes.
+// Use compact binary encoding for integers and varints.
+// NOTE: Marshal does not contain any header or length information.
+func Marshal(p Packet) ([]byte, error) {
+	var cap int
+	switch p.Type() {
+	case PING, PONG:
+		return nil, nil
+	case CLOSE, CONNACK:
+		cap = 1
+	case CONNECT, REQUEST, RESPONSE, MESSAGE:
+		cap = 256
+	}
+	coder := coder.NewEncoder(cap)
+	if err := p.WriteTo(coder); err != nil {
+		return nil, err
+	}
+	return coder.Bytes(), nil
+}
+
+// Unmarshal decodes the given bytes into the given Packet object.
+// NOTE: Unmarshal assumes that the bytes contain a complete packet.
+func Unmarshal(p Packet, bytes []byte) error {
+	return p.ReadFrom(coder.NewDecoder(bytes))
 }
