@@ -8,8 +8,9 @@ import (
 )
 
 type Discovery struct {
-	id string
-	ip string
+	id   string
+	ip   string
+	addr *net.UDPAddr
 }
 
 func New(id string) (*Discovery, error) {
@@ -17,37 +18,70 @@ func New(id string) (*Discovery, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Discovery{id: id, ip: ip}, nil
+	return &Discovery{id: id, ip: ip, addr: &net.UDPAddr{IP: net.ParseIP("224.0.0.2"), Port: 9999}}, nil
 }
 func (d *Discovery) Start() error {
-	conn, err := net.ListenMulticastUDP("udp4", nil, &net.UDPAddr{IP: net.ParseIP("224.0.0.24"), Port: 9999})
+	conn, err := net.ListenMulticastUDP("udp4", nil, d.addr)
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
 	for {
-		buf := make([]byte, 1024)
+		buf := make([]byte, 2048)
 		n, addr, err := conn.ReadFromUDP(buf)
 		if err != nil {
+			fmt.Println(err)
 			return err
 		}
-		conn.WriteToUDP([]byte(d.id), addr)
-		fmt.Println(addr.String(), string(buf[:n]))
-		fmt.Println(string(buf[:n]))
+		fmt.Println("received from ", addr, "len:", n)
+		p, err := packet.Unmarshal(buf[:n])
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+		if p.Type() != packet.REQUEST {
+			continue
+		}
+		req := p.(*packet.Request)
+		if req.Method != "discovery" {
+			continue
+		}
+		resp := packet.NewResponse(req.ID, []byte(d.id))
+		resp.Content = []byte(d.ip)
+		bytes, err := packet.Marshal(resp)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+		fmt.Println(addr, req.ID, string(req.Content))
+		_, err = conn.WriteToUDP(bytes, addr)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
 	}
 }
 func (d *Discovery) Query() (id string, err error) {
-	conn, err := net.Dial("udp4", "224.0.0.24:9999")
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.ParseIP("0.0.0.0"), Port: 0})
 	if err != nil {
 		return id, err
 	}
 	defer conn.Close()
-	request := packet.NewRequest("discovery")
-	err = packet.WriteTo(conn, request)
+	req := packet.NewRequest("discovery")
+	reqdata, err := packet.Marshal(req)
 	if err != nil {
 		return id, err
 	}
-	p, err := packet.ReadFrom(conn)
+	_, err = conn.WriteToUDP(reqdata, d.addr)
+	if err != nil {
+		return id, err
+	}
+	data := make([]byte, 2048)
+	n, _, err := conn.ReadFromUDP(data)
+	if err != nil {
+		return id, err
+	}
+	p, err := packet.Unmarshal(data[:n])
 	if err != nil {
 		return id, err
 	}
@@ -55,18 +89,6 @@ func (d *Discovery) Query() (id string, err error) {
 		return id, fmt.Errorf("unexpected packet type: %d", p.Type())
 	}
 	return string(p.(*packet.Response).Content), nil
-}
-func Lookup(name string) (net.IP, error) {
-	ips, err := net.LookupIP(name)
-	if err != nil {
-		return nil, err
-	}
-	for _, ip := range ips {
-		if ip.To4() != nil {
-			return ip, nil
-		}
-	}
-	return nil, fmt.Errorf("no IPv4 address found for %s", name)
 }
 
 // getLocalIP retrieves the non-loopback local IPv4 address of the machine.

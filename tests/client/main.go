@@ -42,7 +42,7 @@ func RandomClient() *Client {
 		client.WithKeepAlive(time.Second*5, time.Second*60),
 		client.WithRetry(math.MaxInt, backoff.Exponential(2, 2)),
 		client.WithHandler(result),
-		client.WithLogger(logger.NewText(slog.LevelError)),
+		client.WithLogger(logger.NewText(slog.LevelDebug)),
 	)
 	uid := fmt.Sprintf("u%d", rand.IntN(300))
 	cid := fmt.Sprintf("%s_%d", uid, rand.Int())
@@ -62,7 +62,7 @@ func addClient(count uint) {
 }
 func runBrokerClients() {
 	ctx := context.Background()
-	ticker := time.NewTicker(time.Millisecond * 100)
+	ticker := time.NewTicker(time.Millisecond * 1000)
 	defer ticker.Stop()
 	for {
 		select {
@@ -82,6 +82,5 @@ func runServerClietn() {
 func main() {
 	runBrokerClients()
 	// runServerClietn()
-	// addClient(1000)
 	select {}
 }

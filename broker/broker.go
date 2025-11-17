@@ -68,7 +68,7 @@ func NewBroker(opts ...Option) Broker {
 			server.WithLogger(options.logger),
 		)
 	}
-	b.peerServer = cable.NewServer(strings.Split(b.id, "@")[1], server.WithRequest(b.onPeerRequest))
+	b.peerServer = cable.NewServer(strings.Split(b.id, "@")[1], server.WithUDP(), server.WithRequest(b.onPeerRequest))
 	b.mux = http.NewServeMux()
 	b.mux.HandleFunc("/join", b.handleJoin)
 	b.mux.HandleFunc("/inspect", b.handleInspect)
@@ -194,7 +194,7 @@ func (b *broker) onPeerRequest(p *packet.Request, id *packet.Identity) (*packet.
 	switch p.Method {
 	case "SendMessage":
 		msg := &packet.Message{}
-		if err := packet.Unmarshal(msg, p.Content); err != nil {
+		if err := coder.Unmarshal(p.Content, msg); err != nil {
 			return nil, err
 		}
 		total, success := b.sendMessage(msg)

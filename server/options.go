@@ -12,6 +12,7 @@ type Network uint8
 
 const (
 	NetworkTCP Network = iota
+	NetworkUDP
 	NetworkQUIC
 	NetworkWebSocket
 )
@@ -20,6 +21,8 @@ func (n Network) String() string {
 	switch n {
 	case NetworkTCP:
 		return "TCP"
+	case NetworkUDP:
+		return "UDP"
 	case NetworkQUIC:
 		return "QUIC"
 	case NetworkWebSocket:
@@ -71,6 +74,9 @@ func WithTCP() Option {
 }
 func WithNIO(useNIO bool) Option {
 	return Option{f: func(o *Options) { o.UseNIO = useNIO }}
+}
+func WithUDP() Option {
+	return Option{f: func(o *Options) { o.Network = NetworkUDP }}
 }
 func WithQUIC(config *quic.Config) Option {
 	return Option{f: func(o *Options) {

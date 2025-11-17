@@ -30,7 +30,7 @@ func main() {
 		<-sigs
 		cancel(fmt.Errorf("entry signal received"))
 	}()
-	peers := []string{"broker1@:4369", "broker2@:4370", "broker3@:4371", "broker4@:4372"}
+	peers := []string{"broker1@127.0.0.1:4369", "broker2@127.0.0.1:4370", "broker3@127.0.0.1:4371", "broker4@127.0.0.1:4372"}
 	listeners := []broker.Listener{
 		{Address: ":8080", Network: server.NetworkTCP},
 		{Address: ":8081", Network: server.NetworkTCP},

@@ -6,6 +6,7 @@ import (
 	"sutext.github.io/cable/internal/server/quic"
 	"sutext.github.io/cable/internal/server/tcp"
 	"sutext.github.io/cable/internal/server/tcp/nio"
+	"sutext.github.io/cable/internal/server/udp"
 	"sutext.github.io/cable/server"
 )
 
@@ -17,6 +18,8 @@ func NewServer(address string, opts ...server.Option) server.Server {
 			return nio.NewNIO(address, options)
 		}
 		return tcp.NewTCP(address, options)
+	case server.NetworkUDP:
+		return udp.NewUDP(address, options)
 	case server.NetworkQUIC:
 		return quic.NewQUIC(address, options)
 	default:

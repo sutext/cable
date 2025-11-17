@@ -33,7 +33,7 @@ type Client interface {
 type client struct {
 	id             *packet.Identity
 	mu             *sync.RWMutex
-	conn           net.Conn
+	conn           *net.UDPConn
 	status         Status
 	logger         logger.Logger
 	address        string
@@ -123,20 +123,61 @@ func (c *client) tryClose(err error) {
 		}
 	})
 }
+
+//	func (c *client) reconnect() error {
+//		if c.conn != nil {
+//			c.conn.Close()
+//			c.conn = nil
+//		}
+//		conn, err := net.Dial("tcp", c.address)
+//		if err != nil {
+//			return err
+//		}
+//		c.conn = conn
+//		if err := packet.WriteTo(conn, packet.NewConnect(c.id)); err != nil {
+//			return err
+//		}
+//		p, err := packet.ReadFrom(c.conn)
+//		if err != nil {
+//			return err
+//		}
+//		if p.Type() != packet.CONNACK {
+//			return ErrConntionFailed
+//		}
+//		if p.(*packet.Connack).Code != packet.ConnectionAccepted {
+//			return ErrConntionFailed
+//		}
+//		c.setStatus(StatusOpened)
+//		return nil
+//	}
 func (c *client) reconnect() error {
 	if c.conn != nil {
 		c.conn.Close()
 		c.conn = nil
 	}
-	conn, err := net.Dial("tcp", c.address)
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 	if err != nil {
 		return err
 	}
 	c.conn = conn
-	if err := packet.WriteTo(conn, packet.NewConnect(c.id)); err != nil {
+
+	connData, err := packet.Marshal(packet.NewConnect(c.id))
+	if err != nil {
 		return err
 	}
-	p, err := packet.ReadFrom(c.conn)
+	addr, err := net.ResolveUDPAddr("udp4", c.address)
+	if err != nil {
+		return err
+	}
+	if _, err := conn.WriteToUDP(connData, addr); err != nil {
+		return err
+	}
+	buf := make([]byte, 2048)
+	n, _, err := conn.ReadFromUDP(buf)
+	if err != nil {
+		return err
+	}
+	p, err := packet.Unmarshal(buf[:n])
 	if err != nil {
 		return err
 	}
@@ -149,7 +190,6 @@ func (c *client) reconnect() error {
 	c.setStatus(StatusOpened)
 	return nil
 }
-
 func (c *client) SendPing() error {
 	return c.sendPacket(packet.NewPing())
 }
@@ -176,15 +216,40 @@ func (c *client) SendRequest(ctx context.Context, p *packet.Request) (*packet.Re
 		return nil, context.Cause(ctx)
 	}
 }
+
+//	func (c *client) sendPacket(p packet.Packet) error {
+//		return c.sendQueue.AddTask(func() {
+//			if c.Status() != StatusOpened {
+//				return
+//			}
+//			if err := packet.WriteTo(c.conn, p); err != nil {
+//				c.tryClose(err)
+//				return
+//			}
+//			c.keepalive.UpdateTime()
+//		})
+//	}
 func (c *client) sendPacket(p packet.Packet) error {
 	return c.sendQueue.AddTask(func() {
 		if c.Status() != StatusOpened {
 			return
 		}
-		if err := packet.WriteTo(c.conn, p); err != nil {
+		data, err := packet.Marshal(p)
+		if err != nil {
 			c.tryClose(err)
 			return
 		}
+		addr, err := net.ResolveUDPAddr("udp4", c.address)
+		if err != nil {
+			c.tryClose(err)
+			return
+		}
+		_, err = c.conn.WriteToUDP(data, addr)
+		if err != nil {
+			c.tryClose(err)
+			return
+		}
+		c.logger.Debug("send packet", "packet", p)
 		c.keepalive.UpdateTime()
 	})
 }
@@ -216,12 +281,32 @@ func (c *client) _setStatus(status Status) {
 		c.keepalive.Stop()
 	case StatusOpened:
 		c.keepalive.Start()
-		go c.receive()
+		go c.recv()
 	}
 }
-func (c *client) receive() {
+
+//	func (c *client) recv() {
+//		for {
+//			p, err := packet.ReadFrom(c.conn)
+//			if err != nil {
+//				c.tryClose(err)
+//				return
+//			}
+//			c.recvQueue.AddTask(func() {
+//				c.handlePacket(p)
+//				c.keepalive.UpdateTime()
+//			})
+//		}
+//	}
+func (c *client) recv() {
 	for {
-		p, err := packet.ReadFrom(c.conn)
+		buf := make([]byte, 2048)
+		n, _, err := c.conn.ReadFromUDP(buf)
+		if err != nil {
+			c.tryClose(err)
+			return
+		}
+		p, err := packet.Unmarshal(buf[:n])
 		if err != nil {
 			c.tryClose(err)
 			return
@@ -233,6 +318,7 @@ func (c *client) receive() {
 	}
 }
 func (c *client) handlePacket(p packet.Packet) {
+	c.logger.Debug("receive packet", "packet", p)
 	switch p.Type() {
 	case packet.MESSAGE:
 		c.logger.Debug("receive message", "message", p.(*packet.Message))

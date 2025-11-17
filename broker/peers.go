@@ -39,7 +39,7 @@ func (p *peer) Connect() {
 	p.client.Connect(&packet.Identity{ClientID: p.id, UserID: p.id})
 }
 func (p *peer) sendMessage(ctx context.Context, m *packet.Message) (total, success uint64, err error) {
-	body, err := packet.Marshal(m)
+	body, err := coder.Marshal(m)
 	if err != nil {
 		return
 	}

@@ -31,7 +31,7 @@ func (p *Request) Type() PacketType {
 	return REQUEST
 }
 func (p *Request) String() string {
-	return fmt.Sprintf("REQUEST(seq=%d, path=%s, body_len=%d)", p.ID, p.Method, len(p.Content))
+	return fmt.Sprintf("REQUEST(id=%d, method=%s, headers=%v, content=%d)", p.ID, p.Method, p.Headers, len(p.Content))
 }
 func (p *Request) Equal(other Packet) bool {
 	if other == nil {

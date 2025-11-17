@@ -9,7 +9,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/tests/broker/main.go",
+            "program": "${workspaceFolder}/tests/discovery/main.go",
             "env": {
               "ENTRY_MODE": "debug"
             }

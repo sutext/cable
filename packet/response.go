@@ -28,7 +28,7 @@ func (p *Response) Type() PacketType {
 	return RESPONSE
 }
 func (p *Response) String() string {
-	return fmt.Sprintf("RESPONSE(seq=%d, body_len=%d)", p.ID, len(p.Content))
+	return fmt.Sprintf("RESPONSE(id=%d, content=%d)", p.ID, len(p.Content))
 }
 func (p *Response) Equal(other Packet) bool {
 	if other == nil {

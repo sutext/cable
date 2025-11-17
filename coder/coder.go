@@ -2,9 +2,11 @@ package coder
 
 import (
 	"encoding/binary"
+	"io"
 )
 
 type Encoder interface {
+	Bytes() []byte
 	WriteBytes(p []byte)
 	WriteUInt8(i uint8)
 	WriteUInt16(i uint16)
@@ -19,9 +21,9 @@ type Encoder interface {
 	WriteString(s string)
 	WriteStrMap(m map[string]string)
 	WriteStrings(ss []string)
-	Bytes() []byte
 }
 type Decoder interface {
+	io.Reader
 	ReadBytes(l uint64) ([]byte, error)
 	ReadUInt8() (uint8, error)
 	ReadUInt16() (uint16, error)
@@ -123,6 +125,19 @@ func (b *coder) WriteStrings(ss []string) {
 		b.WriteString(s)
 	}
 }
+
+// implement io.Reader interface
+func (b *coder) Read(p []byte) (int, error) {
+	l := len(p)
+	n, err := b.ReadBytes(uint64(l))
+	if err != nil {
+		return 0, err
+	}
+	copy(p, n)
+	return len(p), nil
+}
+
+// Read bytes directly
 func (b *coder) ReadBytes(l uint64) ([]byte, error) {
 	if l == 0 {
 		return nil, nil

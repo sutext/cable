@@ -109,15 +109,31 @@ func (p *pingpong) ReadFrom(c coder.Decoder) error {
 	return nil
 }
 
+// Marshal encodes the given Packet object to bytes.
+// Use compact binary encoding for integers and varints.
+func Marshal(p Packet) ([]byte, error) {
+	header, data, err := pack(p)
+	if err != nil {
+		return nil, err
+	}
+	bytes := make([]byte, len(header)+len(data))
+	copy(bytes, header)
+	copy(bytes[len(header):], data)
+	return bytes, nil
+}
+
+// Unmarshal decodes the given bytes into the given Packet object.
+func Unmarshal(bytes []byte) (Packet, error) {
+	return ReadFrom(coder.NewDecoder(bytes))
+}
 func WriteTo(w io.Writer, p Packet) error {
-	header, data, err := Pack(p)
+	header, data, err := pack(p)
 	if err != nil {
 		return err
 	}
-	hl := len(header)
-	bytes := make([]byte, hl+len(data))
+	bytes := make([]byte, len(header)+len(data))
 	copy(bytes, header)
-	copy(bytes[hl:], data)
+	copy(bytes[len(header):], data)
 	_, err = w.Write(bytes)
 	return err
 }
@@ -144,11 +160,12 @@ func ReadFrom(r io.Reader) (Packet, error) {
 	if _, err := io.ReadFull(r, data); err != nil {
 		return nil, err
 	}
-	return Unpack(header, data)
+	return unpack(header, data)
 }
 
-func Pack(p Packet) (header, data []byte, err error) {
-	data, err = Marshal(p)
+// pack encodes the given Packet object to header and data bytes.
+func pack(p Packet) (header, data []byte, err error) {
+	data, err = coder.Marshal(p)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -178,36 +195,37 @@ func Pack(p Packet) (header, data []byte, err error) {
 	return header, data, nil
 }
 
-func Unpack(header, data []byte) (Packet, error) {
+// unpack decodes the given header and data bytes into the corresponding Packet object.
+func unpack(header, data []byte) (Packet, error) {
 	packetType := PacketType(header[0] >> 5)
 	switch packetType {
 	case CONNECT:
 		conn := &Connect{}
-		if err := Unmarshal(conn, data); err != nil {
+		if err := coder.Unmarshal(data, conn); err != nil {
 			return nil, err
 		}
 		return conn, nil
 	case CONNACK:
 		connack := &Connack{}
-		if err := Unmarshal(connack, data); err != nil {
+		if err := coder.Unmarshal(data, connack); err != nil {
 			return nil, err
 		}
 		return connack, nil
 	case MESSAGE:
 		msg := &Message{}
-		if err := Unmarshal(msg, data); err != nil {
+		if err := coder.Unmarshal(data, msg); err != nil {
 			return nil, err
 		}
 		return msg, nil
 	case REQUEST:
 		req := &Request{}
-		if err := Unmarshal(req, data); err != nil {
+		if err := coder.Unmarshal(data, req); err != nil {
 			return nil, err
 		}
 		return req, nil
 	case RESPONSE:
 		res := &Response{}
-		if err := Unmarshal(res, data); err != nil {
+		if err := coder.Unmarshal(data, res); err != nil {
 			return nil, err
 		}
 		return res, nil
@@ -217,37 +235,11 @@ func Unpack(header, data []byte) (Packet, error) {
 		return NewPong(), nil
 	case CLOSE:
 		close := &Close{}
-		if err := Unmarshal(close, data); err != nil {
+		if err := coder.Unmarshal(data, close); err != nil {
 			return nil, err
 		}
 		return close, nil
 	default:
 		return nil, ErrUnknownPacketType
 	}
-}
-
-// Marshal encodes the given Packet object to bytes.
-// Use compact binary encoding for integers and varints.
-// NOTE: Marshal does not contain any header or length information.
-func Marshal(p Packet) ([]byte, error) {
-	var cap int
-	switch p.Type() {
-	case PING, PONG:
-		return nil, nil
-	case CLOSE, CONNACK:
-		cap = 1
-	case CONNECT, REQUEST, RESPONSE, MESSAGE:
-		cap = 256
-	}
-	coder := coder.NewEncoder(cap)
-	if err := p.WriteTo(coder); err != nil {
-		return nil, err
-	}
-	return coder.Bytes(), nil
-}
-
-// Unmarshal decodes the given bytes into the given Packet object.
-// NOTE: Unmarshal assumes that the bytes contain a complete packet.
-func Unmarshal(p Packet, bytes []byte) error {
-	return p.ReadFrom(coder.NewDecoder(bytes))
 }
