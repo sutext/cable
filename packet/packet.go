@@ -10,8 +10,8 @@ import (
 
 const (
 	MIN_LEN int = 0
-	MID_LEN int = 0x7ff        // 2047
-	MAX_LEN int = 0x7ff_ffffff // 32GB
+	MID_LEN int = 0x7
+	MAX_LEN int = 0x7ff_ffff
 )
 
 // Error represents an error code.
@@ -139,26 +139,29 @@ func WriteTo(w io.Writer, p Packet) error {
 }
 func ReadFrom(r io.Reader) (Packet, error) {
 	// read header
-	header := make([]byte, 2)
-	if _, err := io.ReadFull(r, header); err != nil {
+	header := make([]byte, 1)
+	if _, err := r.Read(header); err != nil {
 		return nil, err
 	}
 	//read length
 	byteCount := (header[0] >> 3) & 0x03
-	length := uint64(header[0]&0x07)<<8 | uint64(header[1])
+	length := uint32(header[0] & 0x07)
 	if byteCount > 0 {
 		bs := make([]byte, byteCount)
-		if _, err := io.ReadFull(r, bs); err != nil {
+		if _, err := r.Read(bs); err != nil {
 			return nil, err
 		}
 		for _, b := range bs {
-			length = length<<8 | uint64(b)
+			length = length<<8 | uint32(b)
 		}
 	}
 	// read data
-	data := make([]byte, length)
-	if _, err := io.ReadFull(r, data); err != nil {
-		return nil, err
+	var data []byte
+	if length > 0 {
+		data = make([]byte, length)
+		if _, err := r.Read(data); err != nil {
+			return nil, err
+		}
 	}
 	return unpack(header, data)
 }
@@ -174,7 +177,7 @@ func pack(p Packet) (header, data []byte, err error) {
 		return nil, nil, ErrPacketSizeTooLarge
 	}
 	if length > MID_LEN {
-		bs := make([]byte, 0, 5)
+		bs := make([]byte, 0, 4)
 		for length > 0 {
 			bs = append(bs, byte(length&0xff))
 			length >>= 8
@@ -186,11 +189,9 @@ func pack(p Packet) (header, data []byte, err error) {
 		} else {
 			header = bs
 		}
-		header[0] = byte(p.Type()<<5) | byte(len(header)-2)<<3 | header[0]
+		header[0] = byte(p.Type()<<5) | byte(len(header)-1)<<3 | header[0]
 	} else {
-		header = make([]byte, 2)
-		header[0] = byte(p.Type()<<5) | byte(length>>8)
-		header[1] = byte(length)
+		header = []byte{byte(p.Type()<<5) | byte(length)}
 	}
 	return header, data, nil
 }

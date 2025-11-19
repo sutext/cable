@@ -87,6 +87,7 @@ func (c *conn) close() {
 		c.handler = nil
 	}
 }
+
 func (c *conn) recv() {
 	timer := time.AfterFunc(time.Second*10, func() {
 		c.Close(packet.CloseAuthenticationTimeout)
