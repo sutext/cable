@@ -10,12 +10,12 @@ type Conn interface {
 	ID() *packet.Identity
 	Close(code packet.CloseCode)
 	IsActive() bool
-	SendMessage(p *packet.Message) error
+	SendMessage(ctx context.Context, p *packet.Message) error
 	SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error)
 }
 type ClosedHandler func(p *packet.Identity)
-type ConnectHandler func(p *packet.Connect) packet.ConnackCode
-type MessageHandler func(p *packet.Message, id *packet.Identity)
+type ConnectHandler func(p *packet.Connect) packet.ConnectCode
+type MessageHandler func(p *packet.Message, id *packet.Identity) error
 type RequestHandler func(p *packet.Request, id *packet.Identity) (*packet.Response, error)
 
 type Server interface {

@@ -27,7 +27,8 @@ func (c *Client) Connect() {
 func (c *Client) OnStatus(status client.Status) {
 
 }
-func (c *Client) OnMessage(msg *packet.Message) {
+func (c *Client) OnMessage(msg *packet.Message) error {
+	return nil
 	// fmt.Printf("client %s receive message: %s\n", c.id.UserID, string(msg.Payload))
 }
 func (c *Client) OnRequest(req *packet.Request) (*packet.Response, error) {

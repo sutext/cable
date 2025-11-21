@@ -10,8 +10,9 @@ import (
 
 const (
 	MIN_LEN int = 0
-	MID_LEN int = 0x7
-	MAX_LEN int = 0x7ff_ffff
+	MID_LEN int = 0x3ff
+	MAX_LEN int = 0x3_ffff_ffff
+	MAX_UDP int = MID_LEN + 2 // max UDP packet size
 )
 
 // Error represents an error code.
@@ -40,14 +41,15 @@ func (e Error) Error() string {
 type PacketType uint8
 
 const (
-	CONNECT  PacketType = iota // CONNECT packet
-	CONNACK                    // CONNACK packet
-	MESSAGE                    // MESSAGE packet
-	REQUEST                    // REQUEST packet
-	RESPONSE                   // RESPONSE packet
-	PING                       // PING packet
-	PONG                       // PONG packet
-	CLOSE                      // CLOSE packet
+	CONNECT  PacketType = 0  // CONNECT packet
+	CONNACK  PacketType = 1  // CONNACK packet
+	MESSAGE  PacketType = 2  // MESSAGE packet
+	MESSACK  PacketType = 3  // MASSACK packet
+	REQUEST  PacketType = 4  // REQUEST packet
+	RESPONSE PacketType = 5  // RESPONSE packet
+	PING     PacketType = 6  // PING packet
+	PONG     PacketType = 7  // PONG packet
+	CLOSE    PacketType = 15 // CLOSE packet
 )
 
 func (t PacketType) String() string {
@@ -58,6 +60,8 @@ func (t PacketType) String() string {
 		return "CONNACK"
 	case MESSAGE:
 		return "MESSAGE"
+	case MESSACK:
+		return "MESSACK"
 	case REQUEST:
 		return "REQUEST"
 	case RESPONSE:
@@ -139,20 +143,20 @@ func WriteTo(w io.Writer, p Packet) error {
 }
 func ReadFrom(r io.Reader) (Packet, error) {
 	// read header
-	header := make([]byte, 1)
+	header := make([]byte, 2)
 	if _, err := r.Read(header); err != nil {
 		return nil, err
 	}
 	//read length
-	byteCount := (header[0] >> 3) & 0x03
-	length := uint32(header[0] & 0x07)
+	byteCount := (header[0] >> 2) & 0x03
+	length := uint64(header[0]&0x03)<<8 | uint64(header[1])
 	if byteCount > 0 {
 		bs := make([]byte, byteCount)
 		if _, err := r.Read(bs); err != nil {
 			return nil, err
 		}
 		for _, b := range bs {
-			length = length<<8 | uint32(b)
+			length = length<<8 | uint64(b)
 		}
 	}
 	// read data
@@ -177,28 +181,31 @@ func pack(p Packet) (header, data []byte, err error) {
 		return nil, nil, ErrPacketSizeTooLarge
 	}
 	if length > MID_LEN {
-		bs := make([]byte, 0, 4)
+		bs := make([]byte, 0, 5)
 		for length > 0 {
 			bs = append(bs, byte(length&0xff))
 			length >>= 8
 		}
 		slices.Reverse(bs)
-		if bs[0] > 7 {
+		if bs[0] > 3 {
 			header = make([]byte, len(bs)+1)
 			copy(header[1:], bs)
 		} else {
 			header = bs
 		}
-		header[0] = byte(p.Type()<<5) | byte(len(header)-1)<<3 | header[0]
+		header[0] = byte(p.Type()<<4) | byte(len(header)-2)<<2 | header[0]
 	} else {
-		header = []byte{byte(p.Type()<<5) | byte(length)}
+		header = make([]byte, 2)
+		header[0] = byte(p.Type()<<4) | byte(length>>8)
+		header[1] = byte(length)
+
 	}
 	return header, data, nil
 }
 
 // unpack decodes the given header and data bytes into the corresponding Packet object.
 func unpack(header, data []byte) (Packet, error) {
-	packetType := PacketType(header[0] >> 5)
+	packetType := PacketType(header[0] >> 4)
 	switch packetType {
 	case CONNECT:
 		conn := &Connect{}

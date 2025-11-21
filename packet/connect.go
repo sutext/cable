@@ -89,35 +89,35 @@ func (p *Connect) ReadFrom(r coder.Decoder) error {
 	return nil
 }
 
-type ConnackCode uint8
+type ConnectCode uint8
 
 const (
-	ConnectionAccepted  ConnackCode = 0
-	ConnectionRejected  ConnackCode = 1
-	ConnectionDuplicate ConnackCode = 2
+	ConnectAccepted  ConnectCode = 0
+	ConnectRejected  ConnectCode = 1
+	ConnectDuplicate ConnectCode = 2
 )
 
-func (c ConnackCode) String() string {
+func (c ConnectCode) String() string {
 	switch c {
-	case ConnectionAccepted:
+	case ConnectAccepted:
 		return "Connection Accepted"
-	case ConnectionRejected:
+	case ConnectRejected:
 		return "Connection Rejected"
-	case ConnectionDuplicate:
+	case ConnectDuplicate:
 		return "Connection Duplicate"
 	default:
 		return "Unknown Connack Code"
 	}
 }
-func (c ConnackCode) Error() string {
+func (c ConnectCode) Error() string {
 	return c.String()
 }
 
 type Connack struct {
-	Code ConnackCode
+	Code ConnectCode
 }
 
-func NewConnack(code ConnackCode) *Connack {
+func NewConnack(code ConnectCode) *Connack {
 	return &Connack{
 		Code: code,
 	}
@@ -148,6 +148,6 @@ func (p *Connack) ReadFrom(r coder.Decoder) error {
 	if err != nil {
 		return err
 	}
-	p.Code = ConnackCode(code)
+	p.Code = ConnectCode(code)
 	return nil
 }

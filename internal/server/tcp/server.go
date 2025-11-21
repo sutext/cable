@@ -74,9 +74,9 @@ func (s *tcpServer) onClose(c *conn) {
 		s.closeHandler(id)
 	}
 }
-func (s *tcpServer) onConnect(c *conn, p *packet.Connect) packet.ConnackCode {
+func (s *tcpServer) onConnect(c *conn, p *packet.Connect) packet.ConnectCode {
 	code := s.connectHander(p)
-	if code == packet.ConnectionAccepted {
+	if code == packet.ConnectAccepted {
 		if old, loaded := s.conns.Swap(p.Identity.ClientID, c); loaded {
 			old.(*conn).Close(packet.CloseDuplicateLogin)
 		}
@@ -84,7 +84,16 @@ func (s *tcpServer) onConnect(c *conn, p *packet.Connect) packet.ConnackCode {
 	return code
 }
 func (s *tcpServer) onMessage(c *conn, p *packet.Message) {
-	s.messageHandler(p, c.id)
+	err := s.messageHandler(p, c.id)
+	if err != nil {
+		c.logger.Error("failed to handle message", "error", err)
+		return
+	}
+	if p.Qos == packet.MessageQos1 {
+		if err := c.sendPacket(packet.NewMessack(p.ID)); err != nil {
+			c.logger.Error("failed to send messack", "error", err)
+		}
+	}
 }
 func (s *tcpServer) onRequest(c *conn, p *packet.Request) {
 	res, err := s.requestHandler(p, c.id)

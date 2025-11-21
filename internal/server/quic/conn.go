@@ -99,7 +99,7 @@ func (c *conn) serve() {
 	}
 }
 
-func (c *conn) connack(code packet.ConnackCode) error {
+func (c *conn) connack(code packet.ConnectCode) error {
 	return c.sendPacket(packet.NewConnack(code))
 }
 func (c *conn) SendPing() error {
@@ -111,7 +111,7 @@ func (c *conn) SendPong() error {
 func (c *conn) SendData(data []byte) error {
 	return c.sendPacket(packet.NewMessage(data))
 }
-func (c *conn) SendMessage(p *packet.Message) error {
+func (c *conn) SendMessage(ctx context.Context, p *packet.Message) error {
 	return c.sendPacket(p)
 }
 func (c *conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {
@@ -133,14 +133,14 @@ func (c *conn) sendPacket(p packet.Packet) error {
 	}
 	return packet.WriteTo(c.stream, p)
 }
-func (c *conn) doAuth(id *packet.Connect) packet.ConnackCode {
+func (c *conn) doAuth(id *packet.Connect) packet.ConnectCode {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.id != nil {
-		return packet.ConnectionAccepted
+		return packet.ConnectAccepted
 	}
 	code := c.server.connectHander(id)
-	if code == packet.ConnectionAccepted {
+	if code == packet.ConnectAccepted {
 		c.id = id.Identity
 		c.authed <- struct{}{}
 		go c.server.addConn(c)

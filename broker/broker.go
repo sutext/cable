@@ -60,7 +60,7 @@ func NewBroker(opts ...Option) Broker {
 	for _, l := range options.listeners {
 		b.listeners[l.Network] = cable.NewServer(l.Address,
 			server.WithClose(b.onUserClosed),
-			server.WithConnect(func(p *packet.Connect) packet.ConnackCode {
+			server.WithConnect(func(p *packet.Connect) packet.ConnectCode {
 				return b.onUserConnect(p, l.Network)
 			}),
 			server.WithMessage(b.onUserMessage),
@@ -68,7 +68,7 @@ func NewBroker(opts ...Option) Broker {
 			server.WithLogger(options.logger),
 		)
 	}
-	b.peerServer = cable.NewServer(strings.Split(b.id, "@")[1], server.WithUDP(), server.WithRequest(b.onPeerRequest))
+	b.peerServer = cable.NewServer(strings.Split(b.id, "@")[1], server.WithRequest(b.onPeerRequest))
 	b.mux = http.NewServeMux()
 	b.mux.HandleFunc("/join", b.handleJoin)
 	b.mux.HandleFunc("/inspect", b.handleInspect)
@@ -166,9 +166,9 @@ func (b *broker) onUserClosed(id *packet.Identity) {
 	b.clients.Delete(id.ClientID)
 	b.handler.OnClosed(id)
 }
-func (b *broker) onUserConnect(p *packet.Connect, net server.Network) packet.ConnackCode {
+func (b *broker) onUserConnect(p *packet.Connect, net server.Network) packet.ConnectCode {
 	code := b.handler.OnConnect(p)
-	if code != packet.ConnectionAccepted {
+	if code != packet.ConnectAccepted {
 		return code
 	}
 	for _, peer := range b.peers { // kick old connections at other peers
@@ -182,10 +182,10 @@ func (b *broker) onUserConnect(p *packet.Connect, net server.Network) packet.Con
 			b.channels.SetKey(ch, p.Identity.ClientID, net)
 		}
 	}
-	return packet.ConnectionAccepted
+	return packet.ConnectAccepted
 }
-func (b *broker) onUserMessage(p *packet.Message, id *packet.Identity) {
-	b.handler.OnMessage(p, id)
+func (b *broker) onUserMessage(p *packet.Message, id *packet.Identity) error {
+	return b.handler.OnMessage(p, id)
 }
 func (b *broker) onUserRequest(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
 	return b.handler.OnRequest(p, id)
@@ -300,7 +300,7 @@ func (b *broker) sendMessage(m *packet.Message) (total, success uint64) {
 			return true
 		}
 		if conn, ok := l.GetConn(cid); ok {
-			if err := conn.SendMessage(m); err != nil {
+			if err := conn.SendMessage(context.Background(), m); err != nil {
 				b.logger.Error("Failed to send message to client", "error", err, "client", cid)
 			} else {
 				success++

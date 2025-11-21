@@ -7,9 +7,23 @@ import (
 	"sutext.github.io/cable/coder"
 )
 
+type MessageQos int8
+
+const (
+	MessageQos0 MessageQos = 0
+	MessageQos1 MessageQos = 1
+)
+
+const (
+	qosMask = 1
+	dupMask = 1 << 1
+)
+
 // Message represents a message packet.
 type Message struct {
-	Flags   uint8
+	ID      int64
+	Qos     MessageQos
+	Dup     bool
 	Channel string
 	Payload []byte
 }
@@ -37,7 +51,12 @@ func (p *Message) Equal(other Packet) bool {
 }
 
 func (p *Message) WriteTo(w coder.Encoder) error {
-	w.WriteUInt8(p.Flags)
+	flags := uint8(p.Qos)
+	if p.Dup {
+		flags |= dupMask
+	}
+	w.WriteUInt8(flags)
+	w.WriteInt64(p.ID)
 	w.WriteString(p.Channel)
 	w.WriteBytes(p.Payload)
 	return nil
@@ -47,16 +66,62 @@ func (p *Message) ReadFrom(r coder.Decoder) error {
 	if err != nil {
 		return err
 	}
-	p.Flags = flags
+	id, err := r.ReadInt64()
+	if err != nil {
+		return err
+	}
 	channel, err := r.ReadString()
 	if err != nil {
 		return err
 	}
-	p.Channel = channel
+
 	payload, err := r.ReadAll()
 	if err != nil {
 		return err
 	}
+	p.ID = id
+	p.Dup = flags&dupMask != 0
+	p.Qos = MessageQos(flags & qosMask)
+	p.Channel = channel
 	p.Payload = payload
+	return nil
+}
+
+type Messack struct {
+	ID int64
+}
+
+func NewMessack(id int64) *Messack {
+	return &Messack{
+		ID: id,
+	}
+}
+func (p *Messack) String() string {
+	return fmt.Sprintf("Messack(%d)", p.ID)
+}
+func (p *Messack) Type() PacketType {
+	return MESSACK
+}
+func (p *Messack) Equal(other Packet) bool {
+	if other == nil {
+		return false
+	}
+	if p.Type() != other.Type() {
+		return false
+	}
+	otherData := other.(*Messack)
+	return p.ID == otherData.ID
+}
+func (p *Messack) WriteTo(w coder.Encoder) error {
+	w.WriteInt64(p.ID)
+
+	return nil
+}
+func (p *Messack) ReadFrom(r coder.Decoder) error {
+	id, err := r.ReadInt64()
+	if err != nil {
+		return err
+	}
+	p.ID = id
 	return nil
 }

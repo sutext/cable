@@ -65,7 +65,7 @@ func (s *udpServer) Serve() error {
 			continue
 		}
 		code := s.connectHander(connPacket)
-		if code != packet.ConnectionAccepted {
+		if code != packet.ConnectAccepted {
 			continue
 		}
 		c := newConn(connPacket.Identity, listener, addr, s.logger, s)
@@ -73,7 +73,7 @@ func (s *udpServer) Serve() error {
 			old.(*conn).Close(packet.CloseDuplicateLogin)
 		}
 		s.addrs.Store(addr.String(), c)
-		c.sendPacket(packet.NewConnack(packet.ConnectionAccepted))
+		c.sendPacket(packet.NewConnack(packet.ConnectAccepted))
 	}
 }
 func (s *udpServer) GetConn(cid string) (server.Conn, bool) {
@@ -104,9 +104,9 @@ func (s *udpServer) onClose(c *conn) {
 		s.closeHandler(id)
 	}
 }
-func (s *udpServer) onConnect(c *conn, p *packet.Connect) packet.ConnackCode {
+func (s *udpServer) onConnect(c *conn, p *packet.Connect) packet.ConnectCode {
 	code := s.connectHander(p)
-	if code == packet.ConnectionAccepted {
+	if code == packet.ConnectAccepted {
 		if old, loaded := s.conns.Swap(p.Identity.ClientID, c); loaded {
 			old.(*conn).Close(packet.CloseDuplicateLogin)
 		}

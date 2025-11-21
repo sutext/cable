@@ -14,7 +14,7 @@ import (
 
 type connHandler interface {
 	onClose(c *conn)
-	onConnect(c *conn, p *packet.Connect) packet.ConnackCode
+	onConnect(c *conn, p *packet.Connect) packet.ConnectCode
 	onMessage(c *conn, p *packet.Message)
 	onRequest(c *conn, p *packet.Request)
 }
@@ -28,6 +28,7 @@ type conn struct {
 	sendQueue    *queue.Queue
 	recvQueue    *queue.Queue
 	requestTasks sync.Map
+	messageTasks sync.Map
 }
 
 func newConn(id *packet.Identity, raw *net.UDPConn, addr *net.UDPAddr, logger logger.Logger, handler connHandler) *conn {
@@ -59,8 +60,25 @@ func (c *conn) SendPing() error {
 func (c *conn) SendPong() error {
 	return c.sendPacket(packet.NewPong())
 }
-func (c *conn) SendMessage(p *packet.Message) error {
-	return c.sendPacket(p)
+func (c *conn) SendMessage(ctx context.Context, p *packet.Message) error {
+	if p.Qos == packet.MessageQos0 {
+		return c.sendPacket(p)
+	}
+	resp := make(chan struct{})
+	defer close(resp)
+	c.messageTasks.Store(p.ID, resp)
+	defer c.messageTasks.Delete(p.ID)
+	if err := c.sendPacket(p); err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	select {
+	case <-resp:
+		return nil
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	}
 }
 func (c *conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {
 	resp := make(chan *packet.Response)
@@ -96,6 +114,13 @@ func (c *conn) handlePacket(p packet.Packet) {
 		switch p.Type() {
 		case packet.MESSAGE:
 			c.handler.onMessage(c, p.(*packet.Message))
+		case packet.MESSACK:
+			p := p.(*packet.Messack)
+			if resp, ok := c.messageTasks.Load(p.ID); ok {
+				resp.(chan struct{}) <- struct{}{}
+			} else {
+				c.logger.Error("unexpected messack packet")
+			}
 		case packet.REQUEST:
 			c.handler.onRequest(c, p.(*packet.Request))
 		case packet.RESPONSE:

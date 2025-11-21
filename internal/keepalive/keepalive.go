@@ -70,7 +70,7 @@ func (k *KeepAlive) TimeoutFunc(f func()) {
 	k.timeoutFunc = f
 }
 func (k *KeepAlive) sendPing() {
-	if k.lastPacketTime.Add(k.interval).After(time.Now()) {
+	if time.Since(k.lastPacketTime) < k.interval {
 		return
 	}
 	k.mu.Lock()

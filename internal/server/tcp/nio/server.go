@@ -146,14 +146,14 @@ func (s *nioServer) waitConnect(c *conn) packet.CloseCode {
 		return packet.CloseInternalError
 	}
 	code := s.connectHander(connPacket)
-	if code != packet.ConnectionAccepted {
+	if code != packet.ConnectAccepted {
 		return packet.CloseAuthenticationFailure
 	}
 	c.id = connPacket.Identity
 	if old, loaded := s.conns.Swap(connPacket.Identity.ClientID, c); loaded {
 		old.(*conn).Close(packet.CloseDuplicateLogin)
 	}
-	c.sendPacket(packet.NewConnack(packet.ConnectionAccepted))
+	c.sendPacket(packet.NewConnack(packet.ConnectAccepted))
 	return 0
 }
 func (s *nioServer) close(conn netpoll.Connection, code packet.CloseCode) {

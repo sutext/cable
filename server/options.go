@@ -54,11 +54,11 @@ func NewOptions(opts ...Option) *Options {
 		CloseHandler: func(p *packet.Identity) {
 
 		},
-		ConnectHandler: func(p *packet.Connect) packet.ConnackCode {
-			return packet.ConnectionAccepted
+		ConnectHandler: func(p *packet.Connect) packet.ConnectCode {
+			return packet.ConnectAccepted
 		},
-		MessageHandler: func(p *packet.Message, id *packet.Identity) {
-
+		MessageHandler: func(p *packet.Message, id *packet.Identity) error {
+			return nil
 		},
 		RequestHandler: func(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
 			return nil, nil

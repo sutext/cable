@@ -42,7 +42,7 @@ func (c *conn) sendPacket(p packet.Packet) error {
 	}
 	return w.Flush()
 }
-func (c *conn) SendMessage(p *packet.Message) error {
+func (c *conn) SendMessage(ctx context.Context, p *packet.Message) error {
 	return c.sendPacket(p)
 }
 func (c *conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {

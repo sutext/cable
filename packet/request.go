@@ -10,7 +10,7 @@ import (
 )
 
 type Request struct {
-	ID      uint64
+	ID      int64
 	Method  string
 	Headers map[string]string
 	Content []byte
@@ -22,7 +22,7 @@ func NewRequest(path string, content ...[]byte) *Request {
 		b = content[0]
 	}
 	return &Request{
-		ID:      rand.Uint64(),
+		ID:      rand.Int64(),
 		Method:  path,
 		Content: b,
 	}
@@ -47,7 +47,7 @@ func (p *Request) Equal(other Packet) bool {
 		bytes.Equal(p.Content, o.Content)
 }
 func (p *Request) WriteTo(w coder.Encoder) error {
-	w.WriteUInt64(p.ID)
+	w.WriteInt64(p.ID)
 	w.WriteString(p.Method)
 	w.WriteStrMap(p.Headers)
 	w.WriteBytes(p.Content)
@@ -55,7 +55,7 @@ func (p *Request) WriteTo(w coder.Encoder) error {
 }
 func (p *Request) ReadFrom(r coder.Decoder) error {
 	var err error
-	if p.ID, err = r.ReadUInt64(); err != nil {
+	if p.ID, err = r.ReadInt64(); err != nil {
 		return err
 	}
 	if p.Method, err = r.ReadString(); err != nil {

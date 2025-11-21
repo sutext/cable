@@ -41,14 +41,14 @@ func (m *muticast) Serve() error {
 		return err
 	}
 	defer conn.Close()
+	buffer := make([]byte, 65535)
 	for {
-		buf := make([]byte, 2048)
-		n, addr, err := conn.ReadFromUDP(buf)
+		n, addr, err := conn.ReadFromUDP(buffer)
 		if err != nil {
 			fmt.Println(err)
 			return err
 		}
-		p, err := packet.Unmarshal(buf[:n])
+		p, err := packet.Unmarshal(buffer[:n])
 		if err != nil {
 			fmt.Println(err)
 			return err
@@ -82,13 +82,13 @@ func (m *muticast) listen() error {
 	}
 	m.conn = conn
 	defer conn.Close()
+	buffer := make([]byte, 65535)
 	for {
-		buf := make([]byte, packet.MID_LEN)
-		n, _, err := conn.ReadFromUDP(buf)
+		n, _, err := conn.ReadFromUDP(buffer)
 		if err != nil {
 			return err
 		}
-		p, err := packet.Unmarshal(buf[:n])
+		p, err := packet.Unmarshal(buffer[:n])
 		if err != nil {
 			return err
 		}
@@ -143,4 +143,12 @@ func getLocalIP() (string, error) {
 		}
 	}
 	return "", fmt.Errorf("no network interface found")
+}
+
+type udpReader struct {
+	conn *net.UDPConn
+}
+
+func (r *udpReader) Read(p []byte) (n int, err error) {
+	return r.conn.Read(p)
 }
