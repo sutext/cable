@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"sutext.github.io/cable"
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/internal/keymap"
 	"sutext.github.io/cable/internal/logger"
@@ -58,7 +57,7 @@ func NewBroker(opts ...Option) Broker {
 	}
 	b.listeners = make(map[server.Network]server.Server, len(options.listeners))
 	for _, l := range options.listeners {
-		b.listeners[l.Network] = cable.NewServer(l.Address,
+		b.listeners[l.Network] = server.New(l.Address,
 			server.WithClose(b.onUserClosed),
 			server.WithConnect(func(p *packet.Connect) packet.ConnectCode {
 				return b.onUserConnect(p, l.Network)
@@ -68,7 +67,7 @@ func NewBroker(opts ...Option) Broker {
 			server.WithLogger(options.logger),
 		)
 	}
-	b.peerServer = cable.NewServer(strings.Split(b.id, "@")[1], server.WithRequest(b.onPeerRequest))
+	b.peerServer = server.New(strings.Split(b.id, "@")[1], server.WithRequest(b.onPeerRequest))
 	b.mux = http.NewServeMux()
 	b.mux.HandleFunc("/join", b.handleJoin)
 	b.mux.HandleFunc("/inspect", b.handleInspect)

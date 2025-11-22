@@ -9,7 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"sutext.github.io/cable"
 	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/server"
 )
@@ -18,7 +17,7 @@ func main() {
 	ctx := context.Background()
 	logger := logger.NewJSON(slog.LevelDebug)
 
-	s := cable.NewServer(":8080",
+	s := server.New(":8080",
 		// server.WithQUIC(&quic.Config{
 		// 	TLSConfig:            &tls.Config{InsecureSkipVerify: true},
 		// 	MaxIdleTimeout:       5 * time.Second,
