@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/cloudwego/netpoll"
+	"sutext.github.io/cable/internal/result"
 	"sutext.github.io/cable/packet"
 )
 
@@ -28,6 +29,9 @@ func (l *nioListener) OnAccept(handler func(*packet.Connect, Conn) packet.Connec
 func (l *nioListener) OnPacket(handler func(p packet.Packet, id *packet.Identity)) {
 	l.packetHandler = handler
 }
+func (l *nioListener) Close(ctx context.Context) error {
+	return l.eventLoop.Shutdown(ctx)
+}
 func (l *nioListener) Listen(address string) error {
 	ln, err := net.Listen("tcp", address)
 	if err != nil {
@@ -49,18 +53,18 @@ func (l *nioListener) onPrepare(conn netpoll.Connection) context.Context {
 	return context.Background()
 }
 func (l *nioListener) onConnect(ctx context.Context, conn netpoll.Connection) context.Context {
-	ch := make(chan connPacketCloseCode)
+	ch := make(chan result.Result[*packet.Connect])
 	defer close(ch)
 	go l.readConnect(conn, ch)
 	select {
 	case r := <-ch:
-		if r.connPacket == nil {
-			packet.WriteTo(conn, packet.NewClose(r.closeCode))
+		if r.Error() != nil {
+			packet.WriteTo(conn, packet.NewClose(packet.AsCloseCode(r.Error())))
 			conn.Close()
 			return ctx
 		}
-		c := newNIOConn(r.connPacket.Identity, conn)
-		code := l.acceptHandler(r.connPacket, c)
+		c := newNIOConn(r.Value().Identity, conn)
+		code := l.acceptHandler(r.Value(), c)
 		if code != packet.ConnectAccepted {
 			c.WritePacket(packet.NewConnack(code))
 			c.Close()
@@ -80,7 +84,7 @@ func (l *nioListener) onRequest(ctx context.Context, conn netpoll.Connection) er
 	reader := netpoll.NewIOReader(conn.Reader())
 	pkt, err := packet.ReadFrom(reader)
 	if err != nil {
-		code := closeCodeOf(err)
+		code := packet.AsCloseCode(err)
 		packet.WriteTo(conn, packet.NewClose(code))
 		conn.Close()
 		return err
@@ -93,23 +97,17 @@ func (l *nioListener) onDisconnect(ctx context.Context, conn netpoll.Connection)
 
 }
 
-func (l *nioListener) readConnect(conn netpoll.Connection, ch chan<- connPacketCloseCode) {
+func (l *nioListener) readConnect(conn netpoll.Connection, ch chan<- result.Result[*packet.Connect]) {
 	p, err := packet.ReadFrom(netpoll.NewIOReader(conn.Reader()))
 	if err != nil {
-		ch <- connPacketCloseCode{
-			closeCode: closeCodeOf(err),
-		}
+		ch <- result.Err[*packet.Connect](err)
 		return
 	}
 	if p.Type() != packet.CONNECT {
-		ch <- connPacketCloseCode{
-			closeCode: packet.CloseInvalidPacket,
-		}
+		ch <- result.Err[*packet.Connect](packet.CloseInvalidPacket)
 		return
 	}
-	ch <- connPacketCloseCode{
-		connPacket: p.(*packet.Connect),
-	}
+	ch <- result.OK(p.(*packet.Connect))
 }
 
 // Below is the nioConn implementation of Conn interface

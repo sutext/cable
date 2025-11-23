@@ -13,7 +13,7 @@ const (
 	CloseKickedOut             CloseCode = 1
 	CloseNoHeartbeat           CloseCode = 2
 	CloseInvalidPacket         CloseCode = 3
-	ClosePintTimeOut           CloseCode = 4
+	ClosePingTimeOut           CloseCode = 4
 	CloseInternalError         CloseCode = 5
 	CloseDuplicateLogin        CloseCode = 6
 	CloseAuthenticationFailure CloseCode = 7
@@ -24,7 +24,7 @@ var closeCodeMap = map[CloseCode]string{
 	CloseNormal:                "Normal",
 	CloseKickedOut:             "Kicked Out",
 	CloseNoHeartbeat:           "No Heartbeat",
-	ClosePintTimeOut:           "Pint Time Out",
+	ClosePingTimeOut:           "Ping Time Out",
 	CloseInvalidPacket:         "Invalid Packet",
 	CloseInternalError:         "Internal Error",
 	CloseDuplicateLogin:        "Duplicate Login",
@@ -40,6 +40,16 @@ func (c CloseCode) String() string {
 }
 func (c CloseCode) Error() string {
 	return c.String()
+}
+func AsCloseCode(err error) CloseCode {
+	switch e := err.(type) {
+	case CloseCode:
+		return e
+	case Error, coder.Error:
+		return CloseInvalidPacket
+	default:
+		return CloseInternalError
+	}
 }
 
 type Close struct {

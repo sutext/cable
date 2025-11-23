@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -48,13 +49,14 @@ func New(length int, workerCount ...int) *Queue {
 		mq.wg.Go(func() {
 			for task := range mq.tasks {
 				task()
+				mq.count.Add(-1)
 			}
 		})
 	}
 	return mq
 }
-func (mq *Queue) Count() int64 {
-	return mq.count.Load()
+func (mq *Queue) IsIdle() bool {
+	return mq.count.Load() == 0
 }
 
 // Close is used to terminate the internal goroutines and close the channel.
@@ -72,15 +74,27 @@ func (mq *Queue) AddTask(task func()) error {
 		return ErrQueueIsStoped
 	}
 	mq.count.Add(1)
-	defer mq.count.Add(-1)
 	select {
 	case mq.tasks <- task:
 		return nil
 	default:
+		mq.count.Add(-1)
 		return ErrQueueIsFull
 	}
 }
-
+func (mq *Queue) AddTaskCtx(ctx context.Context, task func()) error {
+	if mq.closed.Load() {
+		return ErrQueueIsStoped
+	}
+	mq.count.Add(1)
+	select {
+	case mq.tasks <- task:
+		return nil
+	case <-ctx.Done():
+		mq.count.Add(-1)
+		return ctx.Err()
+	}
+}
 func (mq *Queue) safeClose() {
 	if mq.count.Load() == 0 {
 		return

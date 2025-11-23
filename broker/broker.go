@@ -269,11 +269,7 @@ func (b *broker) isOnline(uid string) (ok bool) {
 }
 func (b *broker) isActive(cid string, net server.Network) (ok bool) {
 	if l, ok := b.listeners[net]; ok {
-		if c, ok := l.GetConn(cid); ok {
-			if c.IsActive() {
-				return true
-			}
-		}
+		return l.IsActive(cid)
 	}
 	return false
 }
@@ -298,12 +294,10 @@ func (b *broker) sendMessage(m *packet.Message) (total, success uint64) {
 			b.logger.Error("Failed to find listener", "network", net)
 			return true
 		}
-		if conn, ok := l.GetConn(cid); ok {
-			if err := conn.SendMessage(context.Background(), m); err != nil {
-				b.logger.Error("Failed to send message to client", "error", err, "client", cid)
-			} else {
-				success++
-			}
+		if err := l.SendMessage(cid, m); err != nil {
+			b.logger.Error("Failed to send message to client", "error", err, "client", cid)
+		} else {
+			success++
 		}
 		return true
 	})

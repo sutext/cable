@@ -16,24 +16,27 @@ type RequestHandler func(p *packet.Request, id *packet.Identity) (*packet.Respon
 type Error uint8
 
 const (
-	ErrRequestTimeout    Error = 0
-	ErrConnectionClosed  Error = 1
-	ErrSendingQueueFull  Error = 2
-	ErrNetworkNotSupport Error = 3
-	ErrConnctionNotFound Error = 4
+	ErrRequestTimeout Error = iota
+	ErrServerIsClosed
+	ErrConnectionClosed
+	ErrSendingQueueFull
+	ErrNetworkNotSupport
+	ErrConnectionNotFound
 )
 
 func (e Error) Error() string {
 	switch e {
 	case ErrRequestTimeout:
 		return "Request Timeout"
+	case ErrServerIsClosed:
+		return "Server Is Closed"
 	case ErrConnectionClosed:
 		return "Connection Closed"
 	case ErrSendingQueueFull:
 		return "Sending Queue Full"
 	case ErrNetworkNotSupport:
 		return "Network Not Support"
-	case ErrConnctionNotFound:
+	case ErrConnectionNotFound:
 		return "Connection Not Found"
 	default:
 		return "Unknown Error"

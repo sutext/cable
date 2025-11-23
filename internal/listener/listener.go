@@ -1,7 +1,8 @@
 package listener
 
 import (
-	"sutext.github.io/cable/coder"
+	"context"
+
 	"sutext.github.io/cable/packet"
 )
 
@@ -13,15 +14,7 @@ type Conn interface {
 
 type Listener interface {
 	Listen(addr string) error
+	Close(ctx context.Context) error
 	OnPacket(handler func(p packet.Packet, id *packet.Identity))
 	OnAccept(handler func(p *packet.Connect, c Conn) packet.ConnectCode)
-}
-
-func closeCodeOf(err error) packet.CloseCode {
-	switch err.(type) {
-	case packet.Error, coder.Error:
-		return packet.CloseInvalidPacket
-	default:
-		return packet.CloseInternalError
-	}
 }

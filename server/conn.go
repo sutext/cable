@@ -4,7 +4,6 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/internal/inflight"
@@ -14,21 +13,14 @@ import (
 	"sutext.github.io/cable/packet"
 )
 
-type Conn interface {
-	ID() *packet.Identity
-	Close(code packet.CloseCode)
-	IsActive() bool
-	SendMessage(ctx context.Context, p *packet.Message) error
-	SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error)
-}
 type conn struct {
 	raw          listener.Conn
 	closed       atomic.Bool
 	logger       logger.Logger
 	sendQueue    *queue.Queue
 	recvQueue    *queue.Queue
-	requestTasks sync.Map
 	inflights    *inflight.Inflight
+	requestTasks sync.Map
 }
 
 func newConn(raw listener.Conn, logger logger.Logger) *conn {
@@ -46,27 +38,24 @@ func newConn(raw listener.Conn, logger logger.Logger) *conn {
 func (c *conn) ID() *packet.Identity {
 	return c.raw.ID()
 }
-func (c *conn) IsActive() bool {
-	return !c.closed.Load()
+func (c *conn) isIdle() bool {
+	return c.sendQueue.IsIdle() && c.recvQueue.IsIdle()
 }
-func (c *conn) Close(code packet.CloseCode) {
+func (c *conn) isClosed() bool {
+	return c.closed.Load()
+}
+func (c *conn) closeCode(code packet.CloseCode) {
 	c.sendPacket(packet.NewClose(code))
 	c.close()
 }
 
-func (c *conn) SendPing() error {
-	return c.sendPacket(packet.NewPing())
-}
-func (c *conn) SendPong() error {
-	return c.sendPacket(packet.NewPong())
-}
-func (c *conn) SendMessage(ctx context.Context, p *packet.Message) error {
+func (c *conn) sendMessage(p *packet.Message) error {
 	if p.Qos == packet.MessageQos1 {
 		c.inflights.Add(p)
 	}
 	return c.sendPacket(p)
 }
-func (c *conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {
+func (c *conn) sendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {
 	resp := make(chan *packet.Response)
 	defer close(resp)
 	c.requestTasks.Store(p.ID, resp)
@@ -74,13 +63,11 @@ func (c *conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Resp
 	if err := c.sendPacket(p); err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
 	select {
 	case res := <-resp:
 		return res, nil
 	case <-ctx.Done():
-		return nil, context.Cause(ctx)
+		return nil, ctx.Err()
 	}
 }
 func (c *conn) recvMessack(p *packet.Messack) {

@@ -1,6 +1,7 @@
 package listener
 
 import (
+	"context"
 	"net"
 	"sync"
 
@@ -9,6 +10,7 @@ import (
 
 type udpListener struct {
 	connMap       sync.Map
+	listener      *net.UDPConn
 	packetHandler func(p packet.Packet, id *packet.Identity)
 	acceptHandler func(p *packet.Connect, c Conn) packet.ConnectCode
 }
@@ -23,19 +25,23 @@ func (l *udpListener) OnAccept(handler func(*packet.Connect, Conn) packet.Connec
 func (l *udpListener) OnPacket(handler func(p packet.Packet, id *packet.Identity)) {
 	l.packetHandler = handler
 }
+func (l *udpListener) Close(ctx context.Context) error {
+	return l.listener.Close()
+}
 func (l *udpListener) Listen(address string) error {
 	udpAddr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
 		return err
 	}
-	conn, err := net.ListenUDP("udp", udpAddr)
+	listener, err := net.ListenUDP("udp", udpAddr)
 	if err != nil {
 		return err
 	}
-	defer conn.Close()
+	l.listener = listener
+	defer listener.Close()
 	buf := make([]byte, packet.MAX_UDP)
 	for {
-		n, addr, err := conn.ReadFromUDP(buf)
+		n, addr, err := listener.ReadFromUDP(buf)
 		if err != nil {
 			return err
 		}
@@ -43,7 +49,7 @@ func (l *udpListener) Listen(address string) error {
 		if err != nil {
 			continue
 		}
-		go l.handleConn(conn, addr, p)
+		go l.handleConn(listener, addr, p)
 	}
 }
 func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.Packet) {

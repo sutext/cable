@@ -1,13 +1,16 @@
 package listener
 
 import (
+	"context"
 	"net"
 	"time"
 
+	"sutext.github.io/cable/internal/result"
 	"sutext.github.io/cable/packet"
 )
 
 type tcpListener struct {
+	listener      *net.TCPListener
 	packetHandler func(p packet.Packet, id *packet.Identity)
 	acceptHandler func(*packet.Connect, Conn) packet.ConnectCode
 }
@@ -21,6 +24,9 @@ func (l *tcpListener) OnAccept(handler func(*packet.Connect, Conn) packet.Connec
 func (l *tcpListener) OnPacket(handler func(p packet.Packet, id *packet.Identity)) {
 	l.packetHandler = handler
 }
+func (l *tcpListener) Close(ctx context.Context) error {
+	return l.listener.Close()
+}
 func (l *tcpListener) Listen(address string) error {
 	addr, err := net.ResolveTCPAddr("tcp", address)
 	if err != nil {
@@ -30,6 +36,7 @@ func (l *tcpListener) Listen(address string) error {
 	if err != nil {
 		return err
 	}
+	l.listener = listener
 	defer listener.Close()
 	for {
 		conn, err := listener.AcceptTCP()
@@ -40,24 +47,19 @@ func (l *tcpListener) Listen(address string) error {
 	}
 }
 
-type connPacketCloseCode struct {
-	connPacket *packet.Connect
-	closeCode  packet.CloseCode
-}
-
 func (l *tcpListener) handleConn(conn *net.TCPConn) {
 	defer conn.Close()
-	ch := make(chan connPacketCloseCode)
+	ch := make(chan result.Result[*packet.Connect])
 	defer close(ch)
 	go l.readConnect(conn, ch)
 	select {
 	case r := <-ch:
-		if r.connPacket == nil {
-			packet.WriteTo(conn, packet.NewClose(r.closeCode))
+		if r.Error() != nil {
+			packet.WriteTo(conn, packet.NewClose(packet.AsCloseCode(r.Error())))
 			return
 		}
-		c := newTCPConn(r.connPacket.Identity, conn)
-		code := l.acceptHandler(r.connPacket, c)
+		c := newTCPConn(r.Value().Identity, conn)
+		code := l.acceptHandler(r.Value(), c)
 		if code != packet.ConnectAccepted {
 			c.WritePacket(packet.NewConnack(code))
 			return
@@ -66,7 +68,7 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 		for {
 			p, err := packet.ReadFrom(conn)
 			if err != nil {
-				code := closeCodeOf(err)
+				code := packet.AsCloseCode(err)
 				c.WritePacket(packet.NewClose(code))
 				return
 			}
@@ -78,23 +80,17 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 	}
 }
 
-func (l *tcpListener) readConnect(conn *net.TCPConn, ch chan<- connPacketCloseCode) {
+func (l *tcpListener) readConnect(conn *net.TCPConn, ch chan<- result.Result[*packet.Connect]) {
 	p, err := packet.ReadFrom(conn)
 	if err != nil {
-		ch <- connPacketCloseCode{
-			closeCode: closeCodeOf(err),
-		}
+		ch <- result.Err[*packet.Connect](err)
 		return
 	}
 	if p.Type() != packet.CONNECT {
-		ch <- connPacketCloseCode{
-			closeCode: packet.CloseInvalidPacket,
-		}
+		ch <- result.Err[*packet.Connect](packet.CloseInvalidPacket)
 		return
 	}
-	ch <- connPacketCloseCode{
-		connPacket: p.(*packet.Connect),
-	}
+	ch <- result.OK(p.(*packet.Connect))
 }
 
 // Below is the tcpConn implementation of Conn interface
