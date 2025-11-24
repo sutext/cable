@@ -44,7 +44,13 @@ func (i *Identity) Equal(other *Identity) bool {
 	return i.UserID == other.UserID && i.ClientID == other.ClientID && i.Password == other.Password
 }
 
+const (
+	restartMask uint8 = 0x80
+	versionMask uint8 = 0x3f
+)
+
 type Connect struct {
+	Restart  bool
 	Version  uint8
 	Identity *Identity
 }
@@ -67,25 +73,31 @@ func (p *Connect) Equal(other Packet) bool {
 		return false
 	}
 	otherP := other.(*Connect)
-	return p.Version == otherP.Version && p.Identity.Equal(otherP.Identity)
+	return p.Restart == otherP.Restart && p.Version == otherP.Version && p.Identity.Equal(otherP.Identity)
 }
 func (p *Connect) WriteTo(w coder.Encoder) error {
-	w.WriteUInt8(p.Version)
+	flags := uint8(0)
+	if p.Restart {
+		flags |= restartMask
+	}
+	flags |= p.Version & versionMask
+	w.WriteUInt8(flags)
 	return p.Identity.WriteTo(w)
 }
 
 func (p *Connect) ReadFrom(r coder.Decoder) error {
-	version, err := r.ReadUInt8()
+	flags, err := r.ReadUInt8()
 	if err != nil {
-		return nil
+		return err
 	}
-	var identity Identity
+	identity := &Identity{}
 	err = identity.ReadFrom(r)
 	if err != nil {
 		return err
 	}
-	p.Version = version
-	p.Identity = &identity
+	p.Restart = flags&restartMask != 0
+	p.Version = flags & versionMask
+	p.Identity = identity
 	return nil
 }
 

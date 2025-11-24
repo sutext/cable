@@ -38,9 +38,7 @@ func (p *Response) Equal(other Packet) bool {
 		return false
 	}
 	o := other.(*Response)
-	return p.ID == o.ID &&
-		bytes.Equal(p.Content, o.Content) &&
-		maps.Equal(p.Headers, o.Headers)
+	return p.ID == o.ID && bytes.Equal(p.Content, o.Content) && maps.Equal(p.Headers, o.Headers)
 }
 
 func (p *Response) WriteTo(w coder.Encoder) error {

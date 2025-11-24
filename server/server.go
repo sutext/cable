@@ -2,12 +2,13 @@ package server
 
 import (
 	"context"
-	"sync"
 	"sync/atomic"
 	"time"
 
 	"sutext.github.io/cable/internal/listener"
 	"sutext.github.io/cable/internal/logger"
+	"sutext.github.io/cable/internal/mq"
+	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
 )
 
@@ -21,7 +22,8 @@ type Server interface {
 	SendRequest(ctx context.Context, cid string, p *packet.Request) (*packet.Response, error)
 }
 type server struct {
-	conns          sync.Map
+	conns          safe.Map[*conn]
+	queues         safe.Map[*mq.Queue]
 	closed         atomic.Bool
 	logger         logger.Logger
 	address        string
@@ -63,21 +65,21 @@ func (s *server) Serve() error {
 		if s.closed.Load() {
 			return
 		}
-		if c, ok := s.conns.Load(id.ClientID); ok {
-			s.onPacket(p, c.(*conn))
+		if c, ok := s.conns.Get(id.ClientID); ok {
+			s.onPacket(p, c)
 		}
 	})
 	return s.listener.Listen(s.address)
 }
 func (s *server) IsActive(cid string) bool {
-	if c, ok := s.conns.Load(cid); ok {
-		return !c.(*conn).isClosed()
+	if c, ok := s.conns.Get(cid); ok {
+		return !c.isClosed()
 	}
 	return false
 }
 func (s *server) KickConn(cid string) bool {
-	if cn, ok := s.conns.Load(cid); ok {
-		cn.(*conn).closeCode(packet.CloseKickedOut)
+	if cn, ok := s.conns.Get(cid); ok {
+		cn.closeCode(packet.CloseKickedOut)
 		s.conns.Delete(cid)
 		return true
 	}
@@ -90,21 +92,17 @@ func (s *server) Shutdown(ctx context.Context) error {
 	s.listener.Close(ctx)
 	for {
 		activeConn := 0
-		s.conns.Range(func(key, value any) bool {
-			if conn, ok := value.(*conn); ok {
-				if conn.isIdle() {
-					conn.close()
-				} else {
-					activeConn++
-				}
+		s.conns.Range(func(key string, conn *conn) bool {
+			if conn.isIdle() {
+				conn.close()
+			} else {
+				activeConn++
 			}
 			return true
 		})
 		if activeConn == 0 { // all connections have been closed
 			return nil
 		}
-		// smart control graceful shutdown check internal
-		// we should wait for more time if there are more active connections
 		waitTime := time.Millisecond * time.Duration(activeConn)
 		if waitTime > time.Second { // max wait time is 1000 ms
 			waitTime = time.Millisecond * 1000
@@ -126,17 +124,23 @@ func (s *server) SendMessage(cid string, p *packet.Message) error {
 	if s.closed.Load() {
 		return ErrServerIsClosed
 	}
-	if c, ok := s.conns.Load(cid); ok {
-		return c.(*conn).sendMessage(p)
+	if _, ok := s.conns.Get(cid); !ok {
+		return ErrConnectionNotFound
 	}
-	return ErrConnectionNotFound
+	q, _ := s.queues.GetOrSet(cid, mq.NewQueue(1024))
+	q.AddTask(func() {
+		if c, ok := s.conns.Get(cid); ok {
+			c.sendMessage(p)
+		}
+	})
+	return nil
 }
 func (s *server) SendRequest(ctx context.Context, cid string, p *packet.Request) (*packet.Response, error) {
 	if s.closed.Load() {
 		return nil, ErrServerIsClosed
 	}
-	if c, ok := s.conns.Load(cid); ok {
-		return c.(*conn).sendRequest(ctx, p)
+	if c, ok := s.conns.Get(cid); ok {
+		return c.sendRequest(ctx, p)
 	}
 	return nil, ErrConnectionNotFound
 }
@@ -167,7 +171,14 @@ func (s *server) onConnect(c *conn, p *packet.Connect) packet.ConnectCode {
 	code := s.connectHander(p)
 	if code == packet.ConnectAccepted {
 		if old, loaded := s.conns.Swap(p.Identity.ClientID, c); loaded {
-			old.(*conn).closeCode(packet.CloseDuplicateLogin)
+			old.closeCode(packet.CloseDuplicateLogin)
+		}
+		if q, ok := s.queues.Get(p.Identity.ClientID); ok {
+			if p.Restart {
+				q.Clear()
+			} else {
+				q.Resume()
+			}
 		}
 	}
 	return code
@@ -198,6 +209,9 @@ func (s *server) onClose(c *conn) {
 	id := c.ID()
 	if id != nil {
 		s.conns.Delete(id.ClientID)
+		if q, ok := s.queues.Get(id.ClientID); ok {
+			q.Pause()
+		}
 		s.closeHandler(id)
 	}
 }
