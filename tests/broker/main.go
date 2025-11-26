@@ -30,19 +30,25 @@ func main() {
 		<-sigs
 		cancel(fmt.Errorf("entry signal received"))
 	}()
-	peers := []string{"broker1@127.0.0.1:4369", "broker2@127.0.0.1:4370", "broker3@127.0.0.1:4371", "broker4@127.0.0.1:4372"}
-	listeners := []broker.Listener{
-		{Address: ":8080", Network: server.NetworkTCP},
-		{Address: ":8081", Network: server.NetworkTCP},
-		{Address: ":8082", Network: server.NetworkTCP},
-		{Address: ":8083", Network: server.NetworkTCP},
+	peers := []string{
+		"broker1@127.0.0.1:4369",
+		"broker2@127.0.0.1:4370",
+		"broker3@127.0.0.1:4371",
+		"broker4@127.0.0.1:4372",
 	}
-	brokers := make([]broker.Broker, 4)
-	for i := range 4 {
+	listeners := []string{
+		":8080",
+		":8081",
+		":8082",
+		":8083",
+	}
+	l := len(listeners)
+	brokers := make([]broker.Broker, l)
+	for i := range l {
 		brokers[i] = broker.NewBroker(
 			broker.WithBrokerID(peers[i]),
-			broker.WithListeners(listeners[i]),
-			broker.WithPeers(peers),
+			broker.WithListener(server.NetworkTCP, listeners[i]),
+			// broker.WithPeers(peers),
 			broker.WithLogger(logger),
 		)
 		brokers[i].Start()
@@ -51,7 +57,7 @@ func main() {
 	done := make(chan struct{})
 	go func() {
 		for _, b := range brokers {
-			b.Shutdown()
+			b.Shutdown(context.Background())
 		}
 		close(done)
 	}()

@@ -16,14 +16,14 @@ type Request struct {
 	Content []byte
 }
 
-func NewRequest(path string, content ...[]byte) *Request {
+func NewRequest(method string, content ...[]byte) *Request {
 	var b []byte
 	if len(content) > 0 {
 		b = content[0]
 	}
 	return &Request{
 		ID:      rand.Int64(),
-		Method:  path,
+		Method:  method,
 		Content: b,
 	}
 }

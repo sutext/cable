@@ -16,6 +16,7 @@ type Inspect struct {
 	Users         int            `json:"users"`
 	Clients       int            `json:"clients"`
 	Channels      map[string]int `json:"channels"`
+	BrokerCount   uint32         `json:"broker_count"`
 	OnlienUsers   int            `json:"online_users"`
 	OnlineClients int            `json:"online_clients"`
 }
@@ -30,6 +31,7 @@ func (i *Inspect) merge(o *Inspect) {
 	i.Peers += o.Peers
 	i.Users += o.Users
 	i.Clients += o.Clients
+	i.BrokerCount = max(i.BrokerCount, o.BrokerCount)
 	i.OnlienUsers += o.OnlienUsers
 	i.OnlineClients += o.OnlineClients
 	for k, v := range o.Channels {
@@ -41,21 +43,22 @@ func (i *Inspect) merge(o *Inspect) {
 }
 func (b *broker) inspect() *Inspect {
 	peers := 0
-	for _, p := range b.peers {
-		if p.IsReady() {
+	b.peers.Range(func(k string, v *peer) bool {
+		if v.IsReady() {
 			peers++
 		}
-	}
+		return true
+	})
 	users := 0
 	clients := 0
 	onlienUsers := 0
 	onlineClients := 0
-	b.users.Range(func(cid string) bool {
+	b.userClients.Range(func(cid string) bool {
 		if b.isOnline(cid) {
 			onlienUsers++
 		}
 		oldClients := clients
-		b.users.RangeKey(cid, func(cid string, net server.Network) bool {
+		b.userClients.RangeKey(cid, func(cid string, net server.Network) bool {
 			clients++
 			if b.isActive(cid, net) {
 				onlineClients++
@@ -65,14 +68,14 @@ func (b *broker) inspect() *Inspect {
 		if oldClients != clients {
 			users++
 		} else {
-			b.users.Delete(cid)
+			b.userClients.Delete(cid)
 		}
 		return true
 	})
-	channels := b.channels.GetCounts()
+	channels := b.channelClients.GetCounts()
 	for k, v := range channels {
 		if v == 0 {
-			b.channels.Delete(k)
+			b.channelClients.Delete(k)
 		}
 	}
 	return &Inspect{
@@ -81,24 +84,26 @@ func (b *broker) inspect() *Inspect {
 		Users:         users,
 		Clients:       clients,
 		Channels:      channels,
+		BrokerCount:   b.brokerCount.Load(),
 		OnlienUsers:   onlienUsers,
 		OnlineClients: onlineClients,
 	}
 }
 func (b *broker) Inspects() ([]*Inspect, error) {
 	ctx := context.Background()
-	inspects := make([]*Inspect, len(b.peers)+2)
+	inspects := make([]*Inspect, 2)
 	inspects[0] = NewInspect()
 	inspects[1] = b.inspect()
 	inspects[0].merge(inspects[1])
-	for i, p := range b.peers {
-		isp, err := p.inspect(ctx)
+	b.peers.Range(func(k string, v *peer) bool {
+		isp, err := v.inspect(ctx)
 		if err != nil {
-			return nil, err
+			return true
 		}
 		inspects[0].merge(isp)
-		inspects[i+2] = isp
-	}
+		inspects = append(inspects, isp)
+		return true
+	})
 	return inspects, nil
 }
 

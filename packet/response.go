@@ -8,8 +8,18 @@ import (
 	"sutext.github.io/cable/coder"
 )
 
+type ResponseCode uint8
+
+const (
+	OK         ResponseCode = 0
+	NotFound   ResponseCode = 100
+	Forbidden  ResponseCode = 101
+	BadRequest ResponseCode = 255
+)
+
 type Response struct {
 	ID      int64
+	Code    ResponseCode
 	Headers map[string]string
 	Content []byte
 }
@@ -43,20 +53,31 @@ func (p *Response) Equal(other Packet) bool {
 
 func (p *Response) WriteTo(w coder.Encoder) error {
 	w.WriteInt64(p.ID)
+	w.WriteUInt8(uint8(p.Code))
 	w.WriteStrMap(p.Headers)
 	w.WriteBytes(p.Content)
 	return nil
 }
 func (p *Response) ReadFrom(r coder.Decoder) error {
-	var err error
-	if p.ID, err = r.ReadInt64(); err != nil {
+	id, err := r.ReadInt64()
+	if err != nil {
 		return err
 	}
-	if p.Headers, err = r.ReadStrMap(); err != nil {
+	code, err := r.ReadUInt8()
+	if err != nil {
 		return err
 	}
-	if p.Content, err = r.ReadAll(); err != nil {
+	h, err := r.ReadStrMap()
+	if err != nil {
 		return err
 	}
+	b, err := r.ReadAll()
+	if err != nil {
+		return err
+	}
+	p.ID = id
+	p.Code = ResponseCode(code)
+	p.Headers = h
+	p.Content = b
 	return nil
 }

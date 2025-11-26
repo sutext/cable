@@ -36,6 +36,7 @@ type Handler interface {
 type emptyHandler struct{}
 
 func (h *emptyHandler) OnStatus(status Status) {}
+
 func (h *emptyHandler) OnMessage(p *packet.Message) error {
 	return nil
 }
@@ -45,7 +46,6 @@ func (h *emptyHandler) OnRequest(p *packet.Request) (*packet.Response, error) {
 
 type Options struct {
 	logger         logger.Logger
-	address        string
 	network        Network
 	handler        Handler
 	retryLimit     int
@@ -74,11 +74,6 @@ func newOptions(options ...Option) *Options {
 		o.f(opts)
 	}
 	return opts
-}
-func WithAddress(address string) Option {
-	return Option{f: func(o *Options) {
-		o.address = address
-	}}
 }
 func WithNetwork(network Network) Option {
 	return Option{f: func(o *Options) {

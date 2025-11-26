@@ -114,7 +114,6 @@ func (p *Messack) Equal(other Packet) bool {
 }
 func (p *Messack) WriteTo(w coder.Encoder) error {
 	w.WriteInt64(p.ID)
-
 	return nil
 }
 func (p *Messack) ReadFrom(r coder.Decoder) error {

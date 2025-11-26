@@ -1,7 +1,10 @@
 package broker
 
 import (
+	"fmt"
 	"log/slog"
+	"math/rand/v2"
+	"net"
 
 	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
@@ -17,7 +20,7 @@ type Handler interface {
 	OnConnect(p *packet.Connect) (code packet.ConnectCode)
 	OnMessage(p *packet.Message, id *packet.Identity) error
 	OnRequest(p *packet.Request, id *packet.Identity) (res *packet.Response, err error)
-	GetChannels(uid string) (channels []string, err error)
+	GetChannels(uid string) (channels []string, err error) //uid join channels
 }
 type emptyHandler struct{}
 
@@ -35,23 +38,33 @@ func (h *emptyHandler) OnRequest(p *packet.Request, id *packet.Identity) (res *p
 func (h *emptyHandler) GetChannels(uid string) (channels []string, err error) {
 	return nil, nil
 }
+func (h *emptyHandler) GetWatchers(uid string) (watchers []string, err error) {
+	return nil, nil
+}
 
 type options struct {
-	peers       []string
-	logger      logger.Logger
-	handler     Handler
-	brokerID    string
-	listeners   []Listener
-	queueWorker int
-	queueBuffer int
+	peers     []string
+	logger    logger.Logger
+	handler   Handler
+	brokerID  string
+	httpAddr  string
+	listeners map[server.Network]string
 }
 
 func newOptions(opts ...Option) *options {
+	ip, err := getLocalIP()
+	if err != nil {
+		panic(err)
+	}
 	options := &options{
-		logger:      logger.NewText(slog.LevelDebug),
-		handler:     &emptyHandler{},
-		queueWorker: 32,
-		queueBuffer: 100,
+		logger:   logger.NewText(slog.LevelError),
+		handler:  &emptyHandler{},
+		httpAddr: ":8888",
+		brokerID: fmt.Sprintf("%d@%s:4567", rand.Int64(), ip),
+		listeners: map[server.Network]string{
+			server.NetworkTCP: ":1883",
+			server.NetworkUDP: ":1884",
+		},
 	}
 	for _, opt := range opts {
 		opt.f(options)
@@ -81,19 +94,16 @@ func WithHandler(h Handler) Option {
 		o.handler = h
 	}}
 }
-
-// WithQueue sets the number of worker and buffer for the queue.
-func WithQueue(worker, buffer int) Option {
+func WithHTTPAddr(addr string) Option {
 	return Option{func(o *options) {
-		o.queueWorker = worker
-		o.queueBuffer = buffer
+		o.httpAddr = addr
 	}}
 }
 
 // WithListener sets the listener for the broker.
-func WithListeners(ls ...Listener) Option {
+func WithListener(net server.Network, addr string) Option {
 	return Option{func(o *options) {
-		o.listeners = ls
+		o.listeners[net] = addr
 	}}
 }
 
@@ -101,4 +111,28 @@ func WithBrokerID(id string) Option {
 	return Option{func(o *options) {
 		o.brokerID = id
 	}}
+}
+
+// getLocalIP retrieves the non-loopback local IPv4 address of the machine.
+func getLocalIP() (string, error) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return "", err
+	}
+	for _, iface := range interfaces {
+		// Check if the interface is up and not a loopback
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			if ipNet, ok := addr.(*net.IPNet); ok && ipNet.IP.To4() != nil {
+				return ipNet.IP.String(), nil
+			}
+		}
+	}
+	return "", fmt.Errorf("no network interface found")
 }

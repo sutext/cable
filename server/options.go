@@ -3,7 +3,6 @@ package server
 import (
 	"log/slog"
 
-	"golang.org/x/net/quic"
 	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
 )
@@ -71,10 +70,10 @@ type Option struct {
 	f func(*Options)
 }
 type Options struct {
-	UseNIO         bool
-	Logger         logger.Logger
-	Network        Network
-	QuicConfig     *quic.Config
+	UseNIO  bool
+	Logger  logger.Logger
+	Network Network
+	// QuicConfig     *quic.Config
 	CloseHandler   ClosedHandler
 	ConnectHandler ConnectHandler
 	MessageHandler MessageHandler
@@ -113,12 +112,13 @@ func WithNIO(useNIO bool) Option {
 func WithUDP() Option {
 	return Option{f: func(o *Options) { o.Network = NetworkUDP }}
 }
-func WithQUIC(config *quic.Config) Option {
-	return Option{f: func(o *Options) {
-		o.Network = NetworkQUIC
-		o.QuicConfig = config
-	}}
-}
+
+//	func WithQUIC(config *quic.Config) Option {
+//		return Option{f: func(o *Options) {
+//			o.Network = NetworkQUIC
+//			o.QuicConfig = config
+//		}}
+//	}
 func WithLogger(logger logger.Logger) Option {
 	return Option{f: func(o *Options) { o.Logger = logger }}
 }

@@ -22,8 +22,8 @@ type Server interface {
 	SendRequest(ctx context.Context, cid string, p *packet.Request) (*packet.Response, error)
 }
 type server struct {
-	conns          safe.Map[*conn]
-	queues         safe.Map[*mq.Queue]
+	conns          safe.Map[string, *listener.Conn]
+	queues         safe.Map[string, *mq.Queue]
 	closed         atomic.Bool
 	logger         logger.Logger
 	address        string
@@ -58,28 +58,19 @@ func (s *server) Serve() error {
 	default:
 		return ErrNetworkNotSupport
 	}
-	s.listener.OnAccept(func(p *packet.Connect, c listener.Conn) packet.ConnectCode {
-		return s.onConnect(newConn(c, s.logger), p)
-	})
-	s.listener.OnPacket(func(p packet.Packet, id *packet.Identity) {
-		if s.closed.Load() {
-			return
-		}
-		if c, ok := s.conns.Get(id.ClientID); ok {
-			s.onPacket(p, c)
-		}
-	})
+	s.listener.OnAccept(s.onConnect)
+	s.listener.OnPacket(s.onPacket)
 	return s.listener.Listen(s.address)
 }
 func (s *server) IsActive(cid string) bool {
 	if c, ok := s.conns.Get(cid); ok {
-		return !c.isClosed()
+		return !c.IsClosed()
 	}
 	return false
 }
 func (s *server) KickConn(cid string) bool {
 	if cn, ok := s.conns.Get(cid); ok {
-		cn.closeCode(packet.CloseKickedOut)
+		cn.CloseCode(packet.CloseKickedOut)
 		s.conns.Delete(cid)
 		return true
 	}
@@ -92,9 +83,9 @@ func (s *server) Shutdown(ctx context.Context) error {
 	s.listener.Close(ctx)
 	for {
 		activeConn := 0
-		s.conns.Range(func(key string, conn *conn) bool {
-			if conn.isIdle() {
-				conn.close()
+		s.conns.Range(func(key string, conn *listener.Conn) bool {
+			if conn.IsIdle() {
+				conn.Close()
 			} else {
 				activeConn++
 			}
@@ -130,7 +121,7 @@ func (s *server) SendMessage(cid string, p *packet.Message) error {
 	q, _ := s.queues.GetOrSet(cid, mq.NewQueue(1024))
 	q.AddTask(func() {
 		if c, ok := s.conns.Get(cid); ok {
-			c.sendMessage(p)
+			c.SendMessage(p)
 		}
 	})
 	return nil
@@ -140,38 +131,42 @@ func (s *server) SendRequest(ctx context.Context, cid string, p *packet.Request)
 		return nil, ErrServerIsClosed
 	}
 	if c, ok := s.conns.Get(cid); ok {
-		return c.sendRequest(ctx, p)
+		return c.SendRequest(ctx, p)
 	}
 	return nil, ErrConnectionNotFound
 }
 
 // Below is the code of /Users/vidar/github/cable/server/conn.go
-func (s *server) onPacket(p packet.Packet, c *conn) {
+func (s *server) onPacket(p packet.Packet, c *listener.Conn) {
+	if s.closed.Load() {
+		return
+	}
 	switch p.Type() {
 	case packet.MESSAGE:
 		s.onMessage(c, p.(*packet.Message))
 	case packet.MESSACK:
-		c.recvMessack(p.(*packet.Messack))
+		c.RecvMessack(p.(*packet.Messack))
 	case packet.REQUEST:
 		s.onRequest(c, p.(*packet.Request))
 	case packet.RESPONSE:
-		c.recvResponse(p.(*packet.Response))
+		c.RecvResponse(p.(*packet.Response))
 	case packet.PING:
-		c.sendPacket(packet.NewPong())
+		c.SendPacket(packet.NewPong())
 	case packet.PONG:
 		break
 	case packet.CLOSE:
-		c.close()
+		c.Close()
 	default:
 		break
 	}
 }
 
-func (s *server) onConnect(c *conn, p *packet.Connect) packet.ConnectCode {
+func (s *server) onConnect(p *packet.Connect, c *listener.Conn) packet.ConnectCode {
 	code := s.connectHander(p)
 	if code == packet.ConnectAccepted {
+		c.OnClose(s.onClose)
 		if old, loaded := s.conns.Swap(p.Identity.ClientID, c); loaded {
-			old.closeCode(packet.CloseDuplicateLogin)
+			old.CloseCode(packet.CloseDuplicateLogin)
 		}
 		if q, ok := s.queues.Get(p.Identity.ClientID); ok {
 			if p.Restart {
@@ -183,29 +178,29 @@ func (s *server) onConnect(c *conn, p *packet.Connect) packet.ConnectCode {
 	}
 	return code
 }
-func (s *server) onMessage(c *conn, p *packet.Message) {
+func (s *server) onMessage(c *listener.Conn, p *packet.Message) {
 	err := s.messageHandler(p, c.ID())
 	if err != nil {
-		c.logger.Error("failed to handle message", "error", err)
+		s.logger.Error("failed to handle message", "error", err)
 		return
 	}
 	if p.Qos == packet.MessageQos1 {
-		if err := c.sendPacket(packet.NewMessack(p.ID)); err != nil {
-			c.logger.Error("failed to send messack", "error", err)
+		if err := c.SendPacket(packet.NewMessack(p.ID)); err != nil {
+			s.logger.Error("failed to send messack", "error", err)
 		}
 	}
 }
-func (s *server) onRequest(c *conn, p *packet.Request) {
+func (s *server) onRequest(c *listener.Conn, p *packet.Request) {
 	res, err := s.requestHandler(p, c.ID())
 	if err != nil {
-		c.logger.Error("failed to handle request", "error", err)
+		s.logger.Error("failed to handle request", "error", err)
 		return
 	}
-	if err := c.sendPacket(res); err != nil {
-		c.logger.Error("failed to send response", "error", err)
+	if err := c.SendPacket(res); err != nil {
+		s.logger.Error("failed to send response", "error", err)
 	}
 }
-func (s *server) onClose(c *conn) {
+func (s *server) onClose(c *listener.Conn) {
 	id := c.ID()
 	if id != nil {
 		s.conns.Delete(id.ClientID)

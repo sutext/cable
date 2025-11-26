@@ -51,7 +51,7 @@ func New(address string, options ...Option) Client {
 	opts := newOptions(options...)
 	c := &client{
 		mu:             new(sync.RWMutex),
-		conn:           NewConn(opts.network, opts.address),
+		conn:           NewConn(opts.network, address),
 		status:         StatusUnknown,
 		logger:         opts.logger,
 		retrier:        NewRetrier(opts.retryLimit, opts.retryBackoff),

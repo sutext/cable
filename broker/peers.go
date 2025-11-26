@@ -3,7 +3,6 @@ package broker
 import (
 	"context"
 	"encoding/json"
-	"math"
 	"time"
 
 	"sutext.github.io/cable/backoff"
@@ -23,7 +22,7 @@ func newPeer(id, address string, logger logger.Logger) *peer {
 	p.id = id
 	p.client = client.New(address,
 		client.WithLogger(logger),
-		client.WithRetry(math.MaxInt, backoff.Constant(time.Second*5)),
+		client.WithRetry(20, backoff.RandomD()),
 		client.WithKeepAlive(time.Second*3, time.Second*60),
 		client.WithRequestTimeout(time.Second*3),
 	)
@@ -118,9 +117,4 @@ func (p *peer) leaveChannel(ctx context.Context, uid string, channels []string) 
 		return 0, err
 	}
 	return count, nil
-}
-func (p *peer) joinCluster(ctx context.Context, brokerID BrokerID) error {
-	req := packet.NewRequest("JoinCluster", []byte(brokerID))
-	_, err := p.client.SendRequest(ctx, req)
-	return err
 }

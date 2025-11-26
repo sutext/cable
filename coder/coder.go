@@ -12,6 +12,7 @@ type Encoder interface {
 	WriteUInt16(i uint16)
 	WriteUInt32(i uint32)
 	WriteUInt64(i uint64)
+	WriteBool(b bool)
 	WriteInt8(i int8)
 	WriteInt16(i int16)
 	WriteInt32(i int32)
@@ -29,6 +30,7 @@ type Decoder interface {
 	ReadUInt16() (uint16, error)
 	ReadUInt32() (uint32, error)
 	ReadUInt64() (uint64, error)
+	ReadBool() (bool, error)
 	ReadInt8() (int8, error)
 	ReadInt16() (int16, error)
 	ReadInt32() (int32, error)
@@ -77,6 +79,14 @@ func (b *coder) WriteUInt32(i uint32) {
 }
 func (b *coder) WriteUInt64(i uint64) {
 	b.buf = binary.BigEndian.AppendUint64(b.buf, i)
+}
+
+func (b *coder) WriteBool(bo bool) {
+	if bo {
+		b.WriteUInt8(1)
+	} else {
+		b.WriteUInt8(0)
+	}
 }
 
 // Write Int 8/16/32/64
@@ -149,6 +159,8 @@ func (b *coder) ReadBytes(l uint64) ([]byte, error) {
 	b.pos += l
 	return p, nil
 }
+
+// Read UInt 8/16/32/64
 func (b *coder) ReadUInt8() (uint8, error) {
 	if b.pos+1 > uint64(len(b.buf)) {
 		return 0, ErrBufferTooShort
@@ -179,6 +191,14 @@ func (b *coder) ReadUInt64() (uint64, error) {
 		return 0, err
 	}
 	return binary.BigEndian.Uint64(bytes), nil
+}
+
+func (b *coder) ReadBool() (bool, error) {
+	i, err := b.ReadUInt8()
+	if err != nil {
+		return false, err
+	}
+	return i == 1, nil
 }
 func (b *coder) ReadInt8() (int8, error) {
 	u, err := b.ReadUInt8()
