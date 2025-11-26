@@ -1,0 +1,57 @@
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: default
+  name: cable-service
+  labels:
+    app: cable-service
+spec:
+  replicas: 4
+  selector:
+    matchLabels:
+      app: cable-service
+  strategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 25%
+    type: RollingUpdate
+  revisionHistoryLimit: 5
+  template:
+    metadata:
+      labels:
+        app: cable-service
+    spec:
+      imagePullSecrets:
+        - name: pull-image
+      containers:
+        - image: sutext/cable:latest
+          imagePullPolicy: Always
+          name: cable
+---
+apiVersion: v1
+kind: Service
+
+metadata:
+  namespace: default
+  name: cable-service
+  type: NodePort
+  labels:
+    app: cable-service
+spec:
+  selector:
+    app: cable-service
+  ports:
+    - protocol: TCP
+      port: 1883
+      targetPort: 1883
+      nodePort: 1883
+    - protocol: UDP
+      port: 1884
+      targetPort: 1884
+      nodePort: 1884
+    - protocol: TCP
+      port: 8888
+      targetPort: 8888
+      nodePort: 8888
