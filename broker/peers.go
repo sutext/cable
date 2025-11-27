@@ -8,7 +8,6 @@ import (
 	"sutext.github.io/cable/backoff"
 	"sutext.github.io/cable/client"
 	"sutext.github.io/cable/coder"
-	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
 )
 
@@ -17,11 +16,10 @@ type peer struct {
 	client client.Client
 }
 
-func newPeer(id, address string, logger logger.Logger) *peer {
+func newPeer(id, address string) *peer {
 	p := &peer{}
 	p.id = id
 	p.client = client.New(address,
-		client.WithLogger(logger),
 		client.WithRetry(20, backoff.RandomD()),
 		client.WithKeepAlive(time.Second*3, time.Second*60),
 		client.WithRequestTimeout(time.Second*3),

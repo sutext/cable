@@ -2,9 +2,7 @@ package server
 
 import (
 	"fmt"
-	"log/slog"
 
-	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
 )
 
@@ -72,7 +70,6 @@ type Option struct {
 }
 type Options struct {
 	UseNIO  bool
-	Logger  logger.Logger
 	Network Network
 	// QuicConfig     *quic.Config
 	CloseHandler   ClosedHandler
@@ -85,7 +82,6 @@ func NewOptions(opts ...Option) *Options {
 	var options = &Options{
 		Network: NetworkTCP,
 		UseNIO:  false,
-		Logger:  logger.NewText(slog.LevelDebug),
 		CloseHandler: func(p *packet.Identity) {
 
 		},
@@ -120,9 +116,7 @@ func WithUDP() Option {
 //			o.QuicConfig = config
 //		}}
 //	}
-func WithLogger(logger logger.Logger) Option {
-	return Option{f: func(o *Options) { o.Logger = logger }}
-}
+
 func WithClose(handler ClosedHandler) Option {
 	return Option{f: func(o *Options) { o.CloseHandler = handler }}
 }

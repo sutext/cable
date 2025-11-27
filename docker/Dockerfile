@@ -7,8 +7,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o main cmd/cable/main.go
 
 # 运行时阶段：使用 Distroless 静态镜像
-FROM gcr.io/distroless/static-debian12:nonroot
+FROM alpine:latest
 COPY --from=builder /app/main /
-USER nonroot:nonroot
 CMD ["/main"]
 EXPOSE 1883 1884/udp 4567 8888

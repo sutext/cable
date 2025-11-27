@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"math"
 	"math/rand/v2"
 	"sync"
@@ -11,7 +10,6 @@ import (
 
 	"sutext.github.io/cable/backoff"
 	"sutext.github.io/cable/client"
-	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
 )
 
@@ -44,7 +42,6 @@ func RandomClient() *Client {
 		client.WithKeepAlive(time.Second*5, time.Second*60),
 		client.WithRetry(math.MaxInt, backoff.Exponential(2, 2)),
 		client.WithHandler(result),
-		client.WithLogger(logger.NewText(slog.LevelDebug)),
 	)
 	uid := fmt.Sprintf("u%d", rand.IntN(300))
 	cid := fmt.Sprintf("%s_%d", uid, rand.Int())

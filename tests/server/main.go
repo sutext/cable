@@ -9,14 +9,11 @@ import (
 	"syscall"
 	"time"
 
-	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/server"
 )
 
 func main() {
 	ctx := context.Background()
-	logger := logger.NewJSON(slog.LevelDebug)
-
 	s := server.New(":8080",
 		// server.WithQUIC(&quic.Config{
 		// 	TLSConfig:            &tls.Config{InsecureSkipVerify: true},
@@ -25,16 +22,15 @@ func main() {
 		// 	MaxUniRemoteStreams:  1,
 		// }),
 		server.WithUDP(),
-		server.WithLogger(logger),
 	)
-	logger.Info("entry server start")
+	slog.Info("cable server start")
 	ctx, cancel := context.WithCancelCause(ctx)
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		<-sigs
-		logger.Info("entry signal received")
-		cancel(fmt.Errorf("entry signal received"))
+		slog.Info("cable signal received")
+		cancel(fmt.Errorf("cable signal received"))
 	}()
 	go func() {
 		if err := s.Serve(); err != nil {
@@ -42,7 +38,7 @@ func main() {
 		}
 	}()
 	<-ctx.Done()
-	logger.Info("entry server start graceful shutdown")
+	slog.Info("cable server start graceful shutdown")
 	done := make(chan struct{})
 	go func() {
 		s.Shutdown(ctx)
@@ -52,8 +48,8 @@ func main() {
 	defer timeout.Stop()
 	select {
 	case <-timeout.C:
-		logger.Warn("entry server graceful shutdown timeout")
+		slog.Warn("cable server graceful shutdown timeout")
 	case <-done:
-		logger.Debug("entry server graceful shutdown")
+		slog.Debug("cable server graceful shutdown")
 	}
 }

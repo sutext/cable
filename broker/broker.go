@@ -3,6 +3,7 @@ package broker
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"strings"
@@ -10,7 +11,6 @@ import (
 	"time"
 
 	"sutext.github.io/cable/internal/keymap"
-	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/internal/muticast"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
@@ -35,7 +35,6 @@ type Broker interface {
 type broker struct {
 	id             string
 	peers          safe.Map[string, *peer]
-	logger         logger.Logger
 	handler        Handler
 	muticast       muticast.Muticast
 	listeners      map[server.Network]server.Server
@@ -53,7 +52,6 @@ func NewBroker(opts ...Option) Broker {
 	options := newOptions(opts...)
 	b := &broker{id: options.brokerID}
 	b.brokerCount.Add(1)
-	b.logger = options.logger
 	b.handler = options.handler
 	b.muticast = muticast.New(b.id)
 	b.muticast.OnRequest(func(s string) uint32 {
@@ -72,7 +70,6 @@ func NewBroker(opts ...Option) Broker {
 			}),
 			server.WithMessage(b.onUserMessage),
 			server.WithRequest(b.onUserRequest),
-			server.WithLogger(options.logger),
 		)
 	}
 	b.peerServer = server.New(fmt.Sprintf(":%s", strings.Split(b.id, ":")[1]), server.WithRequest(b.onPeerRequest))
@@ -102,8 +99,8 @@ func (b *broker) addPeer(id string) {
 	if _, ok := b.peers.Get(id); ok {
 		return
 	}
-	b.logger.Debug("add peer", "id", id, "self", b.id)
-	peer := newPeer(b.id, strs[1], b.logger)
+	slog.Debug("add peer", "id", id, "self", b.id)
+	peer := newPeer(b.id, strs[1])
 	b.peers.Set(id, peer)
 	b.brokerCount.Add(1)
 	go peer.Connect()
@@ -114,17 +111,17 @@ func (b *broker) Start() error {
 	}
 	go func() {
 		if err := b.muticast.Serve(); err != nil {
-			b.logger.Error("muticast serve error", "error", err)
+			slog.Error("muticast serve error", "error", err)
 		}
 	}()
 	go func() {
 		if err := b.peerServer.Serve(); err != nil {
-			b.logger.Error("peer server serve error", "error", err)
+			slog.Error("peer server serve error", "error", err)
 		}
 	}()
 	go func() {
 		if err := b.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			b.logger.Error("http server serve error", "error", err)
+			slog.Error("http server serve error", "error", err)
 		}
 	}()
 	time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.syncBroker)
@@ -134,7 +131,7 @@ func (b *broker) Start() error {
 func (b *broker) syncBroker() {
 	m, err := b.muticast.Request()
 	if err != nil {
-		b.logger.Error("failed to sync broker", "error", err)
+		slog.Error("failed to sync broker", "error", err)
 	}
 	var max uint32 = 0
 	var min uint32 = 0xffff
@@ -155,7 +152,7 @@ func (b *broker) syncBroker() {
 		min = count
 	}
 	if max != min {
-		b.logger.Debug("sync broker", "count", count, "max", max, "min", min)
+		slog.Debug("sync broker", "count", count, "max", max, "min", min)
 		b.syncBroker()
 	}
 }
@@ -346,7 +343,7 @@ func (b *broker) brodcast(m *packet.Message) (total, success uint64) {
 		total += t
 		success += s
 		if err != nil {
-			b.logger.Error("Failed to send message to all clients", "error", err, "network", net)
+			slog.Error("Failed to send message to all clients", "error", err, "network", net)
 		}
 	}
 	return total, success
@@ -356,11 +353,11 @@ func (b *broker) sendToUser(uid string, m *packet.Message) (total, success uint6
 		total++
 		l, ok := b.listeners[net]
 		if !ok {
-			b.logger.Error("Failed to find listener", "network", net)
+			slog.Error("Failed to find listener", "network", net)
 			return true
 		}
 		if err := l.SendMessage(cid, m); err != nil {
-			b.logger.Error("Failed to send message to client", "error", err, "client", cid)
+			slog.Error("Failed to send message to client", "error", err, "client", cid)
 		} else {
 			success++
 		}
@@ -373,11 +370,11 @@ func (b *broker) sendToChannel(channel string, m *packet.Message) (total, succes
 		total++
 		l, ok := b.listeners[net]
 		if !ok {
-			b.logger.Error("Failed to find listener", "network", net)
+			slog.Error("Failed to find listener", "network", net)
 			return true
 		}
 		if err := l.SendMessage(cid, m); err != nil {
-			b.logger.Error("Failed to send message to client", "error", err, "client", cid)
+			slog.Error("Failed to send message to client", "error", err, "client", cid)
 		} else {
 			success++
 		}

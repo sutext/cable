@@ -2,12 +2,12 @@ package client
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"time"
 
 	"sutext.github.io/cable/internal/inflight"
 	"sutext.github.io/cable/internal/keepalive"
-	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
 )
@@ -35,7 +35,6 @@ type client struct {
 	mu             *sync.RWMutex
 	conn           Conn
 	status         Status
-	logger         logger.Logger
 	retrier        *Retrier
 	handler        Handler
 	retrying       bool
@@ -53,7 +52,6 @@ func New(address string, options ...Option) Client {
 		mu:             new(sync.RWMutex),
 		conn:           NewConn(opts.network, address),
 		status:         StatusUnknown,
-		logger:         opts.logger,
 		retrier:        NewRetrier(opts.retryLimit, opts.retryBackoff),
 		handler:        opts.handler,
 		recvQueue:      queue.New(1024),
@@ -63,7 +61,7 @@ func New(address string, options ...Option) Client {
 	}
 	c.keepalive.PingFunc(func() {
 		if err := c.sendPacket(packet.NewPing()); err != nil {
-			c.logger.Error("send ping error", "error", err)
+			slog.Error("send ping error", "error", err)
 		}
 	})
 	c.keepalive.TimeoutFunc(func() {
@@ -97,7 +95,7 @@ func (c *client) tryClose(err error) {
 	if c.id == nil {
 		return
 	}
-	c.logger.Error("try close", "reason", err)
+	slog.Error("try close", "reason", err)
 	if c.status == StatusClosed || c.status == StatusClosing {
 		return
 	}
@@ -190,7 +188,7 @@ func (c *client) sendPacket(p packet.Packet) error {
 			c.tryClose(err)
 			return
 		}
-		c.logger.Debug("send packet", "packet", p)
+		slog.Debug("send packet", "packet", p)
 		c.keepalive.UpdateTime()
 	})
 }
@@ -208,7 +206,7 @@ func (c *client) _setStatus(status Status) {
 	if c.status == status {
 		return
 	}
-	c.logger.Debug("status change", "from", c.status.String(), "to", status.String())
+	slog.Debug("status change", "from", c.status.String(), "to", status.String())
 	c.status = status
 	switch status {
 	case StatusClosed:
@@ -244,14 +242,14 @@ func (c *client) recv() {
 }
 
 func (c *client) handlePacket(p packet.Packet) {
-	c.logger.Debug("receive packet", "packet", p)
+	slog.Debug("receive packet", "packet", p)
 	switch p.Type() {
 	case packet.MESSAGE:
 		msg := p.(*packet.Message)
-		c.logger.Debug("receive message", "message", msg)
+		slog.Debug("receive message", "message", msg)
 		err := c.handler.OnMessage(msg)
 		if err != nil {
-			c.logger.Error("message handler error", "error", err)
+			slog.Error("message handler error", "error", err)
 			return
 		}
 		if msg.Qos == packet.MessageQos1 {
@@ -263,7 +261,7 @@ func (c *client) handlePacket(p packet.Packet) {
 	case packet.REQUEST:
 		res, err := c.handler.OnRequest(p.(*packet.Request))
 		if err != nil {
-			c.logger.Error("request handler error", "error", err)
+			slog.Error("request handler error", "error", err)
 			return
 		}
 		if res != nil {
@@ -274,7 +272,7 @@ func (c *client) handlePacket(p packet.Packet) {
 		if t, ok := c.requestTasks.Load(p.ID); ok {
 			t.(chan *packet.Response) <- p
 		} else {
-			c.logger.Error("response task not found", "seq", p.ID)
+			slog.Error("response task not found", "seq", p.ID)
 		}
 	case packet.PING:
 		c.SendPong()

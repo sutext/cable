@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
@@ -13,18 +12,18 @@ import (
 	"time"
 
 	"sutext.github.io/cable/broker"
-	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/server"
 )
 
 func main() {
 	ctx := context.Background()
-	logger := logger.NewText(slog.LevelDebug)
 	ctx, cancel := context.WithCancelCause(ctx)
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		log.Println(http.ListenAndServe("localhost:6060", nil))
+		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
+			slog.Error("pprof server error:", "error", err)
+		}
 	}()
 	go func() {
 		<-sigs
@@ -49,7 +48,6 @@ func main() {
 			broker.WithBrokerID(peers[i]),
 			broker.WithListener(server.NetworkTCP, listeners[i]),
 			// broker.WithPeers(peers),
-			broker.WithLogger(logger),
 		)
 		brokers[i].Start()
 	}
@@ -65,8 +63,8 @@ func main() {
 	defer timeout.Stop()
 	select {
 	case <-timeout.C:
-		logger.Warn("entry server graceful shutdown timeout")
+		slog.Warn("entry server graceful shutdown timeout")
 	case <-done:
-		logger.Debug("entry server graceful shutdown")
+		slog.Debug("entry server graceful shutdown")
 	}
 }

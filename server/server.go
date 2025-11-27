@@ -2,11 +2,11 @@ package server
 
 import (
 	"context"
+	"log/slog"
 	"sync/atomic"
 	"time"
 
 	"sutext.github.io/cable/internal/listener"
-	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/internal/mq"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
@@ -26,7 +26,6 @@ type server struct {
 	conns          safe.Map[string, *listener.Conn]
 	queues         safe.Map[string, *mq.Queue]
 	closed         atomic.Bool
-	logger         logger.Logger
 	address        string
 	network        Network
 	listener       listener.Listener
@@ -41,7 +40,6 @@ func New(address string, opts ...Option) *server {
 	s := &server{
 		address:        address,
 		network:        options.Network,
-		logger:         options.Logger,
 		closeHandler:   options.CloseHandler,
 		connectHander:  options.ConnectHandler,
 		messageHandler: options.MessageHandler,
@@ -140,7 +138,7 @@ func (s *server) SendMessage(cid string, p *packet.Message) error {
 	return q.AddTask(func() {
 		if c, ok := s.conns.Get(cid); ok {
 			if err := c.SendMessage(p); err != nil {
-				s.logger.Error("[Server] failed to send message", "error", err)
+				slog.Error("[Server] failed to send message", "error", err)
 			}
 		}
 	})
@@ -200,23 +198,23 @@ func (s *server) onConnect(p *packet.Connect, c *listener.Conn) packet.ConnectCo
 func (s *server) onMessage(c *listener.Conn, p *packet.Message) {
 	err := s.messageHandler(p, c.ID())
 	if err != nil {
-		s.logger.Error("failed to handle message", "error", err)
+		slog.Error("failed to handle message", "error", err)
 		return
 	}
 	if p.Qos == packet.MessageQos1 {
 		if err := c.SendPacket(packet.NewMessack(p.ID)); err != nil {
-			s.logger.Error("failed to send messack", "error", err)
+			slog.Error("failed to send messack", "error", err)
 		}
 	}
 }
 func (s *server) onRequest(c *listener.Conn, p *packet.Request) {
 	res, err := s.requestHandler(p, c.ID())
 	if err != nil {
-		s.logger.Error("failed to handle request", "error", err)
+		slog.Error("failed to handle request", "error", err)
 		return
 	}
 	if err := c.SendPacket(res); err != nil {
-		s.logger.Error("failed to send response", "error", err)
+		slog.Error("failed to send response", "error", err)
 	}
 }
 func (s *server) onClose(c *listener.Conn) {

@@ -1,12 +1,10 @@
 package client
 
 import (
-	"log/slog"
 	"math"
 	"time"
 
 	"sutext.github.io/cable/backoff"
-	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
 )
 
@@ -45,7 +43,6 @@ func (h *emptyHandler) OnRequest(p *packet.Request) (*packet.Response, error) {
 }
 
 type Options struct {
-	logger         logger.Logger
 	network        Network
 	handler        Handler
 	retryLimit     int
@@ -61,7 +58,6 @@ type Option struct {
 
 func newOptions(options ...Option) *Options {
 	opts := &Options{
-		logger:         logger.NewText(slog.LevelDebug),
 		handler:        &emptyHandler{},
 		network:        NewworkTCP,
 		retryLimit:     math.MaxInt,
@@ -78,11 +74,6 @@ func newOptions(options ...Option) *Options {
 func WithNetwork(network Network) Option {
 	return Option{f: func(o *Options) {
 		o.network = network
-	}}
-}
-func WithLogger(logger logger.Logger) Option {
-	return Option{f: func(o *Options) {
-		o.logger = logger
 	}}
 }
 func WithRetry(limit int, backoff backoff.Backoff) Option {

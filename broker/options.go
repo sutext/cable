@@ -2,11 +2,9 @@ package broker
 
 import (
 	"fmt"
-	"log/slog"
 	"math/rand/v2"
 	"net"
 
-	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
 )
@@ -40,7 +38,6 @@ func (h *emptyHandler) GetWatchers(uid string) (watchers []string, err error) {
 
 type options struct {
 	peers     []string
-	logger    logger.Logger
 	handler   Handler
 	brokerID  string
 	httpAddr  string
@@ -53,7 +50,6 @@ func newOptions(opts ...Option) *options {
 		panic(err)
 	}
 	options := &options{
-		logger:   logger.NewText(slog.LevelError),
 		handler:  &emptyHandler{},
 		httpAddr: ":8888",
 		brokerID: fmt.Sprintf("%d@%s:4567", rand.Int64(), ip),
@@ -80,11 +76,7 @@ func WithPeers(peers []string) Option {
 		o.peers = peers
 	}}
 }
-func WithLogger(l logger.Logger) Option {
-	return Option{func(o *options) {
-		o.logger = l
-	}}
-}
+
 func WithHandler(h Handler) Option {
 	return Option{func(o *options) {
 		o.handler = h
