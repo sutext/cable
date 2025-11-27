@@ -3,6 +3,7 @@ package muticast
 import (
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
 	"sutext.github.io/cable/coder"
@@ -18,6 +19,7 @@ type Muticast interface {
 
 type muticast struct {
 	id       string
+	mu       sync.Mutex
 	addr     *net.UDPAddr
 	conn     *net.UDPConn
 	result   chan string
@@ -27,9 +29,8 @@ type muticast struct {
 
 func New(id string) *muticast {
 	m := &muticast{
-		id:     id,
-		addr:   &net.UDPAddr{IP: net.ParseIP("224.0.0.9"), Port: 9999},
-		result: make(chan string),
+		id:   id,
+		addr: &net.UDPAddr{IP: net.ParseIP("224.0.0.9"), Port: 9999},
 	}
 	return m
 }
@@ -104,6 +105,11 @@ func (m *muticast) listen() error {
 	}
 }
 func (m *muticast) Request() (r map[string]uint32, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.respChan != nil {
+		return nil, fmt.Errorf("Muticast request is already in progress")
+	}
 	req := packet.NewRequest("discovery", []byte(m.id))
 	reqdata, err := packet.Marshal(req)
 	if err != nil {
@@ -113,22 +119,25 @@ func (m *muticast) Request() (r map[string]uint32, err error) {
 	if err != nil {
 		return r, err
 	}
+	m.respChan = make(chan *packet.Response)
 	r = make(map[string]uint32)
-	for {
-		select {
-		case resp := <-m.respChan:
-			denc := coder.NewDecoder(resp.Content)
-			count, err := denc.ReadUInt32()
-			if err != nil {
-				continue
-			}
-			id, err := denc.ReadString()
-			if err != nil {
-				continue
-			}
-			r[id] = count
-		case <-time.After(time.Second * 5):
-			return r, nil
+	time.AfterFunc(time.Second*5, func() {
+		m.mu.Lock()
+		close(m.respChan)
+		m.respChan = nil
+		m.mu.Unlock()
+	})
+	for resp := range m.respChan {
+		denc := coder.NewDecoder(resp.Content)
+		count, err := denc.ReadUInt32()
+		if err != nil {
+			continue
 		}
+		id, err := denc.ReadString()
+		if err != nil {
+			continue
+		}
+		r[id] = count
 	}
+	return r, nil
 }
