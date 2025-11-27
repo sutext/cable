@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"log/slog"
 
 	"sutext.github.io/cable/internal/logger"
@@ -92,10 +93,10 @@ func NewOptions(opts ...Option) *Options {
 			return packet.ConnectAccepted
 		},
 		MessageHandler: func(p *packet.Message, id *packet.Identity) error {
-			return nil
+			return fmt.Errorf("MessageHandler not implemented")
 		},
 		RequestHandler: func(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
-			return nil, nil
+			return nil, fmt.Errorf("RequestHandler not implemented")
 		},
 	}
 	for _, o := range opts {

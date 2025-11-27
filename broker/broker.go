@@ -75,7 +75,7 @@ func NewBroker(opts ...Option) Broker {
 			server.WithLogger(options.logger),
 		)
 	}
-	b.peerServer = server.New(fmt.Sprintf(":%s", strings.Split(b.id, ":")[1]))
+	b.peerServer = server.New(fmt.Sprintf(":%s", strings.Split(b.id, ":")[1]), server.WithRequest(b.onPeerRequest))
 	b.handlePeerRequest("SendMessage", b.handleSendMessage)
 	b.handlePeerRequest("IsOnline", b.handleIsOnline)
 	b.handlePeerRequest("KickConn", b.handleKickConn)
