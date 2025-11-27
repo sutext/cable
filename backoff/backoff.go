@@ -23,7 +23,7 @@ func Random(min, max time.Duration) Backoff {
 	return randomBackoff{min: min, max: max}
 }
 func RandomD() Backoff {
-	return Random(time.Second*2, time.Second*10)
+	return Random(time.Second*2, time.Second*5)
 }
 func Exponential(base time.Duration, exp float64) Backoff {
 	return exponentialBackoff{base: base, exponent: exp}
@@ -35,7 +35,7 @@ func Constant(dur time.Duration) Backoff {
 	return constantBackoff{duration: dur}
 }
 func ConstantD() Backoff {
-	return Constant(time.Second * 5)
+	return Constant(time.Second * 3)
 }
 
 type constantBackoff struct {

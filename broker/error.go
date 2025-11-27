@@ -3,13 +3,15 @@ package broker
 type Error uint8
 
 const (
-	ErrInvalidChannel Error = iota
+	ErrPeerNotReady Error = iota
 	ErrInvalidUserID
+	ErrInvalidChannel
 	ErrInvalidMessageFlag
 	ErrRequestHandlerNotFound
 )
 
 var errorMap = map[Error]string{
+	ErrPeerNotReady:           "Peer not ready",
 	ErrInvalidChannel:         "Invalid channel",
 	ErrInvalidUserID:          "Invalid user ID",
 	ErrInvalidMessageFlag:     "Invalid message flag",

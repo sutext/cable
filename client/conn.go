@@ -60,7 +60,12 @@ func (c *tcpConn) Dail() error {
 }
 
 func (c *tcpConn) Close() error {
-	return c.conn.Close()
+	if c.conn != nil {
+		err := c.conn.Close()
+		c.conn = nil
+		return err
+	}
+	return nil
 }
 
 type udpConn struct {

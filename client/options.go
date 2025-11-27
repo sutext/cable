@@ -1,10 +1,8 @@
 package client
 
 import (
-	"math"
 	"time"
 
-	"sutext.github.io/cable/backoff"
 	"sutext.github.io/cable/packet"
 )
 
@@ -45,10 +43,9 @@ func (h *emptyHandler) OnRequest(p *packet.Request) (*packet.Response, error) {
 type Options struct {
 	network        Network
 	handler        Handler
-	retryLimit     int
+	retrier        *Retrier
 	pingTimeout    time.Duration
 	pingInterval   time.Duration
-	retryBackoff   backoff.Backoff
 	requestTimeout time.Duration
 }
 
@@ -60,8 +57,6 @@ func newOptions(options ...Option) *Options {
 	opts := &Options{
 		handler:        &emptyHandler{},
 		network:        NewworkTCP,
-		retryLimit:     math.MaxInt,
-		retryBackoff:   backoff.Default(),
 		pingTimeout:    time.Second * 5,
 		pingInterval:   time.Second * 60,
 		requestTimeout: time.Second * 5,
@@ -76,10 +71,9 @@ func WithNetwork(network Network) Option {
 		o.network = network
 	}}
 }
-func WithRetry(limit int, backoff backoff.Backoff) Option {
+func WithRetrier(retrier *Retrier) Option {
 	return Option{f: func(o *Options) {
-		o.retryLimit = limit
-		o.retryBackoff = backoff
+		o.retrier = retrier
 	}}
 }
 func WithKeepAlive(timeout, interval time.Duration) Option {

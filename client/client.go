@@ -36,6 +36,7 @@ type client struct {
 	mu             *sync.RWMutex
 	conn           Conn
 	status         Status
+	logger         *xlog.Logger
 	retrier        *Retrier
 	handler        Handler
 	retrying       bool
@@ -53,7 +54,8 @@ func New(address string, options ...Option) Client {
 		mu:             new(sync.RWMutex),
 		conn:           NewConn(opts.network, address),
 		status:         StatusUnknown,
-		retrier:        NewRetrier(opts.retryLimit, opts.retryBackoff),
+		logger:         xlog.With("GROUP", "CLIENT"),
+		retrier:        opts.retrier,
 		handler:        opts.handler,
 		recvQueue:      queue.New(1024),
 		sendQueue:      queue.New(1024),
@@ -62,7 +64,7 @@ func New(address string, options ...Option) Client {
 	}
 	c.keepalive.PingFunc(func() {
 		if err := c.sendPacket(packet.NewPing()); err != nil {
-			xlog.Error("send ping error", err)
+			c.logger.Error("send ping error", err)
 		}
 	})
 	c.keepalive.TimeoutFunc(func() {
@@ -96,7 +98,7 @@ func (c *client) tryClose(err error) {
 	if c.id == nil {
 		return
 	}
-	xlog.Error("try close", err)
+	c.logger.Error("try close", err)
 	if c.status == StatusClosed || c.status == StatusClosing {
 		return
 	}
@@ -206,17 +208,14 @@ func (c *client) _setStatus(status Status) {
 	if c.status == status {
 		return
 	}
-	xlog.Info("client status change", slog.String("from", c.status.String()), slog.String("to", status.String()))
+	xlog.Debug("client status change", slog.String("from", c.status.String()), slog.String("to", status.String()))
 	c.status = status
 	switch status {
 	case StatusClosed:
 		c.keepalive.Stop()
 		c.inflights.Stop()
 		c.retrier.cancel()
-		if c.conn != nil {
-			c.conn.Close()
-			c.conn = nil
-		}
+		c.conn.Close()
 	case StatusOpening, StatusClosing:
 		c.keepalive.Stop()
 		c.inflights.Stop()
@@ -225,6 +224,7 @@ func (c *client) _setStatus(status Status) {
 		c.inflights.Start()
 		go c.recv()
 	}
+	c.handler.OnStatus(status)
 }
 
 func (c *client) recv() {
@@ -247,11 +247,13 @@ func (c *client) handlePacket(p packet.Packet) {
 		msg := p.(*packet.Message)
 		err := c.handler.OnMessage(msg)
 		if err != nil {
-			xlog.Error("message handler error", err)
+			c.logger.Error("message handler error", err)
 			return
 		}
 		if msg.Qos == packet.MessageQos1 {
-			c.sendPacket(packet.NewMessack(msg.ID))
+			if err := c.sendPacket(packet.NewMessack(msg.ID)); err != nil {
+				c.logger.Error("send messack packet error", err)
+			}
 		}
 	case packet.MESSACK:
 		ack := p.(*packet.Messack)
@@ -259,11 +261,13 @@ func (c *client) handlePacket(p packet.Packet) {
 	case packet.REQUEST:
 		res, err := c.handler.OnRequest(p.(*packet.Request))
 		if err != nil {
-			xlog.Error("request handler error", err)
+			c.logger.Error("request handler error", err)
 			return
 		}
 		if res != nil {
-			c.sendPacket(res)
+			if err := c.sendPacket(res); err != nil {
+				c.logger.Error("send response packet error", err)
+			}
 		}
 	case packet.RESPONSE:
 		p := p.(*packet.Response)
@@ -273,7 +277,9 @@ func (c *client) handlePacket(p packet.Packet) {
 			xlog.Errorf("response task not found", slog.Int64("id", p.ID))
 		}
 	case packet.PING:
-		c.SendPong()
+		if err := c.SendPong(); err != nil {
+			c.logger.Error("send pong error", err)
+		}
 	case packet.PONG:
 		c.keepalive.HandlePong()
 	case packet.CLOSE:

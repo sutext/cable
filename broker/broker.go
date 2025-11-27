@@ -42,7 +42,7 @@ type broker struct {
 	listeners      map[server.Network]server.Server
 	peerServer     server.Server
 	httpServer     *http.Server
-	brokerCount    atomic.Uint32
+	brokerCount    atomic.Int32
 	userClients    keymap.KeyMap[server.Network] //map[uid]map[cid]net
 	channelClients keymap.KeyMap[server.Network] //map[channel]map[cid]net
 	clientChannels keymap.KeyMap[server.Network] //map[cid]map[channel]net
@@ -57,7 +57,7 @@ func NewBroker(opts ...Option) Broker {
 	b.logger = xlog.With("GROUP", "BROKER", "selfid", b.id)
 	b.handler = options.handler
 	b.muticast = muticast.New(b.id)
-	b.muticast.OnRequest(func(s string) uint32 {
+	b.muticast.OnRequest(func(s string) int32 {
 		b.addPeer(s)
 		return b.brokerCount.Load()
 	})
@@ -91,19 +91,25 @@ func NewBroker(opts ...Option) Broker {
 	b.httpServer = &http.Server{Addr: options.httpAddr, Handler: mux}
 	return b
 }
+func (b *broker) delPeer(id string) {
+	b.logger.Debug("del peer", slog.String("peerid", id))
+	if _, ok := b.peers.Get(id); ok {
+		b.peers.Delete(id)
+		b.brokerCount.Add(-1)
+	}
+}
 func (b *broker) addPeer(id string) {
 	if id == b.id {
-		return
-	}
-	strs := strings.Split(id, "@")
-	if len(strs) != 2 {
 		return
 	}
 	if _, ok := b.peers.Get(id); ok {
 		return
 	}
+	peer := newPeer(id, b)
+	if peer == nil {
+		return
+	}
 	b.logger.Debug("add peer", slog.String("peerid", id))
-	peer := newPeer(b.id, strs[1])
 	b.peers.Set(id, peer)
 	b.brokerCount.Add(1)
 	go peer.Connect()
@@ -140,9 +146,12 @@ func (b *broker) syncBroker() {
 	if err != nil {
 		b.logger.Error("failed to sync broker", err)
 	}
-	b.logger.Debug("Auto discovery got endpoints", slog.Any("endpoints", m))
-	var max uint32 = 0
-	var min uint32 = 0xffff
+	if len(m) == 0 {
+		b.logger.Warn("Auto discovery got endpoints", slog.Any("endpoints", m))
+		time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.syncBroker)
+	}
+	var max int32 = 0
+	var min int32 = 0xffff
 	for id, count := range m {
 		if count > max {
 			max = count
@@ -160,8 +169,8 @@ func (b *broker) syncBroker() {
 		min = count
 	}
 	if max != min {
-		b.logger.Warn("broker count mismatch", slog.Uint64("max", uint64(max)), slog.Uint64("min", uint64(min)))
-		b.syncBroker()
+		b.logger.Warn("broker count mismatch", slog.Int("max", int(max)), slog.Int("min", int(min)))
+		time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.syncBroker)
 	}
 }
 func (b *broker) Shutdown(ctx context.Context) error {

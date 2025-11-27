@@ -16,7 +16,7 @@ type Inspect struct {
 	Users         int            `json:"users"`
 	Clients       int            `json:"clients"`
 	Channels      map[string]int `json:"channels"`
-	BrokerCount   uint32         `json:"broker_count"`
+	BrokerCount   int32          `json:"broker_count"`
 	OnlienUsers   int            `json:"online_users"`
 	OnlineClients int            `json:"online_clients"`
 }

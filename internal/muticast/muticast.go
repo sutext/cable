@@ -13,8 +13,8 @@ import (
 
 type Muticast interface {
 	Serve() error
-	Request() (map[string]uint32, error)
-	OnRequest(func(string) uint32)
+	Request() (map[string]int32, error)
+	OnRequest(func(string) int32)
 	Shutdown()
 }
 
@@ -23,7 +23,7 @@ type muticast struct {
 	mu       sync.Mutex
 	addr     *net.UDPAddr
 	conn     *net.UDPConn
-	req      func(string) uint32
+	req      func(string) int32
 	logger   *xlog.Logger
 	respChan chan *packet.Response
 }
@@ -71,7 +71,7 @@ func (m *muticast) Serve() error {
 		go func() {
 			count := m.req(string(req.Content))
 			enc := coder.NewEncoder()
-			enc.WriteUInt32(count)
+			enc.WriteInt32(count)
 			enc.WriteString(m.id)
 			resp := packet.NewResponse(req.ID, enc.Bytes())
 			bytes, err := packet.Marshal(resp)
@@ -88,7 +88,7 @@ func (m *muticast) Serve() error {
 func (m *muticast) Shutdown() {
 	m.conn.Close()
 }
-func (m *muticast) OnRequest(f func(string) uint32) {
+func (m *muticast) OnRequest(f func(string) int32) {
 	m.req = f
 }
 func (m *muticast) listen() error {
@@ -116,7 +116,7 @@ func (m *muticast) listen() error {
 		m.respChan <- p.(*packet.Response)
 	}
 }
-func (m *muticast) Request() (r map[string]uint32, err error) {
+func (m *muticast) Request() (r map[string]int32, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.respChan != nil {
@@ -127,19 +127,19 @@ func (m *muticast) Request() (r map[string]uint32, err error) {
 	if err != nil {
 		return r, err
 	}
-	_, err = m.conn.WriteToUDP(reqdata, m.addr)
-	if err != nil {
-		return r, err
-	}
-	m.respChan = make(chan *packet.Response)
+	m.respChan = make(chan *packet.Response, 128)
 	time.AfterFunc(time.Second*5, func() {
 		close(m.respChan)
 		m.respChan = nil
 	})
-	r = make(map[string]uint32)
+	_, err = m.conn.WriteToUDP(reqdata, m.addr)
+	if err != nil {
+		return r, err
+	}
+	r = make(map[string]int32)
 	for resp := range m.respChan {
 		denc := coder.NewDecoder(resp.Content)
-		count, err := denc.ReadUInt32()
+		count, err := denc.ReadInt32()
 		if err != nil {
 			m.logger.Error("decode response error", err)
 			continue

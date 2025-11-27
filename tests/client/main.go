@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/rand/v2"
 	"sync"
 	"time"
@@ -40,7 +39,7 @@ func RandomClient() *Client {
 	result.cli = client.New(addrs[rand.IntN(len(addrs))],
 		client.WithNetwork(client.NewworkTCP),
 		client.WithKeepAlive(time.Second*5, time.Second*60),
-		client.WithRetry(math.MaxInt, backoff.Exponential(2, 2)),
+		client.WithHandler(result),
 		client.WithHandler(result),
 	)
 	uid := fmt.Sprintf("u%d", rand.IntN(300))
