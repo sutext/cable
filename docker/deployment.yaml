@@ -43,14 +43,14 @@ spec:
     app: cable-cluster
   ports:
     - protocol: TCP
+      name: endpoint-tcp
       port: 1883
       targetPort: 1883
-      nodePort: 1883
     - protocol: UDP
+      name: endpoint-udp
       port: 1884
       targetPort: 1884
-      nodePort: 1884
     - protocol: TCP
+      name: inspect
       port: 8888
       targetPort: 8888
-      nodePort: 8888
