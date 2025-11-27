@@ -148,8 +148,7 @@ func (b *broker) handleMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	msg := packet.NewMessage([]byte(payload))
-	msg.Channel = channel
-	total, success, err := b.SendMessage(r.Context(), msg)
+	total, success, err := b.SendToChannel(r.Context(), channel, msg)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

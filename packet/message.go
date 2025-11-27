@@ -7,16 +7,19 @@ import (
 	"sutext.github.io/cable/coder"
 )
 
-type MessageQos int8
+type MessageQos uint8
 
 const (
 	MessageQos0 MessageQos = 0
 	MessageQos1 MessageQos = 1
 )
 
+type MessageKind uint8
+
 const (
-	qosMask = 1
-	dupMask = 1 << 1
+	qosMask  = 0x80
+	dupMask  = 0x40
+	kindMask = 0x3f
 )
 
 // Message represents a message packet.
@@ -24,7 +27,7 @@ type Message struct {
 	ID      int64
 	Qos     MessageQos
 	Dup     bool
-	Channel string
+	Kind    MessageKind
 	Payload []byte
 }
 
@@ -55,9 +58,12 @@ func (p *Message) WriteTo(w coder.Encoder) error {
 	if p.Dup {
 		flags |= dupMask
 	}
+	if p.Kind > kindMask {
+		return ErrMessageKindTooLarge
+	}
+	flags |= uint8(p.Kind)
 	w.WriteUInt8(flags)
 	w.WriteInt64(p.ID)
-	w.WriteString(p.Channel)
 	w.WriteBytes(p.Payload)
 	return nil
 }
@@ -70,11 +76,6 @@ func (p *Message) ReadFrom(r coder.Decoder) error {
 	if err != nil {
 		return err
 	}
-	channel, err := r.ReadString()
-	if err != nil {
-		return err
-	}
-
 	payload, err := r.ReadAll()
 	if err != nil {
 		return err
@@ -82,7 +83,7 @@ func (p *Message) ReadFrom(r coder.Decoder) error {
 	p.ID = id
 	p.Dup = flags&dupMask != 0
 	p.Qos = MessageQos(flags & qosMask)
-	p.Channel = channel
+	p.Kind = MessageKind(flags & kindMask)
 	p.Payload = payload
 	return nil
 }

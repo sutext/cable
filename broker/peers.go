@@ -37,12 +37,14 @@ func (p *peer) IsReady() bool {
 func (p *peer) Connect() {
 	p.client.Connect(&packet.Identity{ClientID: p.id, UserID: p.id})
 }
-func (p *peer) sendMessage(ctx context.Context, m *packet.Message) (total, success uint64, err error) {
-	body, err := coder.Marshal(m)
-	if err != nil {
-		return
+func (p *peer) sendMessage(ctx context.Context, m *packet.Message, target string, flag uint8) (total, success uint64, err error) {
+	enc := coder.NewEncoder()
+	enc.WriteUInt8(flag)
+	enc.WriteString(target)
+	if err = m.WriteTo(enc); err != nil {
+		return 0, 0, err
 	}
-	req := packet.NewRequest("SendMessage", body)
+	req := packet.NewRequest("SendMessage", enc.Bytes())
 	res, err := p.client.SendRequest(ctx, req)
 	if err != nil {
 		return

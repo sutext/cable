@@ -18,6 +18,7 @@ type Server interface {
 	IsActive(cid string) bool
 	KickConn(cid string) bool
 	Shutdown(ctx context.Context) error
+	Brodcast(p *packet.Message) (total, success uint64, err error)
 	SendMessage(cid string, p *packet.Message) error
 	SendRequest(ctx context.Context, cid string, p *packet.Request) (*packet.Response, error)
 }
@@ -111,6 +112,23 @@ func (s *server) Shutdown(ctx context.Context) error {
 func (s *server) Network() Network {
 	return s.network
 }
+func (s *server) Brodcast(p *packet.Message) (total, success uint64, err error) {
+	if s.closed.Load() {
+		return 0, 0, ErrServerIsClosed
+	}
+	s.conns.Range(func(cid string, conn *listener.Conn) bool {
+		total++
+		q, _ := s.queues.GetOrSet(cid, mq.NewQueue(1024))
+		err := q.AddTask(func() {
+			conn.SendMessage(p)
+		})
+		if err == nil {
+			success++
+		}
+		return true
+	})
+	return total, success, nil
+}
 func (s *server) SendMessage(cid string, p *packet.Message) error {
 	if s.closed.Load() {
 		return ErrServerIsClosed
@@ -119,12 +137,13 @@ func (s *server) SendMessage(cid string, p *packet.Message) error {
 		return ErrConnectionNotFound
 	}
 	q, _ := s.queues.GetOrSet(cid, mq.NewQueue(1024))
-	q.AddTask(func() {
+	return q.AddTask(func() {
 		if c, ok := s.conns.Get(cid); ok {
-			c.SendMessage(p)
+			if err := c.SendMessage(p); err != nil {
+				s.logger.Error("[Server] failed to send message", "error", err)
+			}
 		}
 	})
-	return nil
 }
 func (s *server) SendRequest(ctx context.Context, cid string, p *packet.Request) (*packet.Response, error) {
 	if s.closed.Load() {

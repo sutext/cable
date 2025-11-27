@@ -1,17 +1,16 @@
-
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   namespace: default
-  name: cable-service
+  name: cable-cluster
   labels:
-    app: cable-service
+    app: cable-cluster
 spec:
   replicas: 4
   selector:
     matchLabels:
-      app: cable-service
+      app: cable-cluster
   strategy:
     rollingUpdate:
       maxSurge: 0
@@ -21,7 +20,7 @@ spec:
   template:
     metadata:
       labels:
-        app: cable-service
+        app: cable-cluster
     spec:
       imagePullSecrets:
         - name: pull-image
@@ -35,13 +34,13 @@ kind: Service
 
 metadata:
   namespace: default
-  name: cable-service
-  type: NodePort
+  name: cable-cluster
   labels:
-    app: cable-service
+    app: cable-cluster
 spec:
+  type: LoadBalancer
   selector:
-    app: cable-service
+    app: cable-cluster
   ports:
     - protocol: TCP
       port: 1883

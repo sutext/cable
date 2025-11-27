@@ -10,10 +10,10 @@ import (
 )
 
 type Muticast interface {
-	Stop()
 	Serve() error
 	Request() (map[string]uint32, error)
 	OnRequest(func(string) uint32)
+	Shutdown()
 }
 
 type muticast struct {
@@ -32,13 +32,6 @@ func New(id string) *muticast {
 		result: make(chan string),
 	}
 	return m
-}
-
-func (m *muticast) Stop() {
-	m.conn.Close()
-}
-func (m *muticast) OnRequest(f func(string) uint32) {
-	m.req = f
 }
 
 func (m *muticast) Serve() error {
@@ -80,6 +73,12 @@ func (m *muticast) Serve() error {
 			return err
 		}
 	}
+}
+func (m *muticast) Shutdown() {
+	m.conn.Close()
+}
+func (m *muticast) OnRequest(f func(string) uint32) {
+	m.req = f
 }
 func (m *muticast) listen() error {
 	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})

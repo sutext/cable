@@ -19,9 +19,10 @@ const (
 type Error uint8
 
 const (
-	ErrInvalidReadLen     Error = 1
-	ErrUnknownPacketType  Error = 2
-	ErrPacketSizeTooLarge Error = 3
+	ErrInvalidReadLen      Error = 1
+	ErrUnknownPacketType   Error = 2
+	ErrPacketSizeTooLarge  Error = 3
+	ErrMessageKindTooLarge Error = 4
 )
 
 func (e Error) Error() string {
@@ -32,6 +33,8 @@ func (e Error) Error() string {
 		return "unknown packet type"
 	case ErrPacketSizeTooLarge:
 		return "packet size too large"
+	case ErrMessageKindTooLarge:
+		return "message kind too large"
 	default:
 		return "unknown error"
 	}

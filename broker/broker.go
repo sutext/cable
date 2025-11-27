@@ -2,15 +2,12 @@ package broker
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"math/rand/v2"
 	"net/http"
 	"strings"
 	"sync/atomic"
 	"time"
 
-	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/internal/keymap"
 	"sutext.github.io/cable/internal/logger"
 	"sutext.github.io/cable/internal/muticast"
@@ -27,9 +24,12 @@ type Broker interface {
 	IsOnline(ctx context.Context, uid string) (ok bool)
 	KickConn(ctx context.Context, cid string)
 	KickUser(ctx context.Context, uid string)
-	SendMessage(ctx context.Context, m *packet.Message) (total, success uint64, err error)
+	Brodcast(ctx context.Context, m *packet.Message) (total, success uint64, err error)
+	SendToUser(ctx context.Context, uid string, m *packet.Message) (total, success uint64, err error)
+	SendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success uint64, err error)
 	JoinChannel(ctx context.Context, uid string, channels ...string) (count uint64, err error)
 	LeaveChannel(ctx context.Context, uid string, channels ...string) (count uint64, err error)
+	HandleRequest(method string, handler server.RequestHandler)
 }
 type broker struct {
 	id             string
@@ -44,6 +44,8 @@ type broker struct {
 	userClients    keymap.KeyMap[server.Network] //map[uid]map[cid]net
 	channelClients keymap.KeyMap[server.Network] //map[channel]map[cid]net
 	clientChannels keymap.KeyMap[server.Network] //map[cid]map[channel]net
+	peerHandlers   safe.Map[string, server.RequestHandler]
+	userHandlers   safe.Map[string, server.RequestHandler]
 }
 
 func NewBroker(opts ...Option) Broker {
@@ -72,7 +74,14 @@ func NewBroker(opts ...Option) Broker {
 			server.WithLogger(options.logger),
 		)
 	}
-	b.peerServer = server.New(strings.Split(b.id, "@")[1], server.WithRequest(b.onPeerRequest))
+	b.peerServer = server.New(strings.Split(b.id, "@")[1])
+	b.handlePeerRequest("SendMessage", b.handleSendMessage)
+	b.handlePeerRequest("IsOnline", b.handleIsOnline)
+	b.handlePeerRequest("KickConn", b.handleKickConn)
+	b.handlePeerRequest("JoinChannel", b.handleJoinChannel)
+	b.handlePeerRequest("LeaveChannel", b.handleLeaveChannel)
+	b.handlePeerRequest("Inspect", b.handlePeerInspect)
+	b.handlePeerRequest("KickUser", b.handleKickUser)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/join", b.handleJoin)
 	mux.HandleFunc("/inspect", b.handleInspect)
@@ -92,7 +101,7 @@ func (b *broker) addPeer(id string) {
 	if _, ok := b.peers.Get(id); ok {
 		return
 	}
-	b.logger.Info("add peer", "id", id, "self", b.id)
+	b.logger.Debug("add peer", "id", id, "self", b.id)
 	peer := newPeer(b.id, strs[1], b.logger)
 	b.peers.Set(id, peer)
 	b.brokerCount.Add(1)
@@ -102,42 +111,59 @@ func (b *broker) Start() error {
 	for _, l := range b.listeners {
 		go l.Serve()
 	}
-	go b.muticast.Serve()
-	go b.peerServer.Serve()
-	go b.httpServer.ListenAndServe()
+	go func() {
+		if err := b.muticast.Serve(); err != nil {
+			b.logger.Error("muticast serve error", "error", err)
+		}
+	}()
+	go func() {
+		if err := b.peerServer.Serve(); err != nil {
+			b.logger.Error("peer server serve error", "error", err)
+		}
+	}()
+	go func() {
+		if err := b.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			b.logger.Error("http server serve error", "error", err)
+		}
+	}()
 	time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.syncBroker)
 	return nil
 }
+
 func (b *broker) syncBroker() {
-	if m, err := b.muticast.Request(); err != nil {
-		var max uint32 = 0
-		var min uint32 = 0xffff
-		for id, count := range m {
-			if count > max {
-				max = count
-			}
-			if count < min {
-				min = count
-			}
-			b.addPeer(id)
-		}
-		count := b.brokerCount.Load()
+	m, err := b.muticast.Request()
+	if err != nil {
+		b.logger.Error("failed to sync broker", "error", err)
+	}
+	var max uint32 = 0
+	var min uint32 = 0xffff
+	for id, count := range m {
 		if count > max {
 			max = count
 		}
 		if count < min {
 			min = count
 		}
-		if max != min {
-			b.logger.Info("sync broker", "count", count, "max", max, "min", min)
-			b.syncBroker()
-		}
+		b.addPeer(id)
+	}
+	count := b.brokerCount.Load()
+	if count > max {
+		max = count
+	}
+	if count < min {
+		min = count
+	}
+	if max != min {
+		b.logger.Debug("sync broker", "count", count, "max", max, "min", min)
+		b.syncBroker()
 	}
 }
 func (b *broker) Shutdown(ctx context.Context) error {
 	for _, l := range b.listeners {
 		l.Shutdown(ctx)
 	}
+	b.muticast.Shutdown()
+	b.httpServer.Shutdown(ctx)
 	return b.peerServer.Shutdown(ctx)
 }
 
@@ -168,10 +194,42 @@ func (b *broker) KickUser(ctx context.Context, uid string) {
 		return true
 	})
 }
-func (b *broker) SendMessage(ctx context.Context, m *packet.Message) (total, success uint64, err error) {
-	total, success = b.sendMessage(m)
+func (b *broker) Brodcast(ctx context.Context, m *packet.Message) (total, success uint64, err error) {
+	total, success = b.brodcast(m)
 	b.peers.Range(func(id string, peer *peer) bool {
-		if t, s, err := peer.sendMessage(ctx, m); err == nil {
+		if t, s, err := peer.sendMessage(ctx, m, "", 0); err == nil {
+			total += t
+			success += s
+		} else {
+			return false
+		}
+		return true
+	})
+	return total, success, nil
+}
+func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) (total, success uint64, err error) {
+	if uid == "" {
+		return 0, 0, ErrInvalidUserID
+	}
+	total, success = b.sendToUser(uid, m)
+	b.peers.Range(func(id string, peer *peer) bool {
+		if t, s, err := peer.sendMessage(ctx, m, uid, 1); err == nil {
+			total += t
+			success += s
+		} else {
+			return false
+		}
+		return true
+	})
+	return total, success, nil
+}
+func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success uint64, err error) {
+	if channel == "" {
+		return 0, 0, ErrInvalidChannel
+	}
+	total, success = b.sendToChannel(channel, m)
+	b.peers.Range(func(id string, peer *peer) bool {
+		if t, s, err := peer.sendMessage(ctx, m, channel, 2); err == nil {
 			total += t
 			success += s
 		} else {
@@ -204,13 +262,15 @@ func (b *broker) LeaveChannel(ctx context.Context, uid string, channels ...strin
 
 func (b *broker) onUserClosed(id *packet.Identity) {
 	b.userClients.DeleteKey(id.UserID, id.ClientID)
-	b.channelClients.DeleteKey("all", id.ClientID)
 	b.clientChannels.RangeKey(id.ClientID, func(channel string, net server.Network) bool {
 		b.channelClients.DeleteKey(channel, id.ClientID)
 		return true
 	})
 	b.clientChannels.Delete(id.ClientID)
 	b.handler.OnClosed(id)
+}
+func (b *broker) HandleRequest(method string, handler server.RequestHandler) {
+	b.userHandlers.Set(method, handler)
 }
 func (b *broker) onUserConnect(p *packet.Connect, net server.Network) packet.ConnectCode {
 	code := b.handler.OnConnect(p)
@@ -222,7 +282,6 @@ func (b *broker) onUserConnect(p *packet.Connect, net server.Network) packet.Con
 		return true
 	})
 	b.userClients.SetKey(p.Identity.UserID, p.Identity.ClientID, net)
-	b.channelClients.SetKey("all", p.Identity.ClientID, net)
 	if chs, err := b.handler.GetChannels(p.Identity.UserID); err == nil {
 		for _, ch := range chs {
 			b.clientChannels.SetKey(p.Identity.ClientID, ch, net)
@@ -235,71 +294,21 @@ func (b *broker) onUserMessage(p *packet.Message, id *packet.Identity) error {
 	return b.handler.OnMessage(p, id)
 }
 func (b *broker) onUserRequest(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
-	return b.handler.OnRequest(p, id)
+	handler, ok := b.userHandlers.Get(p.Method)
+	if !ok {
+		return nil, ErrRequestHandlerNotFound
+	}
+	return handler(p, id)
+}
+func (b *broker) handlePeerRequest(method string, handler server.RequestHandler) {
+	b.peerHandlers.Set(method, handler)
 }
 func (b *broker) onPeerRequest(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
-	switch p.Method {
-	case "SendMessage":
-		msg := &packet.Message{}
-		if err := coder.Unmarshal(p.Content, msg); err != nil {
-			return nil, err
-		}
-		total, success := b.sendMessage(msg)
-		encoder := coder.NewEncoder()
-		encoder.WriteVarint(total)
-		encoder.WriteVarint(success)
-		return packet.NewResponse(p.ID, encoder.Bytes()), nil
-	case "IsOnline":
-		online := b.isOnline(string(p.Content))
-		var r byte
-		if online {
-			r = 1
-		}
-		return packet.NewResponse(p.ID, []byte{r}), nil
-	case "KickConn":
-		b.kickConn(string(p.Content))
-		return packet.NewResponse(p.ID), nil
-	case "KickUser":
-		b.kickUser(string(p.Content))
-		return packet.NewResponse(p.ID), nil
-	case "Inspect":
-		isp := b.inspect()
-		data, err := json.Marshal(isp)
-		if err != nil {
-			return nil, err
-		}
-		return packet.NewResponse(p.ID, data), nil
-	case "JoinChannel":
-		decoder := coder.NewDecoder(p.Content)
-		uid, err := decoder.ReadString()
-		if err != nil {
-			return nil, err
-		}
-		chs, err := decoder.ReadStrings()
-		if err != nil {
-			return nil, err
-		}
-		count := b.joinChannel(uid, chs)
-		encoder := coder.NewEncoder()
-		encoder.WriteVarint(count)
-		return packet.NewResponse(p.ID, encoder.Bytes()), nil
-	case "LeaveChannel":
-		decoder := coder.NewDecoder(p.Content)
-		uid, err := decoder.ReadString()
-		if err != nil {
-			return nil, err
-		}
-		chs, err := decoder.ReadStrings()
-		if err != nil {
-			return nil, err
-		}
-		count := b.leaveChannel(uid, chs)
-		encoder := coder.NewEncoder()
-		encoder.WriteVarint(count)
-		return packet.NewResponse(p.ID, encoder.Bytes()), nil
-	default:
-		return nil, fmt.Errorf("unsupported request path: %s", p.Method)
+	handler, ok := b.peerHandlers.Get(p.Method)
+	if !ok {
+		return nil, ErrRequestHandlerNotFound
 	}
+	return handler(p, id)
 }
 func (b *broker) isOnline(uid string) (ok bool) {
 	b.userClients.RangeKey(uid, func(cid string, net server.Network) bool {
@@ -330,8 +339,36 @@ func (b *broker) kickUser(uid string) {
 		return true
 	})
 }
-func (b *broker) sendMessage(m *packet.Message) (total, success uint64) {
-	b.channelClients.RangeKey(m.Channel, func(cid string, net server.Network) bool {
+func (b *broker) brodcast(m *packet.Message) (total, success uint64) {
+	for net, l := range b.listeners {
+		t, s, err := l.Brodcast(m)
+		total += t
+		success += s
+		if err != nil {
+			b.logger.Error("Failed to send message to all clients", "error", err, "network", net)
+		}
+	}
+	return total, success
+}
+func (b *broker) sendToUser(uid string, m *packet.Message) (total, success uint64) {
+	b.userClients.RangeKey(uid, func(cid string, net server.Network) bool {
+		total++
+		l, ok := b.listeners[net]
+		if !ok {
+			b.logger.Error("Failed to find listener", "network", net)
+			return true
+		}
+		if err := l.SendMessage(cid, m); err != nil {
+			b.logger.Error("Failed to send message to client", "error", err, "client", cid)
+		} else {
+			success++
+		}
+		return true
+	})
+	return total, success
+}
+func (b *broker) sendToChannel(channel string, m *packet.Message) (total, success uint64) {
+	b.channelClients.RangeKey(channel, func(cid string, net server.Network) bool {
 		total++
 		l, ok := b.listeners[net]
 		if !ok {

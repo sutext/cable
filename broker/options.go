@@ -19,7 +19,6 @@ type Handler interface {
 	OnClosed(id *packet.Identity)
 	OnConnect(p *packet.Connect) (code packet.ConnectCode)
 	OnMessage(p *packet.Message, id *packet.Identity) error
-	OnRequest(p *packet.Request, id *packet.Identity) (res *packet.Response, err error)
 	GetChannels(uid string) (channels []string, err error) //uid join channels
 }
 type emptyHandler struct{}
@@ -31,9 +30,6 @@ func (h *emptyHandler) OnConnect(p *packet.Connect) (code packet.ConnectCode) {
 }
 func (h *emptyHandler) OnMessage(p *packet.Message, id *packet.Identity) error {
 	return nil
-}
-func (h *emptyHandler) OnRequest(p *packet.Request, id *packet.Identity) (res *packet.Response, err error) {
-	return nil, nil
 }
 func (h *emptyHandler) GetChannels(uid string) (channels []string, err error) {
 	return nil, nil
