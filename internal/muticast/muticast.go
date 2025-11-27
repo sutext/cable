@@ -8,6 +8,7 @@ import (
 
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/xlog"
 )
 
 type Muticast interface {
@@ -22,15 +23,16 @@ type muticast struct {
 	mu       sync.Mutex
 	addr     *net.UDPAddr
 	conn     *net.UDPConn
-	result   chan string
 	req      func(string) uint32
+	logger   *xlog.Logger
 	respChan chan *packet.Response
 }
 
 func New(id string) *muticast {
 	m := &muticast{
-		id:   id,
-		addr: &net.UDPAddr{IP: net.ParseIP("224.0.0.9"), Port: 9999},
+		id:     id,
+		logger: xlog.With("GROUP", "MUTICAST"),
+		addr:   &net.UDPAddr{IP: net.ParseIP("224.0.0.9"), Port: 9999},
 	}
 	return m
 }
@@ -46,18 +48,20 @@ func (m *muticast) Serve() error {
 	for {
 		n, addr, err := conn.ReadFromUDP(buffer)
 		if err != nil {
-			fmt.Println(err)
 			return err
 		}
 		p, err := packet.Unmarshal(buffer[:n])
 		if err != nil {
+			m.logger.Error("unmarshal packet error", err)
 			continue
 		}
 		if p.Type() != packet.REQUEST {
+			m.logger.Errorf("packet type is not request")
 			continue
 		}
 		req := p.(*packet.Request)
 		if req.Method != "discovery" {
+			m.logger.Errorf("request method is not discovery")
 			continue
 		}
 		count := m.req(string(req.Content))
@@ -67,12 +71,11 @@ func (m *muticast) Serve() error {
 		resp := packet.NewResponse(req.ID, enc.Bytes())
 		bytes, err := packet.Marshal(resp)
 		if err != nil {
-			return err
+			m.logger.Error("marshal response error", err)
+			continue
 		}
 		_, err = conn.WriteToUDP(bytes, addr)
-		if err != nil {
-			return err
-		}
+		return err
 	}
 }
 func (m *muticast) Shutdown() {
@@ -96,9 +99,11 @@ func (m *muticast) listen() error {
 		}
 		p, err := packet.Unmarshal(buffer[:n])
 		if err != nil {
+			m.logger.Error("unmarshal packet error", err)
 			continue
 		}
 		if p.Type() != packet.RESPONSE {
+			m.logger.Errorf("packet type is not response")
 			continue
 		}
 		m.respChan <- p.(*packet.Response)
@@ -131,10 +136,12 @@ func (m *muticast) Request() (r map[string]uint32, err error) {
 		denc := coder.NewDecoder(resp.Content)
 		count, err := denc.ReadUInt32()
 		if err != nil {
+			m.logger.Error("decode response error", err)
 			continue
 		}
 		id, err := denc.ReadString()
 		if err != nil {
+			m.logger.Error("decode response error", err)
 			continue
 		}
 		r[id] = count

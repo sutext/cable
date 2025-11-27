@@ -39,7 +39,7 @@ type server struct {
 func New(address string, opts ...Option) *server {
 	options := NewOptions(opts...)
 	s := &server{
-		logger:         xlog.With("[Server]", address),
+		logger:         xlog.With("GROUP", "SERVER"),
 		address:        address,
 		network:        options.network,
 		closeHandler:   options.closeHandler,
@@ -79,7 +79,7 @@ func (s *server) KickConn(cid string) bool {
 }
 func (s *server) Shutdown(ctx context.Context) error {
 	if !s.closed.CompareAndSwap(false, true) {
-		return nil
+		return ErrServerAlreadyClosed
 	}
 	s.listener.Close(ctx)
 	for {

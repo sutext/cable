@@ -11,36 +11,6 @@ type ConnectHandler func(p *packet.Connect) packet.ConnectCode
 type MessageHandler func(p *packet.Message, id *packet.Identity) error
 type RequestHandler func(p *packet.Request, id *packet.Identity) (*packet.Response, error)
 
-type Error uint8
-
-const (
-	ErrRequestTimeout Error = iota
-	ErrServerIsClosed
-	ErrConnectionClosed
-	ErrSendingQueueFull
-	ErrNetworkNotSupport
-	ErrConnectionNotFound
-)
-
-func (e Error) Error() string {
-	switch e {
-	case ErrRequestTimeout:
-		return "Request Timeout"
-	case ErrServerIsClosed:
-		return "Server Is Closed"
-	case ErrConnectionClosed:
-		return "Connection Closed"
-	case ErrSendingQueueFull:
-		return "Sending Queue Full"
-	case ErrNetworkNotSupport:
-		return "Network Not Support"
-	case ErrConnectionNotFound:
-		return "Connection Not Found"
-	default:
-		return "Unknown Error"
-	}
-}
-
 type Network uint8
 
 const (

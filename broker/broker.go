@@ -54,7 +54,7 @@ func NewBroker(opts ...Option) Broker {
 	options := newOptions(opts...)
 	b := &broker{id: options.brokerID}
 	b.brokerCount.Add(1)
-	b.logger = xlog.With("selfid", b.id)
+	b.logger = xlog.With("GROUP", "BROKER", "selfid", b.id)
 	b.handler = options.handler
 	b.muticast = muticast.New(b.id)
 	b.muticast.OnRequest(func(s string) uint32 {
@@ -110,7 +110,11 @@ func (b *broker) addPeer(id string) {
 }
 func (b *broker) Start() error {
 	for _, l := range b.listeners {
-		go l.Serve()
+		go func() {
+			if err := l.Serve(); err != nil {
+				b.logger.Error("listener serve", err)
+			}
+		}()
 	}
 	go func() {
 		if err := b.muticast.Serve(); err != nil {
@@ -123,7 +127,7 @@ func (b *broker) Start() error {
 		}
 	}()
 	go func() {
-		if err := b.httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := b.httpServer.ListenAndServe(); err != nil {
 			b.logger.Error("http server serve", err)
 		}
 	}()
