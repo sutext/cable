@@ -10,6 +10,7 @@ import (
 	"sutext.github.io/cable/internal/keepalive"
 	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/xlog"
 )
 
 type Error uint8
@@ -61,7 +62,7 @@ func New(address string, options ...Option) Client {
 	}
 	c.keepalive.PingFunc(func() {
 		if err := c.sendPacket(packet.NewPing()); err != nil {
-			slog.Error("send ping error", "error", err)
+			xlog.Error("send ping error", err)
 		}
 	})
 	c.keepalive.TimeoutFunc(func() {
@@ -95,7 +96,7 @@ func (c *client) tryClose(err error) {
 	if c.id == nil {
 		return
 	}
-	slog.Error("try close", "reason", err)
+	xlog.Error("try close", err)
 	if c.status == StatusClosed || c.status == StatusClosing {
 		return
 	}
@@ -188,7 +189,6 @@ func (c *client) sendPacket(p packet.Packet) error {
 			c.tryClose(err)
 			return
 		}
-		slog.Debug("send packet", "packet", p)
 		c.keepalive.UpdateTime()
 	})
 }
@@ -206,7 +206,7 @@ func (c *client) _setStatus(status Status) {
 	if c.status == status {
 		return
 	}
-	slog.Debug("status change", "from", c.status.String(), "to", status.String())
+	xlog.Info("client status change", slog.String("from", c.status.String()), slog.String("to", status.String()))
 	c.status = status
 	switch status {
 	case StatusClosed:
@@ -242,14 +242,12 @@ func (c *client) recv() {
 }
 
 func (c *client) handlePacket(p packet.Packet) {
-	slog.Debug("receive packet", "packet", p)
 	switch p.Type() {
 	case packet.MESSAGE:
 		msg := p.(*packet.Message)
-		slog.Debug("receive message", "message", msg)
 		err := c.handler.OnMessage(msg)
 		if err != nil {
-			slog.Error("message handler error", "error", err)
+			xlog.Error("message handler error", err)
 			return
 		}
 		if msg.Qos == packet.MessageQos1 {
@@ -261,7 +259,7 @@ func (c *client) handlePacket(p packet.Packet) {
 	case packet.REQUEST:
 		res, err := c.handler.OnRequest(p.(*packet.Request))
 		if err != nil {
-			slog.Error("request handler error", "error", err)
+			xlog.Error("request handler error", err)
 			return
 		}
 		if res != nil {
@@ -272,7 +270,7 @@ func (c *client) handlePacket(p packet.Packet) {
 		if t, ok := c.requestTasks.Load(p.ID); ok {
 			t.(chan *packet.Response) <- p
 		} else {
-			slog.Error("response task not found", "seq", p.ID)
+			xlog.Errorf("response task not found", slog.Int64("id", p.ID))
 		}
 	case packet.PING:
 		c.SendPong()

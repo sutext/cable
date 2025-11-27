@@ -66,32 +66,32 @@ func (n Network) String() string {
 }
 
 type Option struct {
-	f func(*Options)
+	f func(*options)
 }
-type Options struct {
-	UseNIO  bool
-	Network Network
+type options struct {
+	useNIO  bool
+	network Network
 	// QuicConfig     *quic.Config
-	CloseHandler   ClosedHandler
-	ConnectHandler ConnectHandler
-	MessageHandler MessageHandler
-	RequestHandler RequestHandler
+	closeHandler   ClosedHandler
+	connectHandler ConnectHandler
+	messageHandler MessageHandler
+	requestHandler RequestHandler
 }
 
-func NewOptions(opts ...Option) *Options {
-	var options = &Options{
-		Network: NetworkTCP,
-		UseNIO:  false,
-		CloseHandler: func(p *packet.Identity) {
+func NewOptions(opts ...Option) *options {
+	var options = &options{
+		useNIO:  false,
+		network: NetworkTCP,
+		closeHandler: func(p *packet.Identity) {
 
 		},
-		ConnectHandler: func(p *packet.Connect) packet.ConnectCode {
+		connectHandler: func(p *packet.Connect) packet.ConnectCode {
 			return packet.ConnectAccepted
 		},
-		MessageHandler: func(p *packet.Message, id *packet.Identity) error {
+		messageHandler: func(p *packet.Message, id *packet.Identity) error {
 			return fmt.Errorf("MessageHandler not implemented")
 		},
-		RequestHandler: func(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
+		requestHandler: func(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
 			return nil, fmt.Errorf("RequestHandler not implemented")
 		},
 	}
@@ -101,13 +101,13 @@ func NewOptions(opts ...Option) *Options {
 	return options
 }
 func WithTCP() Option {
-	return Option{f: func(o *Options) { o.Network = NetworkTCP }}
+	return Option{f: func(o *options) { o.network = NetworkTCP }}
 }
 func WithNIO(useNIO bool) Option {
-	return Option{f: func(o *Options) { o.UseNIO = useNIO }}
+	return Option{f: func(o *options) { o.useNIO = useNIO }}
 }
 func WithUDP() Option {
-	return Option{f: func(o *Options) { o.Network = NetworkUDP }}
+	return Option{f: func(o *options) { o.network = NetworkUDP }}
 }
 
 //	func WithQUIC(config *quic.Config) Option {
@@ -118,14 +118,14 @@ func WithUDP() Option {
 //	}
 
 func WithClose(handler ClosedHandler) Option {
-	return Option{f: func(o *Options) { o.CloseHandler = handler }}
+	return Option{f: func(o *options) { o.closeHandler = handler }}
 }
 func WithConnect(handler ConnectHandler) Option {
-	return Option{f: func(o *Options) { o.ConnectHandler = handler }}
+	return Option{f: func(o *options) { o.connectHandler = handler }}
 }
 func WithMessage(handler MessageHandler) Option {
-	return Option{f: func(o *Options) { o.MessageHandler = handler }}
+	return Option{f: func(o *options) { o.messageHandler = handler }}
 }
 func WithRequest(handler RequestHandler) Option {
-	return Option{f: func(o *Options) { o.RequestHandler = handler }}
+	return Option{f: func(o *options) { o.requestHandler = handler }}
 }

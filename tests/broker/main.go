@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -13,6 +12,7 @@ import (
 
 	"sutext.github.io/cable/broker"
 	"sutext.github.io/cable/server"
+	"sutext.github.io/cable/xlog"
 )
 
 func main() {
@@ -22,7 +22,7 @@ func main() {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
-			slog.Error("pprof server error:", "error", err)
+			xlog.Error("pprof server error:", err)
 		}
 	}()
 	go func() {
@@ -63,8 +63,8 @@ func main() {
 	defer timeout.Stop()
 	select {
 	case <-timeout.C:
-		slog.Warn("entry server graceful shutdown timeout")
+		xlog.Warn("entry server graceful shutdown timeout")
 	case <-done:
-		slog.Debug("entry server graceful shutdown")
+		xlog.Debug("entry server graceful shutdown")
 	}
 }
