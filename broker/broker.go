@@ -140,6 +140,7 @@ func (b *broker) syncBroker() {
 	if err != nil {
 		b.logger.Error("failed to sync broker", err)
 	}
+	b.logger.Debug("Auto discovery got endpoints", slog.Any("endpoints", m))
 	var max uint32 = 0
 	var min uint32 = 0xffff
 	for id, count := range m {

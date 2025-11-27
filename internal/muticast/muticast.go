@@ -32,21 +32,25 @@ func New(id string) *muticast {
 	m := &muticast{
 		id:     id,
 		logger: xlog.With("GROUP", "MUTICAST"),
-		addr:   &net.UDPAddr{IP: net.ParseIP("224.0.0.9"), Port: 9999},
+		addr:   &net.UDPAddr{IP: net.IPv4(224, 0, 0, 9), Port: 9999},
 	}
 	return m
 }
 
 func (m *muticast) Serve() error {
-	conn, err := net.ListenMulticastUDP("udp4", nil, m.addr)
+	listener, err := net.ListenMulticastUDP("udp4", nil, m.addr)
 	if err != nil {
 		return err
 	}
-	go m.listen()
-	defer conn.Close()
+	go func() {
+		if err := m.listen(); err != nil {
+			m.logger.Error("listen error", err)
+		}
+	}()
+	defer listener.Close()
 	buffer := make([]byte, 1024)
 	for {
-		n, addr, err := conn.ReadFromUDP(buffer)
+		n, addr, err := listener.ReadFromUDP(buffer)
 		if err != nil {
 			return err
 		}
@@ -64,20 +68,23 @@ func (m *muticast) Serve() error {
 			m.logger.Errorf("request method is not discovery")
 			continue
 		}
-		count := m.req(string(req.Content))
-		enc := coder.NewEncoder()
-		enc.WriteUInt32(count)
-		enc.WriteString(m.id)
-		resp := packet.NewResponse(req.ID, enc.Bytes())
-		bytes, err := packet.Marshal(resp)
-		if err != nil {
-			m.logger.Error("marshal response error", err)
-			continue
-		}
-		_, err = conn.WriteToUDP(bytes, addr)
-		return err
+		go func() {
+			count := m.req(string(req.Content))
+			enc := coder.NewEncoder()
+			enc.WriteUInt32(count)
+			enc.WriteString(m.id)
+			resp := packet.NewResponse(req.ID, enc.Bytes())
+			bytes, err := packet.Marshal(resp)
+			if err != nil {
+				m.logger.Error("marshal response error", err)
+			}
+			if _, err = listener.WriteToUDP(bytes, addr); err != nil {
+				m.logger.Error("write response error", err)
+			}
+		}()
 	}
 }
+
 func (m *muticast) Shutdown() {
 	m.conn.Close()
 }
@@ -125,13 +132,11 @@ func (m *muticast) Request() (r map[string]uint32, err error) {
 		return r, err
 	}
 	m.respChan = make(chan *packet.Response)
-	r = make(map[string]uint32)
 	time.AfterFunc(time.Second*5, func() {
-		m.mu.Lock()
 		close(m.respChan)
 		m.respChan = nil
-		m.mu.Unlock()
 	})
+	r = make(map[string]uint32)
 	for resp := range m.respChan {
 		denc := coder.NewDecoder(resp.Content)
 		count, err := denc.ReadUInt32()
