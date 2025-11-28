@@ -4,7 +4,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o main cmd/cable/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o main cmd/cable/*.go
 
 # 运行时阶段：使用 Distroless 静态镜像
 FROM alpine:latest

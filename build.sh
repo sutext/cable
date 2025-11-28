@@ -1,1 +1,1 @@
-docker build -t sutext/cable:latest  -f ./docker/Dockerfile .
+docker build -t sutext/cable:latest  -f ./cmd/cable/Dockerfile .

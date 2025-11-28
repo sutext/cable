@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"sync"
@@ -10,8 +11,10 @@ import (
 
 	"sutext.github.io/cable/backoff"
 	"sutext.github.io/cable/client"
+	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/xlog"
 )
 
 type Client struct {
@@ -27,6 +30,7 @@ func (c *Client) OnStatus(status client.Status) {
 
 }
 func (c *Client) OnMessage(msg *packet.Message) error {
+	xlog.Info("receive message", slog.String("msg", string(msg.Payload)))
 	return nil
 }
 func (c *Client) OnRequest(req *packet.Request) (*packet.Response, error) {
@@ -57,7 +61,7 @@ func (t *Tester) Run() {
 		}
 		t.cond.L.Unlock()
 		t.runOnce()
-		time.Sleep(time.Second * time.Duration(20+rand.IntN(10)))
+		time.Sleep(time.Second * time.Duration(10+rand.IntN(10)))
 	}
 }
 func (t *Tester) addClient() *Client {
@@ -72,6 +76,7 @@ func (t *Tester) addClient() *Client {
 	result.id = &packet.Identity{UserID: uid, ClientID: cid}
 	result.backoff = backoff.Random(time.Second*3, time.Second*10)
 	t.clients.Set(result.id.ClientID, result)
+	result.Connect()
 	return result
 
 }
@@ -85,11 +90,18 @@ func (t *Tester) handlePause(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 func (t *Tester) runOnce() {
-	max := 50
+	max := 100
+	xlog.Info("OK we pick 100 clients to send message")
 	t.clients.Range(func(key string, value *Client) bool {
 		if value.cli.Status() == client.StatusOpened {
 			max--
-			msg := packet.NewMessage(fmt.Appendf(nil, "hello i am %s", value.id.UserID))
+			enc := coder.NewEncoder()
+			toUserID := fmt.Sprintf("u%d", rand.IntN(30000))
+			enc.WriteString(toUserID)
+			enc.WriteString(fmt.Sprintf("hello i am %s", value.id.UserID))
+			msg := packet.NewMessage(enc.Bytes())
+			msg.Qos = packet.MessageQos1
+			msg.Kind = packet.MessageKind(1)
 			err := value.cli.SendMessage(context.Background(), msg)
 			if err != nil {
 				fmt.Println(err)

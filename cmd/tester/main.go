@@ -10,7 +10,7 @@ import (
 func main() {
 	xlog.SetDefault(xlog.WithLevel(xlog.LevelInfo))
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Minute*5)
+	ctx, cancel := context.WithTimeout(ctx, time.Minute*4)
 	tester := NewTester()
 	defer cancel()
 	go func() {
