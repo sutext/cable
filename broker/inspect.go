@@ -132,23 +132,25 @@ func (b *broker) handleKickout(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("ok"))
 }
 func (b *broker) handleMessage(w http.ResponseWriter, r *http.Request) {
-	// var msg packet.Message
-	// if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
-	// 	http.Error(w, err.Error(), http.StatusBadRequest)
-	// 	return
-	// }
+	uid := r.URL.Query().Get("uid")
 	channel := r.URL.Query().Get("channel")
-	if channel == "" {
-		http.Error(w, "channel is required", http.StatusBadRequest)
+	if channel == "" && uid == "" {
+		http.Error(w, "channel or uid is required", http.StatusBadRequest)
 		return
 	}
-	payload := r.URL.Query().Get("payload")
-	if payload == "" {
-		http.Error(w, "payload is required", http.StatusBadRequest)
+	msg := r.URL.Query().Get("msg")
+	if msg == "" {
+		http.Error(w, "msg is required", http.StatusBadRequest)
 		return
 	}
-	msg := packet.NewMessage([]byte(payload))
-	total, success, err := b.SendToChannel(r.Context(), channel, msg)
+	msgPacket := packet.NewMessage([]byte(msg))
+	var total, success uint64
+	var err error
+	if uid != "" {
+		total, success, err = b.SendToUser(r.Context(), uid, msgPacket)
+	} else {
+		total, success, err = b.SendToChannel(r.Context(), channel, msgPacket)
+	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -184,6 +186,29 @@ func (b *broker) handleJoin(w http.ResponseWriter, r *http.Request) {
 	}
 	resp := map[string]uint64{
 		"count": count,
+	}
+	data, err := json.MarshalIndent(resp, "", "  ")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
+}
+func (b *broker) handleBrodcast(w http.ResponseWriter, r *http.Request) {
+	msg := r.URL.Query().Get("msg")
+	if msg == "" {
+		http.Error(w, "msg is required", http.StatusBadRequest)
+		return
+	}
+	total, success, err := b.Brodcast(r.Context(), packet.NewMessage([]byte(msg)))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	resp := map[string]uint64{
+		"total":   total,
+		"success": success,
 	}
 	data, err := json.MarshalIndent(resp, "", "  ")
 	if err != nil {

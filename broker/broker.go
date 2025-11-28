@@ -89,6 +89,7 @@ func NewBroker(opts ...Option) Broker {
 	mux.HandleFunc("/inspect", b.handleInspect)
 	mux.HandleFunc("/kickout", b.handleKickout)
 	mux.HandleFunc("/message", b.handleMessage)
+	mux.HandleFunc("/brodcast", b.handleBrodcast)
 	b.httpServer = &http.Server{Addr: options.httpAddr, Handler: mux}
 	return b
 }

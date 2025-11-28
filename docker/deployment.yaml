@@ -51,6 +51,10 @@ spec:
       port: 1884
       targetPort: 1884
     - protocol: TCP
+      name: pprof
+      port: 6060
+      targetPort: 6060
+    - protocol: TCP
       name: inspect
       port: 8888
       targetPort: 8888

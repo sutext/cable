@@ -10,4 +10,4 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o main cmd/tester/main.g
 FROM alpine:latest
 COPY --from=builder /app/main /
 CMD ["/main"]
-EXPOSE 1883 1884/udp 4567 8888
+EXPOSE 6666
