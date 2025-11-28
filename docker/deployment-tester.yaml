@@ -1,0 +1,28 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: default
+  name: cable-tester
+  labels:
+    app: cable-tester
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cable-tester
+  strategy:
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 25%
+    type: RollingUpdate
+  revisionHistoryLimit: 5
+  template:
+    metadata:
+      labels:
+        app: cable-tester
+    spec:
+      containers:
+        - image: sutext/cable-tester:latest
+          imagePullPolicy: Never
+          name: cable-tester
