@@ -10,6 +10,7 @@ import (
 	"sutext.github.io/cable/backoff"
 	"sutext.github.io/cable/client"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/xlog"
 )
 
 type Client struct {
@@ -33,13 +34,12 @@ func (c *Client) OnRequest(req *packet.Request) (*packet.Response, error) {
 }
 func RandomClient() *Client {
 	result := &Client{}
-	addrs := []string{"127.0.0.1:8080", "127.0.0.1:8081", "127.0.0.1:8082", "127.0.0.1:8083"}
+	// addrs := []string{"127.0.0.1:8080", "127.0.0.1:8081", "127.0.0.1:8082", "127.0.0.1:8083"}
 	// addrs := []string{"127.0.0.1:8080"}
 	// addrs := []string{"172.16.2.123:8080", "172.16.2.123:8081", "172.16.2.123:8082", "172.16.2.123:8083"}
-	result.cli = client.New(addrs[rand.IntN(len(addrs))],
+	result.cli = client.New("172.16.2.123:1883",
 		client.WithNetwork(client.NewworkTCP),
 		client.WithKeepAlive(time.Second*5, time.Second*60),
-		client.WithHandler(result),
 		client.WithHandler(result),
 	)
 	uid := fmt.Sprintf("u%d", rand.IntN(300))
@@ -60,14 +60,14 @@ func addClient(count uint) {
 }
 func runBrokerClients() {
 	ctx := context.Background()
-	ticker := time.NewTicker(time.Millisecond * 1000)
+	ticker := time.NewTicker(time.Millisecond * 10)
 	defer ticker.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			addClient(10)
+			addClient(1)
 		}
 	}
 }
@@ -78,6 +78,7 @@ func runServerClietn() {
 	c.Connect()
 }
 func main() {
+	xlog.SetDefault(xlog.WithLevel(xlog.LevelInfo))
 	runBrokerClients()
 	// runServerClietn()
 	select {}

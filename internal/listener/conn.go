@@ -1,63 +1,124 @@
 package listener
 
 import (
-	"net"
+	"context"
+	"sync"
+	"sync/atomic"
 
+	"sutext.github.io/cable/coder"
+	"sutext.github.io/cable/internal/inflight"
+	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
+	err "sutext.github.io/cable/xerr"
+	"sutext.github.io/cable/xlog"
 )
 
-type conn interface {
-	ID() *packet.Identity
-	close() error
-	writePacket(p packet.Packet) error
+type Conn struct {
+	raw          conn
+	closed       atomic.Bool
+	logger       *xlog.Logger
+	recvQueue    *queue.Queue
+	sendQueue    *queue.Queue
+	inflights    *inflight.Inflight
+	closeHandler func(c *Conn)
+	requestTasks sync.Map
 }
 
-type udpConn struct {
-	id   *packet.Identity
-	raw  *net.UDPConn
-	addr *net.UDPAddr
-}
-
-func (c *udpConn) ID() *packet.Identity {
-	return c.id
-}
-func (c *udpConn) close() error {
-	return nil
-}
-func (c *udpConn) writePacket(p packet.Packet) error {
-	data, err := packet.Marshal(p)
-	if err != nil {
-		return err
+func newConn(raw conn) *Conn {
+	c := &Conn{
+		raw:       raw,
+		logger:    xlog.With("GROUP", "SERVER"),
+		recvQueue: queue.New(1024),
+		sendQueue: queue.New(1024),
 	}
-	_, err = c.raw.WriteToUDP(data, c.addr)
-	return err
+	c.inflights = inflight.New(func(m *packet.Message) {
+		c.SendPacket(m)
+	})
+	return c
+}
+func (c *Conn) ID() *packet.Identity {
+	return c.raw.ID()
+}
+func (c *Conn) IsIdle() bool {
+	return c.recvQueue.IsIdle()
+}
+func (c *Conn) OnClose(handler func(c *Conn)) {
+	c.closeHandler = handler
+}
+func (c *Conn) IsClosed() bool {
+	return c.closed.Load()
 }
 
-func newUDPConn(id *packet.Identity, raw *net.UDPConn, addr *net.UDPAddr) *Conn {
-	return newConn(&udpConn{
-		id:   id,
-		raw:  raw,
-		addr: addr,
+func (c *Conn) SendMessage(p *packet.Message) error {
+	if p.Qos == packet.MessageQos1 {
+		c.inflights.Add(p)
+	}
+	return c.SendPacket(p)
+}
+func (c *Conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {
+	resp := make(chan *packet.Response)
+	defer close(resp)
+	c.requestTasks.Store(p.ID, resp)
+	defer c.requestTasks.Delete(p.ID)
+	if err := c.SendPacket(p); err != nil {
+		return nil, err
+	}
+	select {
+	case res := <-resp:
+		return res, nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+func (c *Conn) RecvMessack(p *packet.Messack) {
+	c.inflights.Remove(p.ID)
+}
+func (c *Conn) RecvResponse(p *packet.Response) {
+	if resp, ok := c.requestTasks.Load(p.ID); ok {
+		resp.(chan *packet.Response) <- p
+	}
+}
+func (c *Conn) Close() {
+	if c.closed.CompareAndSwap(false, true) {
+		c.recvQueue.Close()
+		c.raw.close()
+		if c.closeHandler != nil {
+			c.closeHandler(c)
+		}
+	}
+}
+func (c *Conn) ClosePacket(p packet.Packet) error {
+	if c.closed.Load() {
+		return err.ConnectionIsClosed
+	}
+	return c.sendQueue.AddTask(func() {
+		if c.closed.Load() {
+			return
+		}
+		if err := c.raw.writePacket(p); err != nil {
+			c.logger.Error("failed to send packet", err)
+		}
+		c.Close()
 	})
 }
-
-type tcpConn struct {
-	id  *packet.Identity
-	raw *net.TCPConn
-}
-
-func (c *tcpConn) ID() *packet.Identity {
-	return c.id
-}
-func (c *tcpConn) close() error {
-	return c.raw.Close()
-}
-func (c *tcpConn) writePacket(p packet.Packet) error {
-	return packet.WriteTo(c.raw, p)
-}
-func newTCPConn(id *packet.Identity, raw *net.TCPConn) *Conn {
-	return newConn(&tcpConn{
-		id:  id,
-		raw: raw,
+func (c *Conn) SendPacket(p packet.Packet) error {
+	if c.closed.Load() {
+		return err.ConnectionIsClosed
+	}
+	return c.sendQueue.AddTask(func() {
+		if c.closed.Load() {
+			c.logger.Errorf("try to send packet on closed connection")
+			return
+		}
+		err := c.raw.writePacket(p)
+		if err != nil {
+			c.logger.Error("failed to send packet", err)
+			switch err.(type) {
+			case packet.Error, coder.Error:
+				break
+			default:
+				c.Close()
+			}
+		}
 	})
 }

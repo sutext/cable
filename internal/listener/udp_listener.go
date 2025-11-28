@@ -65,8 +65,7 @@ func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.
 	c := newUDPConn(connPacket.Identity, conn, addr)
 	code := l.acceptHandler(connPacket, c)
 	if code != packet.ConnectAccepted {
-		c.SendPacket(packet.NewConnack(code))
-		c.Close()
+		c.ClosePacket(packet.NewConnack(code))
 		return
 	}
 	c.SendPacket(packet.NewConnack(packet.ConnectAccepted))

@@ -5,6 +5,7 @@ import (
 
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/xerr"
 )
 
 func (b *broker) handleSendMessage(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
@@ -28,7 +29,7 @@ func (b *broker) handleSendMessage(p *packet.Request, id *packet.Identity) (*pac
 	case 2:
 		total, success = b.sendToChannel(target, msg)
 	default:
-		return nil, ErrInvalidMessageFlag
+		return nil, xerr.InvalidPeerMessageFlag
 	}
 	enc := coder.NewEncoder()
 	enc.WriteVarint(total)

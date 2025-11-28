@@ -15,6 +15,7 @@ import (
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
+	"sutext.github.io/cable/xerr"
 	"sutext.github.io/cable/xlog"
 )
 
@@ -224,7 +225,7 @@ func (b *broker) Brodcast(ctx context.Context, m *packet.Message) (total, succes
 }
 func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) (total, success uint64, err error) {
 	if uid == "" {
-		return 0, 0, ErrInvalidUserID
+		return 0, 0, xerr.InvalidUserID
 	}
 	total, success = b.sendToUser(uid, m)
 	b.peers.Range(func(id string, peer *peer) bool {
@@ -240,7 +241,7 @@ func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 }
 func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success uint64, err error) {
 	if channel == "" {
-		return 0, 0, ErrInvalidChannel
+		return 0, 0, xerr.InvalidChannel
 	}
 	total, success = b.sendToChannel(channel, m)
 	b.peers.Range(func(id string, peer *peer) bool {
@@ -311,7 +312,7 @@ func (b *broker) onUserMessage(p *packet.Message, id *packet.Identity) error {
 func (b *broker) onUserRequest(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
 	handler, ok := b.userHandlers.Get(p.Method)
 	if !ok {
-		return nil, ErrRequestHandlerNotFound
+		return nil, xerr.RequestHandlerNotFound
 	}
 	return handler(p, id)
 }
@@ -321,7 +322,7 @@ func (b *broker) handlePeerRequest(method string, handler server.RequestHandler)
 func (b *broker) onPeerRequest(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
 	handler, ok := b.peerHandlers.Get(p.Method)
 	if !ok {
-		return nil, ErrRequestHandlerNotFound
+		return nil, xerr.RequestHandlerNotFound
 	}
 	return handler(p, id)
 }

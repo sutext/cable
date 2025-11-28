@@ -3,6 +3,7 @@ package client
 import (
 	"time"
 
+	"sutext.github.io/cable/backoff"
 	"sutext.github.io/cable/packet"
 )
 
@@ -56,6 +57,7 @@ type Option struct {
 func newOptions(options ...Option) *Options {
 	opts := &Options{
 		handler:        &emptyHandler{},
+		retrier:        NewRetrier(20, backoff.Exponential(2, 2)),
 		network:        NewworkTCP,
 		pingTimeout:    time.Second * 5,
 		pingInterval:   time.Second * 60,

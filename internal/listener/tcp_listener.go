@@ -61,15 +61,14 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 		c := newTCPConn(r.Value().Identity, conn)
 		code := l.acceptHandler(r.Value(), c)
 		if code != packet.ConnectAccepted {
-			c.SendPacket(packet.NewConnack(code))
-			c.Close()
+			c.ClosePacket(packet.NewConnack(code))
 			return
 		}
 		c.SendPacket(packet.NewConnack(packet.ConnectAccepted))
 		for {
 			p, err := packet.ReadFrom(conn)
 			if err != nil {
-				c.CloseCode(packet.AsCloseCode(err))
+				c.ClosePacket(packet.NewClose(packet.AsCloseCode(err)))
 				return
 			}
 			c.recvQueue.AddTask(func() {

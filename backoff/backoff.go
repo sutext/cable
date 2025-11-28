@@ -7,7 +7,7 @@ import (
 )
 
 type Backoff interface {
-	Next(count int) time.Duration
+	Next(count int64) time.Duration
 }
 
 func Default() Backoff {
@@ -42,7 +42,7 @@ type constantBackoff struct {
 	duration time.Duration
 }
 
-func (b constantBackoff) Next(count int) time.Duration {
+func (b constantBackoff) Next(count int64) time.Duration {
 	return b.duration
 }
 
@@ -51,7 +51,7 @@ type exponentialBackoff struct {
 	exponent float64
 }
 
-func (b exponentialBackoff) Next(count int) time.Duration {
+func (b exponentialBackoff) Next(count int64) time.Duration {
 	return time.Duration(float64(b.base) * math.Pow(b.exponent, float64(count)))
 }
 
@@ -60,7 +60,7 @@ type linearBackoff struct {
 	step time.Duration
 }
 
-func (b linearBackoff) Next(count int) time.Duration {
+func (b linearBackoff) Next(count int64) time.Duration {
 	return b.base + time.Duration(count)*b.step
 }
 
@@ -69,6 +69,6 @@ type randomBackoff struct {
 	max time.Duration
 }
 
-func (b randomBackoff) Next(count int) time.Duration {
+func (b randomBackoff) Next(count int64) time.Duration {
 	return time.Duration(float64(b.min) + float64(b.max-b.min)*rand.Float64())
 }

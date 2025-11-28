@@ -45,12 +45,10 @@ func (i *Identity) Equal(other *Identity) bool {
 }
 
 const (
-	restartMask uint8 = 0x80
 	versionMask uint8 = 0x3f
 )
 
 type Connect struct {
-	Restart  bool
 	Version  uint8
 	Identity *Identity
 }
@@ -73,13 +71,11 @@ func (p *Connect) Equal(other Packet) bool {
 		return false
 	}
 	otherP := other.(*Connect)
-	return p.Restart == otherP.Restart && p.Version == otherP.Version && p.Identity.Equal(otherP.Identity)
+	return p.Version == otherP.Version && p.Identity.Equal(otherP.Identity)
 }
 func (p *Connect) WriteTo(w coder.Encoder) error {
 	flags := uint8(0)
-	if p.Restart {
-		flags |= restartMask
-	}
+
 	flags |= p.Version & versionMask
 	w.WriteUInt8(flags)
 	return p.Identity.WriteTo(w)
@@ -95,7 +91,6 @@ func (p *Connect) ReadFrom(r coder.Decoder) error {
 	if err != nil {
 		return err
 	}
-	p.Restart = flags&restartMask != 0
 	p.Version = flags & versionMask
 	p.Identity = identity
 	return nil

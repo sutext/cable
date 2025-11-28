@@ -10,7 +10,7 @@ import (
 var defaultLogger atomic.Pointer[Logger]
 
 func init() {
-	defaultLogger.Store(NewText(LevelDebug))
+	defaultLogger.Store(NewText(LevelInfo))
 }
 
 func Debug(msg string, fields ...slog.Attr) {
@@ -33,7 +33,8 @@ func Errorf(msg string, fields ...slog.Attr) {
 }
 
 type Logger struct {
-	s *slog.Logger
+	json bool
+	s    *slog.Logger
 }
 
 const (
@@ -46,17 +47,20 @@ const (
 func With(args ...any) *Logger {
 	return Defualt().With(args...)
 }
+func WithLevel(level slog.Level) *Logger {
+	return Defualt().WithLevel(level)
+}
 func NewText(level slog.Level) *Logger {
 	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: level,
 	})
-	return &Logger{s: slog.New(handler)}
+	return &Logger{s: slog.New(handler), json: false}
 }
 func NewJSON(level slog.Level) *Logger {
 	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
 		Level: level,
 	})
-	return &Logger{s: slog.New(handler)}
+	return &Logger{s: slog.New(handler), json: true}
 }
 
 func Defualt() *Logger {
@@ -67,6 +71,12 @@ func SetDefault(l *Logger) {
 }
 func (l *Logger) With(args ...any) *Logger {
 	return &Logger{s: l.s.With(args...)}
+}
+func (l *Logger) WithLevel(level slog.Level) *Logger {
+	if l.json {
+		return NewJSON(level)
+	}
+	return NewText(level)
 }
 func (l *Logger) Debug(msg string, fields ...slog.Attr) {
 	l.s.LogAttrs(context.Background(), slog.LevelDebug, msg, fields...)

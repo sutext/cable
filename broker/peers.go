@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"math"
 	"strings"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"sutext.github.io/cable/client"
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/xerr"
 )
 
 type peer struct {
@@ -48,7 +50,10 @@ func (p *peer) Connect() {
 	p.client.Connect(&packet.Identity{ClientID: p.broker.id, UserID: p.broker.id})
 }
 func (p *peer) OnStatus(status client.Status) {
-	if status == client.StatusClosed {
+	switch status {
+	case client.StatusOpened:
+		p.broker.logger.Info("peer connected", slog.String("peer", p.id))
+	case client.StatusClosed:
 		p.broker.delPeer(p.id)
 	}
 }
@@ -61,18 +66,18 @@ func (h *peer) OnRequest(p *packet.Request) (*packet.Response, error) {
 }
 func (p *peer) sendMessage(ctx context.Context, m *packet.Message, target string, flag uint8) (total, success uint64, err error) {
 	if p.client.Status() != client.StatusOpened {
-		return 0, 0, ErrPeerNotReady
+		return 0, 0, xerr.BrokerPeerNotReady
 	}
 	enc := coder.NewEncoder()
 	enc.WriteUInt8(flag)
 	enc.WriteString(target)
-	if err = m.WriteTo(enc); err != nil {
+	if err := m.WriteTo(enc); err != nil {
 		return 0, 0, err
 	}
 	req := packet.NewRequest("SendMessage", enc.Bytes())
 	res, err := p.client.SendRequest(ctx, req)
 	if err != nil {
-		return
+		return 0, 0, err
 	}
 	decoder := coder.NewDecoder(res.Content)
 	if total, err = decoder.ReadVarint(); err != nil {
@@ -85,7 +90,7 @@ func (p *peer) sendMessage(ctx context.Context, m *packet.Message, target string
 }
 func (p *peer) isOnline(ctx context.Context, uid string) (bool, error) {
 	if p.client.Status() != client.StatusOpened {
-		return false, ErrPeerNotReady
+		return false, xerr.BrokerPeerNotReady
 	}
 	req := packet.NewRequest("IsOnline", []byte(uid))
 	res, err := p.client.SendRequest(ctx, req)
@@ -96,7 +101,7 @@ func (p *peer) isOnline(ctx context.Context, uid string) (bool, error) {
 }
 func (p *peer) kickConn(ctx context.Context, cid string) error {
 	if p.client.Status() != client.StatusOpened {
-		return ErrPeerNotReady
+		return xerr.BrokerPeerNotReady
 	}
 	req := packet.NewRequest("KickConn", []byte(cid))
 	_, err := p.client.SendRequest(ctx, req)
@@ -104,7 +109,7 @@ func (p *peer) kickConn(ctx context.Context, cid string) error {
 }
 func (p *peer) kickUser(ctx context.Context, uid string) error {
 	if p.client.Status() != client.StatusOpened {
-		return ErrPeerNotReady
+		return xerr.BrokerPeerNotReady
 	}
 	req := packet.NewRequest("KickUser", []byte(uid))
 	_, err := p.client.SendRequest(ctx, req)
@@ -112,7 +117,7 @@ func (p *peer) kickUser(ctx context.Context, uid string) error {
 }
 func (p *peer) inspect(ctx context.Context) (*Inspect, error) {
 	if p.client.Status() != client.StatusOpened {
-		return nil, ErrPeerNotReady
+		return nil, xerr.BrokerPeerNotReady
 	}
 	req := packet.NewRequest("Inspect")
 	res, err := p.client.SendRequest(ctx, req)
@@ -128,7 +133,7 @@ func (p *peer) inspect(ctx context.Context) (*Inspect, error) {
 
 func (p *peer) joinChannel(ctx context.Context, uid string, channels []string) (count uint64, err error) {
 	if p.client.Status() != client.StatusOpened {
-		return 0, ErrPeerNotReady
+		return 0, xerr.BrokerPeerNotReady
 	}
 	encoder := coder.NewEncoder()
 	encoder.WriteString(uid)
@@ -147,7 +152,7 @@ func (p *peer) joinChannel(ctx context.Context, uid string, channels []string) (
 
 func (p *peer) leaveChannel(ctx context.Context, uid string, channels []string) (count uint64, err error) {
 	if p.client.Status() != client.StatusOpened {
-		return 0, ErrPeerNotReady
+		return 0, xerr.BrokerPeerNotReady
 	}
 	encoder := coder.NewEncoder()
 	encoder.WriteString(uid)

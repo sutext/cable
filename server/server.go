@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"sutext.github.io/cable/internal/listener"
-	"sutext.github.io/cable/internal/mq"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/xerr"
 	"sutext.github.io/cable/xlog"
 )
 
@@ -24,7 +24,6 @@ type Server interface {
 }
 type server struct {
 	conns          safe.Map[string, *listener.Conn]
-	queues         safe.Map[string, *mq.Queue]
 	logger         *xlog.Logger
 	closed         atomic.Bool
 	address        string
@@ -57,7 +56,7 @@ func (s *server) Serve() error {
 	case NetworkUDP:
 		s.listener = listener.NewUDP()
 	default:
-		return ErrNetworkNotSupport
+		return xerr.NetworkNotSupported
 	}
 	s.listener.OnAccept(s.onConnect)
 	s.listener.OnPacket(s.onPacket)
@@ -70,18 +69,17 @@ func (s *server) IsActive(cid string) bool {
 	return false
 }
 func (s *server) KickConn(cid string) bool {
-	if cn, ok := s.conns.Get(cid); ok {
-		cn.CloseCode(packet.CloseKickedOut)
-		s.conns.Delete(cid)
+	if c, ok := s.conns.Get(cid); ok {
+		c.ClosePacket(packet.NewClose(packet.CloseKickedOut))
 		return true
 	}
 	return false
 }
 func (s *server) Shutdown(ctx context.Context) error {
 	if !s.closed.CompareAndSwap(false, true) {
-		return ErrServerAlreadyClosed
+		return xerr.ServerAlreadyClosed
 	}
-	s.listener.Close(ctx)
+	err := s.listener.Close(ctx)
 	for {
 		activeConn := 0
 		s.conns.Range(func(key string, conn *listener.Conn) bool {
@@ -93,7 +91,7 @@ func (s *server) Shutdown(ctx context.Context) error {
 			return true
 		})
 		if activeConn == 0 { // all connections have been closed
-			return nil
+			return err
 		}
 		waitTime := time.Millisecond * time.Duration(activeConn)
 		if waitTime > time.Second { // max wait time is 1000 ms
@@ -112,17 +110,14 @@ func (s *server) Shutdown(ctx context.Context) error {
 func (s *server) Network() Network {
 	return s.network
 }
-func (s *server) Brodcast(p *packet.Message) (total, success uint64, err error) {
+func (s *server) Brodcast(p *packet.Message) (uint64, uint64, error) {
 	if s.closed.Load() {
-		return 0, 0, ErrServerIsClosed
+		return 0, 0, xerr.ServerIsClosed
 	}
+	var total, success uint64
 	s.conns.Range(func(cid string, conn *listener.Conn) bool {
 		total++
-		q, _ := s.queues.GetOrSet(cid, mq.NewQueue(1024))
-		err := q.AddTask(func() {
-			conn.SendMessage(p)
-		})
-		if err == nil {
+		if err := conn.SendMessage(p); err == nil {
 			success++
 		}
 		return true
@@ -131,28 +126,21 @@ func (s *server) Brodcast(p *packet.Message) (total, success uint64, err error) 
 }
 func (s *server) SendMessage(cid string, p *packet.Message) error {
 	if s.closed.Load() {
-		return ErrServerIsClosed
+		return xerr.ServerIsClosed
 	}
-	if _, ok := s.conns.Get(cid); !ok {
-		return ErrConnectionNotFound
+	if c, ok := s.conns.Get(cid); ok {
+		return c.SendMessage(p)
 	}
-	q, _ := s.queues.GetOrSet(cid, mq.NewQueue(1024))
-	return q.AddTask(func() {
-		if c, ok := s.conns.Get(cid); ok {
-			if err := c.SendMessage(p); err != nil {
-				s.logger.Error("[Server] failed to send message", err)
-			}
-		}
-	})
+	return xerr.ConnectionNotFound
 }
 func (s *server) SendRequest(ctx context.Context, cid string, p *packet.Request) (*packet.Response, error) {
 	if s.closed.Load() {
-		return nil, ErrServerIsClosed
+		return nil, xerr.ServerIsClosed
 	}
 	if c, ok := s.conns.Get(cid); ok {
 		return c.SendRequest(ctx, p)
 	}
-	return nil, ErrConnectionNotFound
+	return nil, xerr.ConnectionNotFound
 }
 
 // Below is the code of /Users/vidar/github/cable/server/conn.go
@@ -185,14 +173,7 @@ func (s *server) onConnect(p *packet.Connect, c *listener.Conn) packet.ConnectCo
 	if code == packet.ConnectAccepted {
 		c.OnClose(s.onClose)
 		if old, loaded := s.conns.Swap(p.Identity.ClientID, c); loaded {
-			old.CloseCode(packet.CloseDuplicateLogin)
-		}
-		if q, ok := s.queues.Get(p.Identity.ClientID); ok {
-			if p.Restart {
-				q.Clear()
-			} else {
-				q.Resume()
-			}
+			old.ClosePacket(packet.NewClose(packet.CloseDuplicateLogin))
 		}
 	}
 	return code
@@ -223,9 +204,6 @@ func (s *server) onClose(c *listener.Conn) {
 	id := c.ID()
 	if id != nil {
 		s.conns.Delete(id.ClientID)
-		if q, ok := s.queues.Get(id.ClientID); ok {
-			q.Pause()
-		}
 		s.closeHandler(id)
 	}
 }

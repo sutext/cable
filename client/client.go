@@ -208,13 +208,15 @@ func (c *client) _setStatus(status Status) {
 	if c.status == status {
 		return
 	}
-	xlog.Debug("client status change", slog.String("from", c.status.String()), slog.String("to", status.String()))
+	c.logger.Debug("client status change", slog.String("from", c.status.String()), slog.String("to", status.String()))
 	c.status = status
 	switch status {
 	case StatusClosed:
 		c.keepalive.Stop()
 		c.inflights.Stop()
-		c.retrier.cancel()
+		if c.retrier != nil {
+			c.retrier.cancel()
+		}
 		c.conn.Close()
 	case StatusOpening, StatusClosing:
 		c.keepalive.Stop()
@@ -274,7 +276,7 @@ func (c *client) handlePacket(p packet.Packet) {
 		if t, ok := c.requestTasks.Load(p.ID); ok {
 			t.(chan *packet.Response) <- p
 		} else {
-			xlog.Errorf("response task not found", slog.Int64("id", p.ID))
+			c.logger.Errorf("response task not found", slog.Int64("id", p.ID))
 		}
 	case packet.PING:
 		if err := c.SendPong(); err != nil {

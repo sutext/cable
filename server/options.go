@@ -39,7 +39,6 @@ type Option struct {
 	f func(*options)
 }
 type options struct {
-	useNIO  bool
 	network Network
 	// QuicConfig     *quic.Config
 	closeHandler   ClosedHandler
@@ -50,7 +49,6 @@ type options struct {
 
 func NewOptions(opts ...Option) *options {
 	var options = &options{
-		useNIO:  false,
 		network: NetworkTCP,
 		closeHandler: func(p *packet.Identity) {
 
@@ -72,9 +70,6 @@ func NewOptions(opts ...Option) *options {
 }
 func WithTCP() Option {
 	return Option{f: func(o *options) { o.network = NetworkTCP }}
-}
-func WithNIO(useNIO bool) Option {
-	return Option{f: func(o *options) { o.useNIO = useNIO }}
 }
 func WithUDP() Option {
 	return Option{f: func(o *options) { o.network = NetworkUDP }}
