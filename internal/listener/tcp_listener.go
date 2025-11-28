@@ -2,21 +2,25 @@ package listener
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"time"
 
-	"sutext.github.io/cable/internal/result"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/xlog"
 )
 
 type tcpListener struct {
+	logger        *xlog.Logger
 	listener      *net.TCPListener
 	packetHandler func(p packet.Packet, c *Conn)
 	acceptHandler func(*packet.Connect, *Conn) packet.ConnectCode
 }
 
 func NewTCP() Listener {
-	return &tcpListener{}
+	return &tcpListener{
+		logger: xlog.With("GROUP", "SERVER"),
+	}
 }
 func (l *tcpListener) OnAccept(handler func(*packet.Connect, *Conn) packet.ConnectCode) {
 	l.acceptHandler = handler
@@ -46,51 +50,39 @@ func (l *tcpListener) Listen(address string) error {
 		go l.handleConn(conn)
 	}
 }
-
 func (l *tcpListener) handleConn(conn *net.TCPConn) {
-	ch := make(chan result.Result[*packet.Connect])
-	defer close(ch)
-	go l.readConnect(conn, ch)
-	select {
-	case r := <-ch:
-		if r.Error() != nil {
-			packet.WriteTo(conn, packet.NewClose(packet.AsCloseCode(r.Error())))
-			conn.Close()
-			return
-		}
-		c := newTCPConn(r.Value().Identity, conn)
-		code := l.acceptHandler(r.Value(), c)
-		if code != packet.ConnectAccepted {
-			c.ClosePacket(packet.NewConnack(code))
-			return
-		}
-		c.SendPacket(packet.NewConnack(packet.ConnectAccepted))
-		for {
-			p, err := packet.ReadFrom(conn)
-			if err != nil {
-				c.ClosePacket(packet.NewClose(packet.AsCloseCode(err)))
-				return
-			}
-			c.recvQueue.AddTask(func() {
-				l.packetHandler(p, c)
-			})
-		}
-	case <-time.After(time.Second * 10):
-		packet.WriteTo(conn, packet.NewClose(packet.CloseAuthenticationTimeout))
+	timer := time.AfterFunc(time.Second*10, func() {
+		l.logger.Warn("waite conn packet timeout")
+		conn.Close()
+	})
+	p, err := packet.ReadFrom(conn)
+	if err != nil {
+		l.logger.Error("failed to read packet", err)
 		conn.Close()
 		return
 	}
-}
-
-func (l *tcpListener) readConnect(conn *net.TCPConn, ch chan<- result.Result[*packet.Connect]) {
-	p, err := packet.ReadFrom(conn)
-	if err != nil {
-		ch <- result.Err[*packet.Connect](err)
-		return
-	}
 	if p.Type() != packet.CONNECT {
-		ch <- result.Err[*packet.Connect](packet.CloseInvalidPacket)
+		l.logger.Errorf("first packet is not connect packet", slog.String("packetType", p.Type().String()))
+		conn.Close()
 		return
 	}
-	ch <- result.OK(p.(*packet.Connect))
+	connPacket := p.(*packet.Connect)
+	c := newTCPConn(connPacket.Identity, conn)
+	code := l.acceptHandler(connPacket, c)
+	if code != packet.ConnectAccepted {
+		c.ClosePacket(packet.NewConnack(code))
+		return
+	}
+	timer.Stop()
+	c.SendPacket(packet.NewConnack(packet.ConnectAccepted))
+	for {
+		p, err := packet.ReadFrom(conn)
+		if err != nil {
+			c.ClosePacket(packet.NewClose(packet.AsCloseCode(err)))
+			return
+		}
+		c.recvQueue.AddTask(func() {
+			l.packetHandler(p, c)
+		})
+	}
 }

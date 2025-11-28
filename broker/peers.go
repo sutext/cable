@@ -52,7 +52,7 @@ func (p *peer) Connect() {
 func (p *peer) OnStatus(status client.Status) {
 	switch status {
 	case client.StatusOpened:
-		p.broker.logger.Info("peer connected", slog.String("peer", p.id))
+		p.broker.logger.Info("peer connected", slog.String("peerid", p.id))
 	case client.StatusClosed:
 		p.broker.delPeer(p.id)
 	}

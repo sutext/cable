@@ -183,30 +183,39 @@ func (b *broker) Shutdown(ctx context.Context) error {
 	return b.peerServer.Shutdown(ctx)
 }
 
-func (b *broker) IsOnline(ctx context.Context, uid string) (ok bool) {
-	if ok = b.isOnline(uid); ok {
+func (b *broker) IsOnline(ctx context.Context, uid string) (online bool) {
+	if online = b.isOnline(uid); online {
 		return true
 	}
 	b.peers.Range(func(id string, peer *peer) bool {
-		if ok, _ = peer.isOnline(ctx, uid); ok {
-			ok = true
+		online, err := peer.isOnline(ctx, uid)
+		if err != nil {
+			b.logger.Error("check online from peer failed", err)
+			return true
+		}
+		if online {
+			online = true
 			return false
 		}
 		return true
 	})
-	return ok
+	return online
 }
 func (b *broker) KickConn(ctx context.Context, cid string) {
 	b.kickConn(cid)
 	b.peers.Range(func(id string, peer *peer) bool {
-		peer.kickConn(ctx, cid)
+		if err := peer.kickConn(ctx, cid); err != nil {
+			b.logger.Error("kick conn from peer failed", err)
+		}
 		return true
 	})
 }
 func (b *broker) KickUser(ctx context.Context, uid string) {
 	b.kickUser(uid)
 	b.peers.Range(func(id string, peer *peer) bool {
-		peer.kickUser(ctx, uid)
+		if err := peer.kickUser(ctx, uid); err != nil {
+			b.logger.Error("kick user from peer failed", err)
+		}
 		return true
 	})
 }
@@ -217,7 +226,7 @@ func (b *broker) Brodcast(ctx context.Context, m *packet.Message) (total, succes
 			total += t
 			success += s
 		} else {
-			return false
+			b.logger.Error("brodcast to peer failed", err)
 		}
 		return true
 	})
@@ -229,12 +238,13 @@ func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 	}
 	total, success = b.sendToUser(uid, m)
 	b.peers.Range(func(id string, peer *peer) bool {
-		if t, s, err := peer.sendMessage(ctx, m, uid, 1); err == nil {
-			total += t
-			success += s
-		} else {
-			return false
+		t, s, err := peer.sendMessage(ctx, m, uid, 1)
+		if err != nil {
+			b.logger.Error("peer send to user failed", err)
+			return true
 		}
+		total += t
+		success += s
 		return true
 	})
 	return total, success, nil
@@ -249,7 +259,7 @@ func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Me
 			total += t
 			success += s
 		} else {
-			return false
+			b.logger.Error("peer send to channel failed", err)
 		}
 		return true
 	})
@@ -260,6 +270,8 @@ func (b *broker) JoinChannel(ctx context.Context, uid string, channels ...string
 	b.peers.Range(func(id string, peer *peer) bool {
 		if c, err := peer.joinChannel(ctx, uid, channels); err == nil {
 			count += c
+		} else {
+			b.logger.Error("peer join channel failed", err)
 		}
 		return true
 	})
@@ -270,6 +282,8 @@ func (b *broker) LeaveChannel(ctx context.Context, uid string, channels ...strin
 	b.peers.Range(func(id string, peer *peer) bool {
 		if c, err := peer.leaveChannel(ctx, uid, channels); err == nil {
 			count += c
+		} else {
+			b.logger.Error("peer leave channel failed", err)
 		}
 		return true
 	})

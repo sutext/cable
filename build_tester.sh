@@ -1,0 +1,1 @@
+docker build -t sutext/cable-tester:latest  -f ./cmd/tester/Dockerfile .

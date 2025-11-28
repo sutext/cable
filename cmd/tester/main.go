@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"math"
 	"math/rand/v2"
 	"sync"
 	"time"
@@ -11,6 +10,7 @@ import (
 	"sutext.github.io/cable/backoff"
 	"sutext.github.io/cable/client"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/xlog"
 )
 
 type Client struct {
@@ -27,20 +27,15 @@ func (c *Client) OnStatus(status client.Status) {
 }
 func (c *Client) OnMessage(msg *packet.Message) error {
 	return nil
-	// fmt.Printf("client %s receive message: %s\n", c.id.UserID, string(msg.Payload))
 }
 func (c *Client) OnRequest(req *packet.Request) (*packet.Response, error) {
 	return nil, fmt.Errorf("unsupported request")
 }
 func RandomClient() *Client {
 	result := &Client{}
-	addrs := []string{"127.0.0.1:8080", "127.0.0.1:8081", "127.0.0.1:8082", "127.0.0.1:8083"}
-	// addrs := []string{"127.0.0.1:8080"}
-	// addrs := []string{"172.16.2.123:8080", "172.16.2.123:8081", "172.16.2.123:8082", "172.16.2.123:8083"}
-	result.cli = client.New(addrs[rand.IntN(len(addrs))],
+	result.cli = client.New("172.16.2.123:1883",
 		client.WithNetwork(client.NewworkTCP),
 		client.WithKeepAlive(time.Second*5, time.Second*60),
-		client.WithRetrier(client.NewRetrier(math.MaxInt, backoff.Exponential(2, 2))),
 		client.WithHandler(result),
 	)
 	uid := fmt.Sprintf("u%d", rand.IntN(300))
@@ -50,36 +45,25 @@ func RandomClient() *Client {
 	return result
 }
 
-var clients sync.Map
-
-func addClient(count uint) {
-	for range count {
-		c := RandomClient()
-		clients.Store(c.id.ClientID, c)
-		go c.Connect()
-	}
-}
-func runBrokerClients() {
-	ctx := context.Background()
-	ticker := time.NewTicker(time.Millisecond * 1000)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			addClient(10)
-		}
-	}
-}
-
-func runServerClietn() {
-	c := RandomClient()
-	clients.Store(c.id.ClientID, c)
-	c.Connect()
-}
 func main() {
-	runBrokerClients()
-	// runServerClietn()
+	xlog.SetDefault(xlog.WithLevel(xlog.LevelInfo))
+	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(ctx, time.Second*70)
+	var clients sync.Map
+	defer cancel()
+	go func() {
+		ticker := time.NewTicker(time.Millisecond * 10)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				c := RandomClient()
+				clients.Store(c.id.ClientID, c)
+				go c.Connect()
+			}
+		}
+	}()
 	select {}
 }
