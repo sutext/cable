@@ -55,7 +55,7 @@ func NewBroker(opts ...Option) Broker {
 	options := newOptions(opts...)
 	b := &broker{id: options.brokerID}
 	b.brokerCount.Add(1)
-	b.logger = xlog.With("GROUP", "BROKER", "selfid", b.id)
+	b.logger = xlog.With("GROUP", "BROKER")
 	b.handler = options.handler
 	b.muticast = muticast.New(b.id)
 	b.muticast.OnRequest(func(s string) int32 {
@@ -175,13 +175,14 @@ func (b *broker) syncBroker() {
 		time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.syncBroker)
 	}
 }
-func (b *broker) Shutdown(ctx context.Context) error {
+func (b *broker) Shutdown(ctx context.Context) (err error) {
 	for _, l := range b.listeners {
-		l.Shutdown(ctx)
+		err = l.Shutdown(ctx)
 	}
-	b.muticast.Shutdown()
-	b.httpServer.Shutdown(ctx)
-	return b.peerServer.Shutdown(ctx)
+	err = b.muticast.Shutdown()
+	err = b.httpServer.Shutdown(ctx)
+	err = b.peerServer.Shutdown(ctx)
+	return err
 }
 
 func (b *broker) IsOnline(ctx context.Context, uid string) (online bool) {

@@ -15,7 +15,7 @@ type Muticast interface {
 	Serve() error
 	Request() (map[string]int32, error)
 	OnRequest(func(string) int32)
-	Shutdown()
+	Shutdown() error
 }
 
 type muticast struct {
@@ -23,6 +23,7 @@ type muticast struct {
 	mu       sync.Mutex
 	addr     *net.UDPAddr
 	conn     *net.UDPConn
+	listener *net.UDPConn
 	req      func(string) int32
 	logger   *xlog.Logger
 	respChan chan *packet.Response
@@ -42,13 +43,14 @@ func (m *muticast) Serve() error {
 	if err != nil {
 		return err
 	}
+	m.listener = listener
 	go func() {
 		if err := m.listen(); err != nil {
 			m.logger.Error("listen error", err)
 		}
 	}()
 	defer listener.Close()
-	buffer := make([]byte, 1024)
+	buffer := make([]byte, packet.MAX_UDP)
 	for {
 		n, addr, err := listener.ReadFromUDP(buffer)
 		if err != nil {
@@ -85,8 +87,10 @@ func (m *muticast) Serve() error {
 	}
 }
 
-func (m *muticast) Shutdown() {
-	m.conn.Close()
+func (m *muticast) Shutdown() error {
+	err := m.conn.Close()
+	err = m.listener.Close()
+	return err
 }
 func (m *muticast) OnRequest(f func(string) int32) {
 	m.req = f
@@ -98,7 +102,7 @@ func (m *muticast) listen() error {
 	}
 	m.conn = conn
 	defer conn.Close()
-	buffer := make([]byte, 1024)
+	buffer := make([]byte, packet.MAX_UDP)
 	for {
 		n, _, err := conn.ReadFromUDP(buffer)
 		if err != nil {

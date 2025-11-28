@@ -20,7 +20,7 @@ func main() {
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
-		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
+		if err := http.ListenAndServe(":6060", nil); err != nil {
 			xlog.Error("pprof server start :", err)
 		}
 	}()
