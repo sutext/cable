@@ -1,4 +1,4 @@
-package keymap
+package safe
 
 import (
 	"sync"
@@ -50,7 +50,7 @@ func (s *KeyMap[T]) Delete(key string) {
 }
 
 // Warn: This functoin is expencive. O(n*m) complexity.
-func (s *KeyMap[T]) GetCounts() map[string]int {
+func (s *KeyMap[T]) Statistics() map[string]int {
 	m := make(map[string]int)
 	s.m.Range(func(k, v any) bool {
 		key := k.(string)

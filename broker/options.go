@@ -32,9 +32,6 @@ func (h *emptyHandler) OnMessage(p *packet.Message, id *packet.Identity) error {
 func (h *emptyHandler) GetChannels(uid string) (channels []string, err error) {
 	return nil, nil
 }
-func (h *emptyHandler) GetWatchers(uid string) (watchers []string, err error) {
-	return nil, nil
-}
 
 type options struct {
 	peers     []string
@@ -82,6 +79,7 @@ func WithHandler(h Handler) Option {
 		o.handler = h
 	}}
 }
+
 func WithHTTPAddr(addr string) Option {
 	return Option{func(o *options) {
 		o.httpAddr = addr

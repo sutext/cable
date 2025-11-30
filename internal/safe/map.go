@@ -10,7 +10,7 @@ type Map[K comparable, V any] struct {
 }
 
 func (m *Map[K, V]) Set(key K, value V) {
-	m.m.Store(key, value)
+	m.m.Swap(key, value)
 }
 func (m *Map[K, V]) Get(key K) (actual V, loaded bool) {
 	if value, ok := m.m.Load(key); ok {
@@ -30,8 +30,12 @@ func (m *Map[K, V]) Range(f func(key K, value V) bool) {
 	})
 }
 func (m *Map[K, V]) Delete(key K) {
-	m.m.Delete(key)
+	m.m.LoadAndDelete(key)
 }
+
+// GetOrSet returns the existing value for the key if present.
+// Otherwise, it stores and returns the given value.
+// The loaded result is true if the value was loaded, false if stored.
 func (m *Map[K, V]) GetOrSet(key K, value V) (actual V, loaded bool) {
 	if actual, loaded := m.m.LoadOrStore(key, value); loaded {
 		return actual.(V), true

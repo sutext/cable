@@ -23,7 +23,7 @@ func (b *broker) handleSendMessage(p *packet.Request, id *packet.Identity) (*pac
 	var total, success uint64
 	switch flag {
 	case 0:
-		total, success = b.brodcast(msg)
+		total, success = b.sendToAll(msg)
 	case 1:
 		total, success = b.sendToUser(target, msg)
 	case 2:

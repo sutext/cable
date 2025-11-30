@@ -78,7 +78,6 @@ func (t *Tester) addClient() *Client {
 	t.clients.Set(result.id.ClientID, result)
 	result.Connect()
 	return result
-
 }
 func (t *Tester) handlePause(w http.ResponseWriter, r *http.Request) {
 	p := r.URL.Query().Get("pause")

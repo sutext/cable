@@ -16,7 +16,7 @@ type Inspect struct {
 	Users         int            `json:"users"`
 	Clients       int            `json:"clients"`
 	Channels      map[string]int `json:"channels"`
-	BrokerCount   int32          `json:"broker_count"`
+	ClusterSize   int32          `json:"cluster_size"`
 	OnlienUsers   int            `json:"online_users"`
 	OnlineClients int            `json:"online_clients"`
 }
@@ -26,12 +26,13 @@ func NewInspect() *Inspect {
 		Channels: make(map[string]int),
 	}
 }
+
 func (i *Inspect) merge(o *Inspect) {
 	i.ID = "all"
 	i.Peers += o.Peers
 	i.Users += o.Users
 	i.Clients += o.Clients
-	i.BrokerCount = max(i.BrokerCount, o.BrokerCount)
+	i.ClusterSize = max(i.ClusterSize, o.ClusterSize)
 	i.OnlienUsers += o.OnlienUsers
 	i.OnlineClients += o.OnlineClients
 	for k, v := range o.Channels {
@@ -41,6 +42,7 @@ func (i *Inspect) merge(o *Inspect) {
 		i.Channels[k] += v
 	}
 }
+
 func (b *broker) inspect() *Inspect {
 	peers := 0
 	b.peers.Range(func(k string, v *peer) bool {
@@ -72,7 +74,7 @@ func (b *broker) inspect() *Inspect {
 		}
 		return true
 	})
-	channels := b.channelClients.GetCounts()
+	channels := b.channelClients.Statistics()
 	for k, v := range channels {
 		if v == 0 {
 			b.channelClients.Delete(k)
@@ -84,11 +86,12 @@ func (b *broker) inspect() *Inspect {
 		Users:         users,
 		Clients:       clients,
 		Channels:      channels,
-		BrokerCount:   b.brokerCount.Load(),
+		ClusterSize:   b.clusterSize(),
 		OnlienUsers:   onlienUsers,
 		OnlineClients: onlineClients,
 	}
 }
+
 func (b *broker) Inspects() ([]*Inspect, error) {
 	ctx := context.Background()
 	inspects := make([]*Inspect, 2)
@@ -134,10 +137,6 @@ func (b *broker) handleKickout(w http.ResponseWriter, r *http.Request) {
 func (b *broker) handleMessage(w http.ResponseWriter, r *http.Request) {
 	uid := r.URL.Query().Get("uid")
 	channel := r.URL.Query().Get("channel")
-	if channel == "" && uid == "" {
-		http.Error(w, "channel or uid is required", http.StatusBadRequest)
-		return
-	}
 	msg := r.URL.Query().Get("msg")
 	if msg == "" {
 		http.Error(w, "msg is required", http.StatusBadRequest)
@@ -148,8 +147,10 @@ func (b *broker) handleMessage(w http.ResponseWriter, r *http.Request) {
 	var err error
 	if uid != "" {
 		total, success, err = b.SendToUser(r.Context(), uid, msgPacket)
-	} else {
+	} else if channel != "" {
 		total, success, err = b.SendToChannel(r.Context(), channel, msgPacket)
+	} else {
+		total, success, err = b.SendToAll(r.Context(), msgPacket)
 	}
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -201,7 +202,7 @@ func (b *broker) handleBrodcast(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "msg is required", http.StatusBadRequest)
 		return
 	}
-	total, success, err := b.Brodcast(r.Context(), packet.NewMessage([]byte(msg)))
+	total, success, err := b.SendToAll(r.Context(), packet.NewMessage([]byte(msg)))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
