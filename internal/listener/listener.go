@@ -35,7 +35,7 @@ func (c *udpConn) close() error {
 	return nil
 }
 func (c *udpConn) writePacket(p packet.Packet) error {
-	p.PropSet(packet.PropertyUDPConnID, c.connID)
+	p.Set(packet.PropertyUDPConnID, c.connID)
 	data, err := packet.Marshal(p)
 	if err != nil {
 		return err

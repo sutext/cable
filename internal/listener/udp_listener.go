@@ -62,7 +62,7 @@ func (l *udpListener) Listen(address string) error {
 }
 func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.Packet) {
 	if p.Type() != packet.CONNECT {
-		connID, ok := p.PropGet(packet.PropertyUDPConnID)
+		connID, ok := p.Get(packet.PropertyUDPConnID)
 		if !ok {
 			l.logger.Warn("unknown udp packet", slog.String("packet", p.String()))
 			return

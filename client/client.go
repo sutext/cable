@@ -149,7 +149,7 @@ func (c *client) reconnect() error {
 	if ack.Code != packet.ConnectAccepted {
 		return ErrConntionFailed
 	}
-	if connID, ok := ack.PropGet(packet.PropertyUDPConnID); ok {
+	if connID, ok := ack.Get(packet.PropertyUDPConnID); ok {
 		c.packetConnID = connID
 	}
 	c.setStatus(StatusOpened)
@@ -192,7 +192,7 @@ func (c *client) sendPacket(p packet.Packet) error {
 			return
 		}
 		if c.packetConnID != "" {
-			p.PropSet(packet.PropertyUDPConnID, c.packetConnID)
+			p.Set(packet.PropertyUDPConnID, c.packetConnID)
 		}
 		err := c.conn.WritePacket(p)
 		if err != nil {
@@ -244,7 +244,7 @@ func (c *client) recv() {
 			c.tryClose(err)
 			return
 		}
-		if connID, ok := p.PropGet(packet.PropertyUDPConnID); ok {
+		if connID, ok := p.Get(packet.PropertyUDPConnID); ok {
 			if connID != c.packetConnID {
 				c.logger.Errorf("packet conn id not match", slog.String("connID", connID), slog.String("expect", c.packetConnID))
 				c.tryClose(ErrConntionFailed)

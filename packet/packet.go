@@ -88,9 +88,8 @@ const (
 )
 
 type Properties interface {
-	PropGet(key Property) (string, bool)
-	PropSet(key Property, value string)
-	PropsRange(f func(key Property, value string))
+	Get(key Property) (string, bool)
+	Set(key Property, value string)
 }
 type Packet interface {
 	fmt.Stringer
@@ -116,23 +115,15 @@ func (p *packet) ReadFrom(c coder.Decoder) error {
 	p.props = m
 	return nil
 }
-func (p *packet) PropGet(key Property) (string, bool) {
+func (p *packet) Get(key Property) (string, bool) {
 	v, ok := p.props[uint8(key)]
 	return v, ok
 }
-func (p *packet) PropSet(key Property, value string) {
+func (p *packet) Set(key Property, value string) {
 	if p.props == nil {
 		p.props = make(map[uint8]string)
 	}
 	p.props[uint8(key)] = value
-}
-func (p *packet) PropsRange(f func(key Property, value string)) {
-	if p.props == nil {
-		return
-	}
-	for k, v := range p.props {
-		f(Property(k), v)
-	}
 }
 
 type ping struct {
