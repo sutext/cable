@@ -54,6 +54,7 @@ func (h *Handler) GetChannels(uid string) ([]string, error) {
 }
 
 func main() {
+	xlog.SetDefault(xlog.WithLevel(xlog.LevelWarn))
 	ctx := context.Background()
 	ctx, cancel := context.WithCancelCause(ctx)
 	sigs := make(chan os.Signal, 1)

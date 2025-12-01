@@ -226,7 +226,7 @@ func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (total, succe
 			total += t
 			success += s
 		} else {
-			b.logger.Error("brodcast to peer failed", err)
+			b.logger.Error("send to all from peer failed", err)
 		}
 		return true
 	})
@@ -240,7 +240,7 @@ func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 	b.peers.Range(func(id string, peer *peer) bool {
 		t, s, err := peer.sendMessage(ctx, m, uid, 1)
 		if err != nil {
-			b.logger.Error("peer send to user failed", err)
+			b.logger.Error("send to user from peer failed", err)
 			return true
 		}
 		total += t
@@ -259,7 +259,7 @@ func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Me
 			total += t
 			success += s
 		} else {
-			b.logger.Error("peer send to channel failed", err)
+			b.logger.Error("send to channel from peer failed", err)
 		}
 		return true
 	})
@@ -271,7 +271,7 @@ func (b *broker) JoinChannel(ctx context.Context, uid string, channels ...string
 		if c, err := peer.joinChannel(ctx, uid, channels); err == nil {
 			count += c
 		} else {
-			b.logger.Error("peer join channel failed", err)
+			b.logger.Error("join channel from peer failed", err)
 		}
 		return true
 	})
@@ -283,7 +283,7 @@ func (b *broker) LeaveChannel(ctx context.Context, uid string, channels ...strin
 		if c, err := peer.leaveChannel(ctx, uid, channels); err == nil {
 			count += c
 		} else {
-			b.logger.Error("peer leave channel failed", err)
+			b.logger.Error("leave channel from peer failed", err)
 		}
 		return true
 	})
@@ -375,7 +375,7 @@ func (b *broker) sendToAll(m *packet.Message) (total, success uint64) {
 		total += t
 		success += s
 		if err != nil {
-			b.logger.Error("Failed to send message to all clients", err)
+			b.logger.Error("send message to all failed", err)
 		}
 	}
 	return total, success
@@ -388,7 +388,7 @@ func (b *broker) sendToUser(uid string, m *packet.Message) (total, success uint6
 			return true
 		}
 		if err := l.SendMessage(cid, m); err != nil {
-			b.logger.Error("Failed to send message to client", err)
+			b.logger.Error("send message to user failed", err)
 		} else {
 			success++
 		}
@@ -404,7 +404,7 @@ func (b *broker) sendToChannel(channel string, m *packet.Message) (total, succes
 			return true
 		}
 		if err := l.SendMessage(cid, m); err != nil {
-			b.logger.Error("Failed to send message to client", err)
+			b.logger.Error("send message to channel failed", err)
 		} else {
 			success++
 		}
