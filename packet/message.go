@@ -3,6 +3,7 @@ package packet
 import (
 	"bytes"
 	"fmt"
+	"maps"
 
 	"sutext.github.io/cable/coder"
 )
@@ -34,9 +35,11 @@ type Message struct {
 
 func NewMessage(payload []byte) *Message {
 	return &Message{
-		packet:  packet{t: MESSAGE},
 		Payload: payload,
 	}
+}
+func (p *Message) Type() PacketType {
+	return MESSAGE
 }
 func (p *Message) String() string {
 	return fmt.Sprintf("Message(%d bytes)", len(p.Payload))
@@ -49,7 +52,7 @@ func (p *Message) Equal(other Packet) bool {
 		return false
 	}
 	otherData := other.(*Message)
-	return p.packet.Equal(other) && bytes.Equal(p.Payload, otherData.Payload)
+	return maps.Equal(p.props, otherData.props) && bytes.Equal(p.Payload, otherData.Payload)
 }
 
 func (p *Message) WriteTo(w coder.Encoder) error {
@@ -102,9 +105,11 @@ type Messack struct {
 
 func NewMessack(id int64) *Messack {
 	return &Messack{
-		packet: packet{t: MESSACK},
-		ID:     id,
+		ID: id,
 	}
+}
+func (p *Messack) Type() PacketType {
+	return MESSACK
 }
 func (p *Messack) String() string {
 	return fmt.Sprintf("Messack(%d)", p.ID)
@@ -117,7 +122,7 @@ func (p *Messack) Equal(other Packet) bool {
 		return false
 	}
 	otherData := other.(*Messack)
-	return p.packet.Equal(other) && p.ID == otherData.ID
+	return maps.Equal(p.props, otherData.props) && p.ID == otherData.ID
 }
 func (p *Messack) WriteTo(w coder.Encoder) error {
 	w.WriteInt64(p.ID)

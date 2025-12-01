@@ -3,6 +3,7 @@ package packet
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 
 	"sutext.github.io/cable/coder"
@@ -22,11 +23,13 @@ func NewRequest(method string, content ...[]byte) *Request {
 		b = content[0]
 	}
 	return &Request{
-		packet:  packet{t: REQUEST},
 		ID:      rand.Int64(),
 		Method:  method,
 		Content: b,
 	}
+}
+func (p *Request) Type() PacketType {
+	return REQUEST
 }
 func (p *Request) String() string {
 	return fmt.Sprintf("REQUEST(id=%d, method=%s, content=%d)", p.ID, p.Method, len(p.Content))
@@ -39,9 +42,10 @@ func (p *Request) Equal(other Packet) bool {
 		return false
 	}
 	o := other.(*Request)
-	return p.packet.Equal(other) &&
+	return maps.Equal(p.props, o.props) &&
 		p.ID == o.ID &&
 		p.Method == o.Method &&
+		maps.Equal(p.Headers, o.Headers) &&
 		bytes.Equal(p.Content, o.Content)
 }
 func (p *Request) WriteTo(w coder.Encoder) error {

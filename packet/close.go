@@ -2,6 +2,7 @@ package packet
 
 import (
 	"fmt"
+	"maps"
 
 	"sutext.github.io/cable/coder"
 )
@@ -59,9 +60,11 @@ type Close struct {
 
 func NewClose(code CloseCode) *Close {
 	return &Close{
-		packet: packet{t: CLOSE},
-		Code:   code,
+		Code: code,
 	}
+}
+func (p *Close) Type() PacketType {
+	return CLOSE
 }
 func (p *Close) String() string {
 	return fmt.Sprintf("CLOSE(%d)", p.Code)
@@ -75,16 +78,12 @@ func (p *Close) Equal(other Packet) bool {
 		return false
 	}
 	otherClose := other.(*Close)
-	return p.packet.Equal(other) && p.Code == otherClose.Code
+	return maps.Equal(p.props, otherClose.props) && p.Code == otherClose.Code
 }
 
 func (p *Close) WriteTo(w coder.Encoder) error {
 	w.WriteUInt8(uint8(p.Code))
-	err := p.packet.WriteTo(w)
-	if err != nil {
-		return err
-	}
-	return nil
+	return p.packet.WriteTo(w)
 }
 func (p *Close) ReadFrom(r coder.Decoder) error {
 	code, err := r.ReadUInt8()

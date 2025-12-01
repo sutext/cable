@@ -3,6 +3,7 @@ package packet
 import (
 	"bytes"
 	"fmt"
+	"maps"
 
 	"sutext.github.io/cable/coder"
 )
@@ -34,6 +35,9 @@ func NewResponse(id int64, content ...[]byte) *Response {
 		Content: b,
 	}
 }
+func (p *Response) Type() PacketType {
+	return RESPONSE
+}
 func (p *Response) String() string {
 	return fmt.Sprintf("RESPONSE(id=%d, content=%d)", p.ID, len(p.Content))
 }
@@ -45,7 +49,11 @@ func (p *Response) Equal(other Packet) bool {
 		return false
 	}
 	o := other.(*Response)
-	return p.packet.Equal(other) && p.ID == o.ID && bytes.Equal(p.Content, o.Content)
+	return maps.Equal(p.props, o.props) &&
+		p.ID == o.ID &&
+		p.Code == o.Code &&
+		maps.Equal(p.Headers, o.Headers) &&
+		bytes.Equal(p.Content, o.Content)
 }
 
 func (p *Response) WriteTo(w coder.Encoder) error {

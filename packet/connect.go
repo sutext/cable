@@ -2,6 +2,7 @@ package packet
 
 import (
 	"fmt"
+	"maps"
 
 	"sutext.github.io/cable/coder"
 )
@@ -56,18 +57,17 @@ type Connect struct {
 
 func NewConnect(identity *Identity) *Connect {
 	return &Connect{
-		packet:   packet{t: CONNECT},
 		Identity: identity,
 		Version:  1,
 	}
+}
+func (p *Connect) Type() PacketType {
+	return CONNECT
 }
 func (p *Connect) String() string {
 	return fmt.Sprintf("CONNECT(uid=%s, cid=%s)", p.Identity.UserID, p.Identity.ClientID)
 }
 
-func (p *Connect) Type() PacketType {
-	return CONNECT
-}
 func (p *Connect) Equal(other Packet) bool {
 	if other == nil {
 		return false
@@ -76,14 +76,17 @@ func (p *Connect) Equal(other Packet) bool {
 		return false
 	}
 	otherP := other.(*Connect)
-	return p.packet.Equal(other) && p.Version == otherP.Version && p.Identity.Equal(otherP.Identity)
+	return maps.Equal(p.props, otherP.props) && p.Version == otherP.Version && p.Identity.Equal(otherP.Identity)
 }
 func (p *Connect) WriteTo(w coder.Encoder) error {
 	flags := uint8(0)
-
 	flags |= p.Version & versionMask
 	w.WriteUInt8(flags)
-	return p.Identity.WriteTo(w)
+	err := p.Identity.WriteTo(w)
+	if err != nil {
+		return err
+	}
+	return p.packet.WriteTo(w)
 }
 
 func (p *Connect) ReadFrom(r coder.Decoder) error {
@@ -98,7 +101,7 @@ func (p *Connect) ReadFrom(r coder.Decoder) error {
 	}
 	p.Version = flags & versionMask
 	p.Identity = identity
-	return nil
+	return p.packet.ReadFrom(r)
 }
 
 type ConnectCode uint8
@@ -132,9 +135,11 @@ type Connack struct {
 
 func NewConnack(code ConnectCode) *Connack {
 	return &Connack{
-		packet: packet{t: CONNACK},
-		Code:   code,
+		Code: code,
 	}
+}
+func (p *Connack) Type() PacketType {
+	return CONNACK
 }
 func (p *Connack) String() string {
 	return fmt.Sprintf("CONNACK:%s", p.Code.String())
@@ -148,7 +153,7 @@ func (p *Connack) Equal(other Packet) bool {
 		return false
 	}
 	otherP := other.(*Connack)
-	return p.packet.Equal(other) && p.Code == otherP.Code
+	return maps.Equal(p.props, otherP.props) && p.Code == otherP.Code
 }
 
 func (p *Connack) WriteTo(w coder.Encoder) error {

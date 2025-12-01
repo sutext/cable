@@ -101,28 +101,9 @@ type Packet interface {
 }
 
 type packet struct {
-	t     PacketType
 	props map[uint8]string
 }
 
-func NewPing() Packet {
-	return &packet{t: PING}
-}
-func NewPong() Packet {
-	return &packet{t: PONG}
-}
-func (p *packet) Type() PacketType {
-	return p.t
-}
-func (p *packet) String() string {
-	return p.t.String()
-}
-func (p *packet) Equal(other Packet) bool {
-	if other == nil {
-		return false
-	}
-	return p.t == other.Type() && maps.Equal(p.props, other.(*packet).props)
-}
 func (p *packet) WriteTo(c coder.Encoder) error {
 	c.WriteUInt8Map(p.props)
 	return nil
@@ -152,6 +133,46 @@ func (p *packet) PropsRange(f func(key Property, value string)) {
 	for k, v := range p.props {
 		f(Property(k), v)
 	}
+}
+
+type ping struct {
+	packet
+}
+
+func NewPing() Packet {
+	return &ping{}
+}
+func (p *ping) Type() PacketType {
+	return PING
+}
+func (p *ping) Equal(other Packet) bool {
+	if other == nil {
+		return false
+	}
+	return other.Type() == PING && maps.Equal(p.props, other.(*ping).props)
+}
+func (p *ping) String() string {
+	return PING.String()
+}
+
+type pong struct {
+	packet
+}
+
+func NewPong() Packet {
+	return &pong{}
+}
+func (p *pong) Type() PacketType {
+	return PONG
+}
+func (p *pong) Equal(other Packet) bool {
+	if other == nil {
+		return false
+	}
+	return other.Type() == PONG && maps.Equal(p.props, other.(*pong).props)
+}
+func (p *pong) String() string {
+	return PONG.String()
 }
 
 // Marshal encodes the given Packet object to bytes.
