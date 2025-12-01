@@ -2,13 +2,18 @@ package listener
 
 import (
 	"context"
+	"crypto/md5"
+	"encoding/hex"
+	"log/slog"
 	"net"
 
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/xlog"
 )
 
 type udpListener struct {
+	logger        *xlog.Logger
 	connMap       safe.Map[string, *Conn]
 	listener      *net.UDPConn
 	packetHandler func(p packet.Packet, c *Conn)
@@ -16,7 +21,10 @@ type udpListener struct {
 }
 
 func NewUDP() Listener {
-	return &udpListener{}
+	return &udpListener{
+		logger: xlog.With("GROUP", "SERVER"),
+	}
+
 }
 func (l *udpListener) OnAccept(handler func(*packet.Connect, *Conn) packet.ConnectCode) {
 	l.acceptHandler = handler
@@ -54,15 +62,24 @@ func (l *udpListener) Listen(address string) error {
 }
 func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.Packet) {
 	if p.Type() != packet.CONNECT {
-		if c, loaded := l.connMap.Get(addr.String()); loaded {
-			c.recvQueue.AddTask(func() {
-				l.packetHandler(p, c)
-			})
+		connID, ok := p.PropGet(packet.PropertyUDPConnID)
+		if !ok {
+			l.logger.Warn("unknown udp packet", slog.String("packet", p.String()))
+			return
 		}
+		c, loaded := l.connMap.Get(connID)
+		if !loaded {
+			l.logger.Warn("unknown udp connID", slog.String("connID", connID))
+			return
+		}
+		c.recvQueue.AddTask(func() {
+			l.packetHandler(p, c)
+		})
 		return
 	}
 	connPacket := p.(*packet.Connect)
-	c := newUDPConn(connPacket.Identity, conn, addr)
+	connID := md5Hash(connPacket.Identity.ClientID)
+	c := newUDPConn(connPacket.Identity, conn, addr, connID)
 	code := l.acceptHandler(connPacket, c)
 	if code != packet.ConnectAccepted {
 		c.ClosePacket(packet.NewConnack(code))
@@ -70,4 +87,9 @@ func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.
 	}
 	c.SendPacket(packet.NewConnack(packet.ConnectAccepted))
 	l.connMap.Set(addr.String(), c)
+}
+func md5Hash(s string) string {
+	h := md5.New()
+	h.Write([]byte(s))
+	return hex.EncodeToString(h.Sum(nil))
 }

@@ -3,6 +3,7 @@ package listener
 import (
 	"context"
 	"net"
+	"sync/atomic"
 
 	"sutext.github.io/cable/packet"
 )
@@ -21,9 +22,10 @@ type conn interface {
 }
 
 type udpConn struct {
-	id   *packet.Identity
-	raw  *net.UDPConn
-	addr *net.UDPAddr
+	id     *packet.Identity
+	raw    *net.UDPConn
+	addr   atomic.Pointer[net.UDPAddr]
+	connID string
 }
 
 func (c *udpConn) ID() *packet.Identity {
@@ -33,20 +35,23 @@ func (c *udpConn) close() error {
 	return nil
 }
 func (c *udpConn) writePacket(p packet.Packet) error {
+	p.PropSet(packet.PropertyUDPConnID, c.connID)
 	data, err := packet.Marshal(p)
 	if err != nil {
 		return err
 	}
-	_, err = c.raw.WriteToUDP(data, c.addr)
+	_, err = c.raw.WriteToUDP(data, c.addr.Load())
 	return err
 }
 
-func newUDPConn(id *packet.Identity, raw *net.UDPConn, addr *net.UDPAddr) *Conn {
-	return newConn(&udpConn{
-		id:   id,
-		raw:  raw,
-		addr: addr,
-	})
+func newUDPConn(id *packet.Identity, raw *net.UDPConn, addr *net.UDPAddr, connID string) *Conn {
+	c := &udpConn{
+		id:     id,
+		raw:    raw,
+		connID: connID,
+	}
+	c.addr.Store(addr)
+	return newConn(c)
 }
 
 type tcpConn struct {

@@ -22,6 +22,7 @@ type Encoder interface {
 	WriteString(s string)
 	WriteStrMap(m map[string]string)
 	WriteStrings(ss []string)
+	WriteUInt8Map(m map[uint8]string)
 }
 type Decoder interface {
 	io.Reader
@@ -40,6 +41,7 @@ type Decoder interface {
 	ReadString() (string, error)
 	ReadStrMap() (map[string]string, error)
 	ReadStrings() ([]string, error)
+	ReadUInt8Map() (map[uint8]string, error)
 	ReadAll() ([]byte, error)
 }
 
@@ -133,6 +135,13 @@ func (b *coder) WriteStrings(ss []string) {
 	b.WriteVarint(uint64(len(ss)))
 	for _, s := range ss {
 		b.WriteString(s)
+	}
+}
+func (b *coder) WriteUInt8Map(m map[uint8]string) {
+	b.WriteUInt8(uint8(len(m)))
+	for k, v := range m {
+		b.WriteUInt8(k)
+		b.WriteString(v)
 	}
 }
 
@@ -287,6 +296,25 @@ func (b *coder) ReadStrings() ([]string, error) {
 		ss[i] = s
 	}
 	return ss, nil
+}
+func (b *coder) ReadUInt8Map() (map[uint8]string, error) {
+	l, err := b.ReadUInt8()
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[uint8]string)
+	for i := 0; i < int(l); i++ {
+		k, err := b.ReadUInt8()
+		if err != nil {
+			return nil, err
+		}
+		v, err := b.ReadString()
+		if err != nil {
+			return nil, err
+		}
+		m[k] = v
+	}
+	return m, nil
 }
 func (b *coder) ReadAll() ([]byte, error) {
 	l := uint64(len(b.buf))

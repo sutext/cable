@@ -3,6 +3,7 @@ package packet
 import (
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 
 	"sutext.github.io/cable/coder"
@@ -80,40 +81,77 @@ func (t PacketType) String() string {
 	}
 }
 
+type Property uint8
+
+const (
+	PropertyUDPConnID Property = 0
+)
+
+type Properties interface {
+	PropGet(key Property) (string, bool)
+	PropSet(key Property, value string)
+	PropsRange(f func(key Property, value string))
+}
 type Packet interface {
 	fmt.Stringer
 	coder.Codable
+	Properties
 	Type() PacketType
 	Equal(Packet) bool
 }
 
-type pingpong struct {
-	t PacketType
+type packet struct {
+	t     PacketType
+	props map[uint8]string
 }
 
 func NewPing() Packet {
-	return &pingpong{t: PING}
+	return &packet{t: PING}
 }
 func NewPong() Packet {
-	return &pingpong{t: PONG}
+	return &packet{t: PONG}
 }
-func (p *pingpong) Type() PacketType {
+func (p *packet) Type() PacketType {
 	return p.t
 }
-func (p *pingpong) String() string {
+func (p *packet) String() string {
 	return p.t.String()
 }
-func (p *pingpong) Equal(other Packet) bool {
+func (p *packet) Equal(other Packet) bool {
 	if other == nil {
 		return false
 	}
-	return p.t == other.Type()
+	return p.t == other.Type() && maps.Equal(p.props, other.(*packet).props)
 }
-func (p *pingpong) WriteTo(c coder.Encoder) error {
+func (p *packet) WriteTo(c coder.Encoder) error {
+	c.WriteUInt8Map(p.props)
 	return nil
 }
-func (p *pingpong) ReadFrom(c coder.Decoder) error {
+func (p *packet) ReadFrom(c coder.Decoder) error {
+	m, err := c.ReadUInt8Map()
+	if err != nil {
+		return err
+	}
+	p.props = m
 	return nil
+}
+func (p *packet) PropGet(key Property) (string, bool) {
+	v, ok := p.props[uint8(key)]
+	return v, ok
+}
+func (p *packet) PropSet(key Property, value string) {
+	if p.props == nil {
+		p.props = make(map[uint8]string)
+	}
+	p.props[uint8(key)] = value
+}
+func (p *packet) PropsRange(f func(key Property, value string)) {
+	if p.props == nil {
+		return
+	}
+	for k, v := range p.props {
+		f(Property(k), v)
+	}
 }
 
 // Marshal encodes the given Packet object to bytes.

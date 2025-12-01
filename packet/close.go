@@ -53,18 +53,20 @@ func AsCloseCode(err error) CloseCode {
 }
 
 type Close struct {
+	packet
 	Code CloseCode
 }
 
 func NewClose(code CloseCode) *Close {
-	return &Close{Code: code}
+	return &Close{
+		packet: packet{t: CLOSE},
+		Code:   code,
+	}
 }
 func (p *Close) String() string {
 	return fmt.Sprintf("CLOSE(%d)", p.Code)
 }
-func (p *Close) Type() PacketType {
-	return CLOSE
-}
+
 func (p *Close) Equal(other Packet) bool {
 	if other == nil {
 		return false
@@ -73,11 +75,15 @@ func (p *Close) Equal(other Packet) bool {
 		return false
 	}
 	otherClose := other.(*Close)
-	return p.Code == otherClose.Code
+	return p.packet.Equal(other) && p.Code == otherClose.Code
 }
 
 func (p *Close) WriteTo(w coder.Encoder) error {
 	w.WriteUInt8(uint8(p.Code))
+	err := p.packet.WriteTo(w)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 func (p *Close) ReadFrom(r coder.Decoder) error {
@@ -86,5 +92,5 @@ func (p *Close) ReadFrom(r coder.Decoder) error {
 		return err
 	}
 	p.Code = CloseCode(code)
-	return nil
+	return p.packet.ReadFrom(r)
 }

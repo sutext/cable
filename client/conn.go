@@ -69,8 +69,9 @@ func (c *tcpConn) Close() error {
 }
 
 type udpConn struct {
-	addr *net.UDPAddr
-	conn *net.UDPConn
+	addr    *net.UDPAddr
+	conn    *net.UDPConn
+	bufPool sync.Pool
 }
 
 func newUDPConn(addr string) Conn {
@@ -78,7 +79,11 @@ func newUDPConn(addr string) Conn {
 	if err != nil {
 		panic(err)
 	}
-	return &udpConn{addr: udpAddr}
+	return &udpConn{
+		addr: udpAddr,
+		bufPool: sync.Pool{New: func() any {
+			return make([]byte, packet.MAX_UDP)
+		}}}
 }
 
 func (c *udpConn) WritePacket(p packet.Packet) error {
@@ -93,15 +98,9 @@ func (c *udpConn) WritePacket(p packet.Packet) error {
 	return err
 }
 
-var bufPool = sync.Pool{
-	New: func() any {
-		return make([]byte, packet.MAX_UDP)
-	},
-}
-
 func (c *udpConn) ReadPacket() (packet.Packet, error) {
-	buf := bufPool.Get().([]byte)
-	defer bufPool.Put(buf)
+	buf := c.bufPool.Get().([]byte)
+	defer c.bufPool.Put(buf[:0]) //nolint:errcheck,SA6002
 	n, _, err := c.conn.ReadFromUDP(buf)
 	if err != nil {
 		return nil, err

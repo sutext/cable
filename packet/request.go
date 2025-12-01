@@ -3,13 +3,13 @@ package packet
 import (
 	"bytes"
 	"fmt"
-	"maps"
 	"math/rand/v2"
 
 	"sutext.github.io/cable/coder"
 )
 
 type Request struct {
+	packet
 	ID      int64
 	Method  string
 	Headers map[string]string
@@ -22,16 +22,14 @@ func NewRequest(method string, content ...[]byte) *Request {
 		b = content[0]
 	}
 	return &Request{
+		packet:  packet{t: REQUEST},
 		ID:      rand.Int64(),
 		Method:  method,
 		Content: b,
 	}
 }
-func (p *Request) Type() PacketType {
-	return REQUEST
-}
 func (p *Request) String() string {
-	return fmt.Sprintf("REQUEST(id=%d, method=%s, headers=%v, content=%d)", p.ID, p.Method, p.Headers, len(p.Content))
+	return fmt.Sprintf("REQUEST(id=%d, method=%s, content=%d)", p.ID, p.Method, len(p.Content))
 }
 func (p *Request) Equal(other Packet) bool {
 	if other == nil {
@@ -41,15 +39,19 @@ func (p *Request) Equal(other Packet) bool {
 		return false
 	}
 	o := other.(*Request)
-	return p.ID == o.ID &&
+	return p.packet.Equal(other) &&
+		p.ID == o.ID &&
 		p.Method == o.Method &&
-		maps.Equal(p.Headers, o.Headers) &&
 		bytes.Equal(p.Content, o.Content)
 }
 func (p *Request) WriteTo(w coder.Encoder) error {
 	w.WriteInt64(p.ID)
 	w.WriteString(p.Method)
 	w.WriteStrMap(p.Headers)
+	err := p.packet.WriteTo(w)
+	if err != nil {
+		return err
+	}
 	w.WriteBytes(p.Content)
 	return nil
 }
@@ -62,6 +64,9 @@ func (p *Request) ReadFrom(r coder.Decoder) error {
 		return err
 	}
 	if p.Headers, err = r.ReadStrMap(); err != nil {
+		return err
+	}
+	if err = p.packet.ReadFrom(r); err != nil {
 		return err
 	}
 	if p.Content, err = r.ReadAll(); err != nil {

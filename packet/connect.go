@@ -49,12 +49,17 @@ const (
 )
 
 type Connect struct {
+	packet
 	Version  uint8
 	Identity *Identity
 }
 
 func NewConnect(identity *Identity) *Connect {
-	return &Connect{Identity: identity, Version: 1}
+	return &Connect{
+		packet:   packet{t: CONNECT},
+		Identity: identity,
+		Version:  1,
+	}
 }
 func (p *Connect) String() string {
 	return fmt.Sprintf("CONNECT(uid=%s, cid=%s)", p.Identity.UserID, p.Identity.ClientID)
@@ -71,7 +76,7 @@ func (p *Connect) Equal(other Packet) bool {
 		return false
 	}
 	otherP := other.(*Connect)
-	return p.Version == otherP.Version && p.Identity.Equal(otherP.Identity)
+	return p.packet.Equal(other) && p.Version == otherP.Version && p.Identity.Equal(otherP.Identity)
 }
 func (p *Connect) WriteTo(w coder.Encoder) error {
 	flags := uint8(0)
@@ -121,20 +126,20 @@ func (c ConnectCode) Error() string {
 }
 
 type Connack struct {
+	packet
 	Code ConnectCode
 }
 
 func NewConnack(code ConnectCode) *Connack {
 	return &Connack{
-		Code: code,
+		packet: packet{t: CONNACK},
+		Code:   code,
 	}
 }
 func (p *Connack) String() string {
 	return fmt.Sprintf("CONNACK:%s", p.Code.String())
 }
-func (P *Connack) Type() PacketType {
-	return CONNACK
-}
+
 func (p *Connack) Equal(other Packet) bool {
 	if other == nil {
 		return false
@@ -143,12 +148,12 @@ func (p *Connack) Equal(other Packet) bool {
 		return false
 	}
 	otherP := other.(*Connack)
-	return p.Code == otherP.Code
+	return p.packet.Equal(other) && p.Code == otherP.Code
 }
 
 func (p *Connack) WriteTo(w coder.Encoder) error {
 	w.WriteUInt8(uint8(p.Code))
-	return nil
+	return p.packet.WriteTo(w)
 }
 func (p *Connack) ReadFrom(r coder.Decoder) error {
 	code, err := r.ReadUInt8()
@@ -156,5 +161,5 @@ func (p *Connack) ReadFrom(r coder.Decoder) error {
 		return err
 	}
 	p.Code = ConnectCode(code)
-	return nil
+	return p.packet.ReadFrom(r)
 }

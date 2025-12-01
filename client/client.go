@@ -44,6 +44,7 @@ type client struct {
 	sendQueue      *queue.Queue
 	keepalive      *keepalive.KeepAlive
 	inflights      *inflight.Inflight
+	packetConnID   string
 	requestTasks   sync.Map
 	requestTimeout time.Duration
 }
@@ -144,8 +145,12 @@ func (c *client) reconnect() error {
 	if p.Type() != packet.CONNACK {
 		return ErrConntionFailed
 	}
-	if p.(*packet.Connack).Code != packet.ConnectAccepted {
+	ack := p.(*packet.Connack)
+	if ack.Code != packet.ConnectAccepted {
 		return ErrConntionFailed
+	}
+	if connID, ok := ack.PropGet(packet.PropertyUDPConnID); ok {
+		c.packetConnID = connID
 	}
 	c.setStatus(StatusOpened)
 	return nil
@@ -185,6 +190,9 @@ func (c *client) sendPacket(p packet.Packet) error {
 	return c.sendQueue.AddTask(func() {
 		if c.Status() != StatusOpened {
 			return
+		}
+		if c.packetConnID != "" {
+			p.PropSet(packet.PropertyUDPConnID, c.packetConnID)
 		}
 		err := c.conn.WritePacket(p)
 		if err != nil {
@@ -235,6 +243,13 @@ func (c *client) recv() {
 		if err != nil {
 			c.tryClose(err)
 			return
+		}
+		if connID, ok := p.PropGet(packet.PropertyUDPConnID); ok {
+			if connID != c.packetConnID {
+				c.logger.Errorf("packet conn id not match", slog.String("connID", connID), slog.String("expect", c.packetConnID))
+				c.tryClose(ErrConntionFailed)
+				return
+			}
 		}
 		c.recvQueue.AddTask(func() {
 			c.handlePacket(p)

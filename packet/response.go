@@ -3,7 +3,6 @@ package packet
 import (
 	"bytes"
 	"fmt"
-	"maps"
 
 	"sutext.github.io/cable/coder"
 )
@@ -18,6 +17,7 @@ const (
 )
 
 type Response struct {
+	packet
 	ID      int64
 	Code    ResponseCode
 	Headers map[string]string
@@ -34,9 +34,6 @@ func NewResponse(id int64, content ...[]byte) *Response {
 		Content: b,
 	}
 }
-func (p *Response) Type() PacketType {
-	return RESPONSE
-}
 func (p *Response) String() string {
 	return fmt.Sprintf("RESPONSE(id=%d, content=%d)", p.ID, len(p.Content))
 }
@@ -48,13 +45,16 @@ func (p *Response) Equal(other Packet) bool {
 		return false
 	}
 	o := other.(*Response)
-	return p.ID == o.ID && bytes.Equal(p.Content, o.Content) && maps.Equal(p.Headers, o.Headers)
+	return p.packet.Equal(other) && p.ID == o.ID && bytes.Equal(p.Content, o.Content)
 }
 
 func (p *Response) WriteTo(w coder.Encoder) error {
 	w.WriteInt64(p.ID)
 	w.WriteUInt8(uint8(p.Code))
 	w.WriteStrMap(p.Headers)
+	if err := p.packet.WriteTo(w); err != nil {
+		return err
+	}
 	w.WriteBytes(p.Content)
 	return nil
 }
@@ -67,8 +67,11 @@ func (p *Response) ReadFrom(r coder.Decoder) error {
 	if err != nil {
 		return err
 	}
-	h, err := r.ReadStrMap()
+	headers, err := r.ReadStrMap()
 	if err != nil {
+		return err
+	}
+	if err := p.packet.ReadFrom(r); err != nil {
 		return err
 	}
 	b, err := r.ReadAll()
@@ -77,7 +80,7 @@ func (p *Response) ReadFrom(r coder.Decoder) error {
 	}
 	p.ID = id
 	p.Code = ResponseCode(code)
-	p.Headers = h
+	p.Headers = headers
 	p.Content = b
 	return nil
 }
