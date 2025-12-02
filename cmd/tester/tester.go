@@ -57,7 +57,7 @@ func (c *Client) sendToChannel() {
 	enc.WriteString(fmt.Sprintf("hello group, i am %s", c.id.UserID))
 	msg := packet.NewMessage(enc.Bytes())
 	msg.Qos = packet.MessageQos1
-	msg.Kind = packet.MessageKind(2)
+	// msg.Kind = packet.MessageKind(2)
 	err := c.cli.SendMessage(context.Background(), msg)
 	if err != nil {
 		xlog.Error("sendToChannel message error", err)
