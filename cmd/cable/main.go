@@ -74,7 +74,7 @@ func (h *Handler) OnMessage(m *packet.Message, id *packet.Identity) error {
 	return nil
 }
 func (h *Handler) GetChannels(uid string) ([]string, error) {
-	channels := make([]string, 5)
+	channels := make([]string, 2)
 	for i := range channels {
 		channels[i] = fmt.Sprintf("channel%d", rand.IntN(100000))
 	}
