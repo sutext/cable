@@ -11,20 +11,17 @@ import (
 )
 
 type Inspect struct {
-	ID            string         `json:"id"`
-	Peers         int            `json:"peers"`
-	Users         int            `json:"users"`
-	Clients       int            `json:"clients"`
-	Channels      map[string]int `json:"channels"`
-	ClusterSize   int32          `json:"cluster_size"`
-	OnlienUsers   int            `json:"online_users"`
-	OnlineClients int            `json:"online_clients"`
+	ID            string `json:"id"`
+	Peers         int    `json:"peers"`
+	Users         int    `json:"users"`
+	Clients       int    `json:"clients"`
+	ClusterSize   int32  `json:"cluster_size"`
+	OnlienUsers   int    `json:"online_users"`
+	OnlineClients int    `json:"online_clients"`
 }
 
 func NewInspect() *Inspect {
-	return &Inspect{
-		Channels: make(map[string]int),
-	}
+	return &Inspect{}
 }
 
 func (i *Inspect) merge(o *Inspect) {
@@ -35,12 +32,6 @@ func (i *Inspect) merge(o *Inspect) {
 	i.ClusterSize = max(i.ClusterSize, o.ClusterSize)
 	i.OnlienUsers += o.OnlienUsers
 	i.OnlineClients += o.OnlineClients
-	for k, v := range o.Channels {
-		if _, ok := i.Channels[k]; !ok {
-			i.Channels[k] = 0
-		}
-		i.Channels[k] += v
-	}
 }
 
 func (b *broker) inspect() *Inspect {
@@ -74,18 +65,11 @@ func (b *broker) inspect() *Inspect {
 		}
 		return true
 	})
-	channels := b.channelClients.Statistics()
-	for k, v := range channels {
-		if v == 0 {
-			b.channelClients.Delete(k)
-		}
-	}
 	return &Inspect{
 		ID:            b.id,
 		Peers:         peers,
 		Users:         users,
 		Clients:       clients,
-		Channels:      channels,
 		ClusterSize:   b.clusterSize(),
 		OnlienUsers:   onlienUsers,
 		OnlineClients: onlineClients,
