@@ -3,13 +3,11 @@ package main
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"sync"
 	"time"
 
-	"sutext.github.io/cable/backoff"
 	"sutext.github.io/cable/client"
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/internal/safe"
@@ -18,9 +16,8 @@ import (
 )
 
 type Client struct {
-	id      *packet.Identity
-	cli     client.Client
-	backoff backoff.Backoff
+	id  *packet.Identity
+	cli client.Client
 }
 
 func (c *Client) run() {
@@ -36,17 +33,10 @@ func (c *Client) run() {
 		case 2:
 			c.sendToChannel()
 		}
-		time.Sleep(c.backoff.Next(1))
+		time.Sleep(time.Second * time.Duration(20+rand.IntN(10)))
 	}
 }
-func (c *Client) sendToAll() {
-	msg := packet.NewMessage(fmt.Appendf(nil, "hello every one, i am %s", c.id.UserID))
-	msg.Kind = packet.MessageKind(3)
-	err := c.cli.SendMessage(context.Background(), msg)
-	if err != nil {
-		xlog.Error("sendToAll message error", err)
-	}
-}
+
 func (c *Client) sendToUser() {
 	enc := coder.NewEncoder()
 	toUserID := fmt.Sprintf("u%d", rand.IntN(100000))
@@ -64,7 +54,7 @@ func (c *Client) sendToChannel() {
 	enc := coder.NewEncoder()
 	channel := fmt.Sprintf("channel%d", rand.IntN(100000))
 	enc.WriteString(channel)
-	enc.WriteString(fmt.Sprintf("hello every one, i am %s", c.id.UserID))
+	enc.WriteString(fmt.Sprintf("hello group, i am %s", c.id.UserID))
 	msg := packet.NewMessage(enc.Bytes())
 	msg.Qos = packet.MessageQos1
 	msg.Kind = packet.MessageKind(2)
@@ -73,16 +63,20 @@ func (c *Client) sendToChannel() {
 		xlog.Error("sendToChannel message error", err)
 	}
 }
+func (c *Client) sendToAll() {
+	msg := packet.NewMessage(fmt.Appendf(nil, "hello every one, i am %s", c.id.UserID))
+	err := c.cli.SendMessage(context.Background(), msg)
+	if err != nil {
+		xlog.Error("sendToAll message error", err)
+	}
+}
 func (c *Client) OnStatus(status client.Status) {
 	if status == client.StatusOpened {
 		xlog.Info("client opened")
 		go c.run()
-	} else {
-		xlog.Info("client closed")
 	}
 }
 func (c *Client) OnMessage(msg *packet.Message) error {
-	xlog.Info("receive message", slog.String("msg", string(msg.Payload)))
 	return nil
 }
 func (c *Client) OnRequest(req *packet.Request) (*packet.Response, error) {
@@ -113,7 +107,7 @@ func (t *Tester) Run() {
 		}
 		t.cond.L.Unlock()
 		t.runOnce()
-		time.Sleep(time.Second * time.Duration(10+rand.IntN(10)))
+		time.Sleep(time.Second * time.Duration(20+rand.IntN(10)))
 	}
 }
 func (t *Tester) addClient() *Client {
@@ -126,7 +120,6 @@ func (t *Tester) addClient() *Client {
 	uid := fmt.Sprintf("u%d", rand.IntN(100000))
 	cid := fmt.Sprintf("%s_%d", uid, rand.Int())
 	result.id = &packet.Identity{UserID: uid, ClientID: cid}
-	result.backoff = backoff.Random(time.Second*2, time.Second*5)
 	t.clients.Set(result.id.ClientID, result)
 	result.cli.Connect(result.id)
 	return result
