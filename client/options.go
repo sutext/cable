@@ -57,7 +57,7 @@ type Option struct {
 func newOptions(options ...Option) *Options {
 	opts := &Options{
 		handler:        &emptyHandler{},
-		retrier:        NewRetrier(20, backoff.Exponential(2, 2)),
+		retrier:        NewRetrier(10, backoff.Exponential(2, 1.5)),
 		network:        NewworkTCP,
 		pingTimeout:    time.Second * 5,
 		pingInterval:   time.Second * 60,

@@ -4,7 +4,6 @@ import (
 	"context"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 type Error uint8
@@ -27,7 +26,7 @@ func (e Error) Error() string {
 
 type Queue struct {
 	wg     sync.WaitGroup
-	count  atomic.Int64
+	mu     sync.Mutex
 	tasks  chan func()
 	closed atomic.Bool
 }
@@ -49,21 +48,21 @@ func New(length int, workerCount ...int) *Queue {
 		mq.wg.Go(func() {
 			for task := range mq.tasks {
 				task()
-				mq.count.Add(-1)
 			}
 		})
 	}
 	return mq
 }
 func (mq *Queue) IsIdle() bool {
-	return mq.count.Load() == 0
+	return len(mq.tasks) == 0
 }
 
 // Close is used to terminate the internal goroutines and close the channel.
 func (mq *Queue) Close() {
 	if mq.closed.CompareAndSwap(false, true) {
-		mq.safeClose()
+		mq.mu.Lock()
 		close(mq.tasks)
+		mq.mu.Unlock()
 		mq.wg.Wait()
 	}
 }
@@ -73,12 +72,12 @@ func (mq *Queue) AddTask(task func()) error {
 	if mq.closed.Load() {
 		return ErrQueueIsStoped
 	}
-	mq.count.Add(1)
+	mq.mu.Lock()
+	defer mq.mu.Unlock()
 	select {
 	case mq.tasks <- task:
 		return nil
 	default:
-		mq.count.Add(-1)
 		return ErrQueueIsFull
 	}
 }
@@ -86,24 +85,12 @@ func (mq *Queue) AddTaskCtx(ctx context.Context, task func()) error {
 	if mq.closed.Load() {
 		return ErrQueueIsStoped
 	}
-	mq.count.Add(1)
+	mq.mu.Lock()
+	defer mq.mu.Unlock()
 	select {
 	case mq.tasks <- task:
 		return nil
 	case <-ctx.Done():
-		mq.count.Add(-1)
 		return ctx.Err()
-	}
-}
-func (mq *Queue) safeClose() {
-	if mq.count.Load() == 0 {
-		return
-	}
-	ticker := time.NewTicker(time.Millisecond * 100)
-	defer ticker.Stop()
-	for range ticker.C {
-		if mq.count.Load() == 0 {
-			return
-		}
 	}
 }

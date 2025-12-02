@@ -23,11 +23,63 @@ type Client struct {
 	backoff backoff.Backoff
 }
 
-func (c *Client) Connect() {
-	c.cli.Connect(c.id)
+func (c *Client) run() {
+	for {
+		if c.cli.Status() == client.StatusClosed {
+			return
+		}
+		switch rand.Int() % 3 {
+		case 0:
+			c.sendToAll()
+		case 1:
+			c.sendToUser()
+		case 2:
+			c.sendToChannel()
+		}
+		time.Sleep(c.backoff.Next(1))
+	}
+}
+func (c *Client) sendToAll() {
+	msg := packet.NewMessage(fmt.Appendf(nil, "hello every one, i am %s", c.id.UserID))
+	msg.Kind = packet.MessageKind(3)
+	err := c.cli.SendMessage(context.Background(), msg)
+	if err != nil {
+		xlog.Error("sendToAll message error", err)
+	}
+}
+func (c *Client) sendToUser() {
+	enc := coder.NewEncoder()
+	toUserID := fmt.Sprintf("u%d", rand.IntN(100000))
+	enc.WriteString(toUserID)
+	enc.WriteString(fmt.Sprintf("hello i am %s", c.id.UserID))
+	msg := packet.NewMessage(enc.Bytes())
+	msg.Qos = packet.MessageQos1
+	msg.Kind = packet.MessageKind(1)
+	err := c.cli.SendMessage(context.Background(), msg)
+	if err != nil {
+		xlog.Error("sendToUser message error", err)
+	}
+}
+func (c *Client) sendToChannel() {
+	enc := coder.NewEncoder()
+	channel := fmt.Sprintf("channel%d", rand.IntN(100000))
+	enc.WriteString(channel)
+	enc.WriteString(fmt.Sprintf("hello every one, i am %s", c.id.UserID))
+	msg := packet.NewMessage(enc.Bytes())
+	msg.Qos = packet.MessageQos1
+	msg.Kind = packet.MessageKind(2)
+	err := c.cli.SendMessage(context.Background(), msg)
+	if err != nil {
+		xlog.Error("sendToChannel message error", err)
+	}
 }
 func (c *Client) OnStatus(status client.Status) {
-
+	if status == client.StatusOpened {
+		xlog.Info("client opened")
+		go c.run()
+	} else {
+		xlog.Info("client closed")
+	}
 }
 func (c *Client) OnMessage(msg *packet.Message) error {
 	xlog.Info("receive message", slog.String("msg", string(msg.Payload)))
@@ -71,12 +123,12 @@ func (t *Tester) addClient() *Client {
 		client.WithKeepAlive(time.Second*5, time.Second*60),
 		client.WithHandler(result),
 	)
-	uid := fmt.Sprintf("u%d", rand.IntN(30000))
+	uid := fmt.Sprintf("u%d", rand.IntN(100000))
 	cid := fmt.Sprintf("%s_%d", uid, rand.Int())
 	result.id = &packet.Identity{UserID: uid, ClientID: cid}
-	result.backoff = backoff.Random(time.Second*3, time.Second*10)
+	result.backoff = backoff.Random(time.Second*2, time.Second*5)
 	t.clients.Set(result.id.ClientID, result)
-	result.Connect()
+	result.cli.Connect(result.id)
 	return result
 }
 func (t *Tester) handlePause(w http.ResponseWriter, r *http.Request) {
@@ -94,17 +146,7 @@ func (t *Tester) runOnce() {
 	t.clients.Range(func(key string, value *Client) bool {
 		if value.cli.Status() == client.StatusOpened {
 			max--
-			enc := coder.NewEncoder()
-			toUserID := fmt.Sprintf("u%d", rand.IntN(30000))
-			enc.WriteString(toUserID)
-			enc.WriteString(fmt.Sprintf("hello i am %s", value.id.UserID))
-			msg := packet.NewMessage(enc.Bytes())
-			msg.Qos = packet.MessageQos1
-			msg.Kind = packet.MessageKind(1)
-			err := value.cli.SendMessage(context.Background(), msg)
-			if err != nil {
-				fmt.Println(err)
-			}
+			value.sendToUser()
 		}
 		return max > 0
 	})

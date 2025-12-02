@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"math/rand/v2"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -29,7 +30,8 @@ func (h *Handler) OnClosed(id *packet.Identity) {
 }
 func (h *Handler) OnMessage(m *packet.Message, id *packet.Identity) error {
 	var msg string
-	if m.Kind == 1 {
+	switch m.Kind {
+	case 1:
 		dec := coder.NewDecoder(m.Payload)
 		toUserID, err := dec.ReadString()
 		if err != nil {
@@ -45,12 +47,40 @@ func (h *Handler) OnMessage(m *packet.Message, id *packet.Identity) error {
 		} else {
 			xlog.Info("send message to ", slog.String("toId", toUserID), slog.String("msg", msg), slog.Uint64("total", totla), slog.Uint64("success", success))
 		}
+	case 2:
+		dec := coder.NewDecoder(m.Payload)
+		channel, err := dec.ReadString()
+		if err != nil {
+			return err
+		}
+		msg, err := dec.ReadString()
+		if err != nil {
+			return err
+		}
+		totla, success, err := h.b.SendToChannel(context.Background(), channel, packet.NewMessage([]byte(msg)))
+		if err != nil {
+			xlog.Errorf("send message to ", slog.String("channel", channel), slog.String("msg", msg), slog.Any("error", err))
+		} else {
+			xlog.Info("send message to ", slog.String("channel", channel), slog.String("msg", msg), slog.Uint64("total", totla), slog.Uint64("success", success))
+		}
+	case 3:
+		msg = string(m.Payload)
+		total, success, err := h.b.SendToAll(context.Background(), packet.NewMessage([]byte(msg)))
+		if err != nil {
+			xlog.Errorf("send message to all ", slog.String("msg", msg), slog.Any("error", err))
+		} else {
+			xlog.Info("send message to all ", slog.String("msg", msg), slog.Uint64("total", total), slog.Uint64("success", success))
+		}
 	}
 	xlog.Info("receive message from ", slog.String("fromId", id.UserID), slog.String("msg", msg))
 	return nil
 }
 func (h *Handler) GetChannels(uid string) ([]string, error) {
-	return []string{"test"}, nil
+	channels := make([]string, 5)
+	for i := range channels {
+		channels[i] = fmt.Sprintf("channel%d", rand.IntN(100000))
+	}
+	return channels, nil
 }
 
 func main() {

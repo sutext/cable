@@ -9,7 +9,7 @@ import (
 	"sutext.github.io/cable/internal/inflight"
 	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
-	err "sutext.github.io/cable/xerr"
+	"sutext.github.io/cable/xerr"
 	"sutext.github.io/cable/xlog"
 )
 
@@ -79,8 +79,9 @@ func (c *Conn) RecvResponse(p *packet.Response) {
 	}
 }
 func (c *Conn) Close() {
+	c.recvQueue.Close()
+	c.sendQueue.Close()
 	if c.closed.CompareAndSwap(false, true) {
-		c.recvQueue.Close()
 		c.raw.close()
 		if c.closeHandler != nil {
 			c.closeHandler(c)
@@ -89,7 +90,7 @@ func (c *Conn) Close() {
 }
 func (c *Conn) ClosePacket(p packet.Packet) error {
 	if c.closed.Load() {
-		return err.ConnectionIsClosed
+		return xerr.ConnectionIsClosed
 	}
 	return c.sendQueue.AddTask(func() {
 		if c.closed.Load() {
@@ -103,7 +104,7 @@ func (c *Conn) ClosePacket(p packet.Packet) error {
 }
 func (c *Conn) SendPacket(p packet.Packet) error {
 	if c.closed.Load() {
-		return err.ConnectionIsClosed
+		return xerr.ConnectionIsClosed
 	}
 	return c.sendQueue.AddTask(func() {
 		if c.closed.Load() {
