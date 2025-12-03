@@ -38,7 +38,7 @@ type options struct {
 	peers     []string
 	handler   Handler
 	brokerID  string
-	httpAddr  string
+	httpPort  string
 	peerPort  string
 	listeners map[server.Network]string
 }
@@ -46,7 +46,7 @@ type options struct {
 func newOptions(opts ...Option) *options {
 	options := &options{
 		handler:  &emptyHandler{},
-		httpAddr: ":8888",
+		httpPort: ":8888",
 		peerPort: ":4567",
 		brokerID: getBrokerID(),
 		listeners: map[server.Network]string{
@@ -78,9 +78,9 @@ func WithHandler(h Handler) Option {
 	}}
 }
 
-func WithHTTPAddr(addr string) Option {
+func WithHTTPPort(port string) Option {
 	return Option{func(o *options) {
-		o.httpAddr = addr
+		o.httpPort = port
 	}}
 }
 func WithPeerPort(port string) Option {

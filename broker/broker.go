@@ -2,7 +2,6 @@ package broker
 
 import (
 	"context"
-	"fmt"
 	"math/rand/v2"
 	"net/http"
 	"runtime/debug"
@@ -55,13 +54,13 @@ func NewBroker(opts ...Option) Broker {
 	b.logger = xlog.With("GROUP", "BROKER")
 	b.handler = options.handler
 	b.muticast = muticast.New(b.id)
-	b.muticast.OnRequest(func(s string) int32 {
-		strs := strings.Split(s, ":")
+	b.muticast.OnRequest(func(idip string) int32 {
+		strs := strings.Split(idip, ":")
 		b.addPeer(strs[0], strs[1])
 		return b.clusterSize()
 	})
-	for _, p := range options.peers {
-		strs := strings.Split(p, ":")
+	for _, idip := range options.peers {
+		strs := strings.Split(idip, ":")
 		if len(strs) != 2 {
 			panic("peers format error want id:ip")
 		}
@@ -79,7 +78,7 @@ func NewBroker(opts ...Option) Broker {
 		)
 	}
 	b.peerPort = options.peerPort
-	b.peerServer = server.New(fmt.Sprintf(":%s", options.peerPort), server.WithRequest(b.onPeerRequest))
+	b.peerServer = server.New(options.peerPort, server.WithRequest(b.onPeerRequest))
 	b.handlePeer("SendMessage", b.handleSendMessage)
 	b.handlePeer("IsOnline", b.handleIsOnline)
 	b.handlePeer("KickConn", b.handleKickConn)
@@ -96,7 +95,7 @@ func NewBroker(opts ...Option) Broker {
 	mux.HandleFunc("/brodcast", b.handleBrodcast)
 	mux.HandleFunc("/health", b.handleHealth)
 	mux.HandleFunc("/freeMemory", b.handleFreeMemory)
-	b.httpServer = &http.Server{Addr: options.httpAddr, Handler: mux}
+	b.httpServer = &http.Server{Addr: options.httpPort, Handler: mux}
 	return b
 }
 func (b *broker) clusterSize() int32 {
@@ -162,14 +161,14 @@ func (b *broker) syncBroker() {
 	}
 	max := b.clusterSize()
 	min := b.clusterSize()
-	for key, count := range m {
+	for idip, count := range m {
 		if count > max {
 			max = count
 		}
 		if count < min {
 			min = count
 		}
-		strs := strings.Split(key, ":")
+		strs := strings.Split(idip, ":")
 		b.addPeer(strs[0], strs[1])
 	}
 	if max != min {

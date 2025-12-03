@@ -20,7 +20,7 @@ import (
 type peer struct {
 	id     string
 	ip     string
-	ipmu   *sync.Mutex
+	ipmu   sync.Mutex
 	broker *broker
 	client client.Client
 }
@@ -102,7 +102,7 @@ func (p *peer) createClient() client.Client {
 	retrier.Filter(func(err error) bool {
 		return strings.Contains(err.Error(), "no route")
 	})
-	return client.New(fmt.Sprintf("%s:%d", p.ip, p.broker.peerPort),
+	return client.New(fmt.Sprintf("%s%s", p.ip, p.broker.peerPort),
 		client.WithRetrier(retrier),
 		client.WithHandler(p),
 		client.WithKeepAlive(time.Second*3, time.Second*60),

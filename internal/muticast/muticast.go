@@ -19,12 +19,12 @@ type Muticast interface {
 }
 
 type muticast struct {
-	id       string
+	idip     string
 	mu       sync.Mutex
 	addr     *net.UDPAddr
 	conn     *net.UDPConn
 	listener *net.UDPConn
-	req      func(string) int32
+	req      func(idip string) int32
 	logger   *xlog.Logger
 	respChan chan *packet.Response
 }
@@ -35,7 +35,7 @@ func New(brokerID string) *muticast {
 		panic(err)
 	}
 	m := &muticast{
-		id:     fmt.Sprintf("%s@%s", brokerID, ip),
+		idip:   fmt.Sprintf("%s:%s", brokerID, ip),
 		logger: xlog.With("GROUP", "MUTICAST"),
 		addr:   &net.UDPAddr{IP: net.IPv4(224, 0, 0, 9), Port: 9999},
 	}
@@ -77,7 +77,7 @@ func (m *muticast) Serve() error {
 		count := m.req(string(req.Content))
 		enc := coder.NewEncoder()
 		enc.WriteInt32(count)
-		enc.WriteString(m.id)
+		enc.WriteString(m.idip)
 		resp := packet.NewResponse(req.ID, enc.Bytes())
 		bytes, err := packet.Marshal(resp)
 		if err != nil {
@@ -128,7 +128,7 @@ func (m *muticast) Request() (r map[string]int32, err error) {
 	if m.respChan != nil {
 		return nil, fmt.Errorf("Muticast request is already in progress")
 	}
-	req := packet.NewRequest("discovery", []byte(m.id))
+	req := packet.NewRequest("discovery", []byte(m.idip))
 	reqdata, err := packet.Marshal(req)
 	if err != nil {
 		return r, err
