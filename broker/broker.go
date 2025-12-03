@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -79,12 +80,15 @@ func NewBroker(opts ...Option) Broker {
 	b.handlePeer("LeaveChannel", b.handleLeaveChannel)
 	b.handlePeer("Inspect", b.handlePeerInspect)
 	b.handlePeer("KickUser", b.handleKickUser)
+	b.handlePeer("FreeMemory", b.handlePeerFreeMemory)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/join", b.handleJoin)
 	mux.HandleFunc("/inspect", b.handleInspect)
 	mux.HandleFunc("/kickout", b.handleKickout)
 	mux.HandleFunc("/message", b.handleMessage)
 	mux.HandleFunc("/brodcast", b.handleBrodcast)
+	mux.HandleFunc("/health", b.handleHealth)
+	mux.HandleFunc("/freeMemory", b.handleFreeMemory)
 	b.httpServer = &http.Server{Addr: options.httpAddr, Handler: mux}
 	return b
 }
@@ -116,23 +120,23 @@ func (b *broker) Start() error {
 	for _, l := range b.listeners {
 		go func() {
 			if err := l.Serve(); err != nil {
-				b.logger.Error("listener serve", xlog.Err(err))
+				panic(err)
 			}
 		}()
 	}
 	go func() {
 		if err := b.muticast.Serve(); err != nil {
-			b.logger.Error("muticast serve ", xlog.Err(err))
+			panic(err)
 		}
 	}()
 	go func() {
 		if err := b.peerServer.Serve(); err != nil {
-			b.logger.Error("peer server serve", xlog.Err(err))
+			panic(err)
 		}
 	}()
 	go func() {
 		if err := b.httpServer.ListenAndServe(); err != nil {
-			b.logger.Error("http server serve", xlog.Err(err))
+			panic(err)
 		}
 	}()
 	time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.syncBroker)
@@ -181,7 +185,13 @@ func (b *broker) Shutdown(ctx context.Context) (err error) {
 	}
 	return err
 }
-
+func (b *broker) freeMemory() {
+	debug.FreeOSMemory()
+	b.peers.Range(func(key string, p *peer) bool {
+		p.freeMemory(context.Background())
+		return true
+	})
+}
 func (b *broker) IsOnline(ctx context.Context, uid string) (online bool) {
 	if online = b.isOnline(uid); online {
 		return true

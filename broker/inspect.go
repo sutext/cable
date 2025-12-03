@@ -212,3 +212,12 @@ func (b *broker) handleBrodcast(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(data)
 }
+func (b *broker) handleHealth(w http.ResponseWriter, r *http.Request) {
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ok"))
+}
+func (b *broker) handleFreeMemory(w http.ResponseWriter, r *http.Request) {
+	b.freeMemory()
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ok"))
+}

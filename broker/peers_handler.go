@@ -2,6 +2,7 @@ package broker
 
 import (
 	"encoding/json"
+	"runtime/debug"
 
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
@@ -89,4 +90,8 @@ func (b *broker) handleLeaveChannel(p *packet.Request, id *packet.Identity) (*pa
 	encoder := coder.NewEncoder()
 	encoder.WriteVarint(count)
 	return packet.NewResponse(p.ID, encoder.Bytes()), nil
+}
+func (b *broker) handlePeerFreeMemory(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
+	debug.FreeOSMemory()
+	return packet.NewResponse(p.ID), nil
 }

@@ -168,3 +168,6 @@ func (p *peer) leaveChannel(ctx context.Context, uid string, channels []string) 
 	}
 	return count, nil
 }
+func (p *peer) freeMemory(ctx context.Context) {
+	p.client.SendRequest(ctx, packet.NewRequest("FreeMemory"))
+}
