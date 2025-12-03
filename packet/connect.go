@@ -44,6 +44,9 @@ func (i *Identity) Equal(other *Identity) bool {
 	}
 	return i.UserID == other.UserID && i.ClientID == other.ClientID && i.Password == other.Password
 }
+func (i *Identity) String() string {
+	return fmt.Sprintf("uid=%s, cid=%s", i.UserID, i.ClientID)
+}
 
 const (
 	versionMask uint8 = 0x3f
@@ -65,7 +68,7 @@ func (p *Connect) Type() PacketType {
 	return CONNECT
 }
 func (p *Connect) String() string {
-	return fmt.Sprintf("CONNECT(uid=%s, cid=%s)", p.Identity.UserID, p.Identity.ClientID)
+	return fmt.Sprintf("CONNECT(Version=%d, %s, Props=%v)", p.Version, p.Identity.String(), p.props)
 }
 
 func (p *Connect) Equal(other Packet) bool {
@@ -75,8 +78,8 @@ func (p *Connect) Equal(other Packet) bool {
 	if other.Type() != CONNECT {
 		return false
 	}
-	otherP := other.(*Connect)
-	return maps.Equal(p.props, otherP.props) && p.Version == otherP.Version && p.Identity.Equal(otherP.Identity)
+	o := other.(*Connect)
+	return maps.Equal(p.props, o.props) && p.Version == o.Version && p.Identity.Equal(o.Identity)
 }
 func (p *Connect) WriteTo(w coder.Encoder) error {
 	flags := uint8(0)
@@ -142,7 +145,7 @@ func (p *Connack) Type() PacketType {
 	return CONNACK
 }
 func (p *Connack) String() string {
-	return fmt.Sprintf("CONNACK:%s", p.Code.String())
+	return fmt.Sprintf("CONNACK(Code=%s,Props=%v)", p.Code, p.props)
 }
 
 func (p *Connack) Equal(other Packet) bool {
@@ -152,8 +155,8 @@ func (p *Connack) Equal(other Packet) bool {
 	if other.Type() != CONNACK {
 		return false
 	}
-	otherP := other.(*Connack)
-	return maps.Equal(p.props, otherP.props) && p.Code == otherP.Code
+	o := other.(*Connack)
+	return maps.Equal(p.props, o.props) && p.Code == o.Code
 }
 
 func (p *Connack) WriteTo(w coder.Encoder) error {

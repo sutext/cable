@@ -84,7 +84,9 @@ func (t PacketType) String() string {
 type Property uint8
 
 const (
-	PropertyUDPConnID Property = 0
+	PropertyConnID  Property = 0
+	PropertyUserID  Property = 1
+	PropertyChannel Property = 2
 )
 
 type Properties interface {
@@ -115,6 +117,9 @@ func (p *packet) ReadFrom(c coder.Decoder) error {
 	p.props = m
 	return nil
 }
+func (p *packet) String() string {
+	return fmt.Sprintf("%v", p.props)
+}
 func (p *packet) Get(key Property) (string, bool) {
 	v, ok := p.props[uint8(key)]
 	return v, ok
@@ -143,7 +148,7 @@ func (p *ping) Equal(other Packet) bool {
 	return other.Type() == PING && maps.Equal(p.props, other.(*ping).props)
 }
 func (p *ping) String() string {
-	return PING.String()
+	return fmt.Sprintf("PING(%v)", p.props)
 }
 
 type pong struct {
@@ -163,7 +168,7 @@ func (p *pong) Equal(other Packet) bool {
 	return other.Type() == PONG && maps.Equal(p.props, other.(*pong).props)
 }
 func (p *pong) String() string {
-	return PONG.String()
+	return fmt.Sprintf("PONG(%v)", p.props)
 }
 
 // Marshal encodes the given Packet object to bytes.
@@ -278,6 +283,12 @@ func unpack(header, data []byte) (Packet, error) {
 			return nil, err
 		}
 		return msg, nil
+	case MESSACK:
+		ack := &Messack{}
+		if err := coder.Unmarshal(data, ack); err != nil {
+			return nil, err
+		}
+		return ack, nil
 	case REQUEST:
 		req := &Request{}
 		if err := coder.Unmarshal(data, req); err != nil {
@@ -301,6 +312,7 @@ func unpack(header, data []byte) (Packet, error) {
 		}
 		return close, nil
 	default:
+		fmt.Printf("unknown packet type: %d\n", packetType)
 		return nil, ErrUnknownPacketType
 	}
 }

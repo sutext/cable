@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/md5"
 	"encoding/hex"
-	"log/slog"
 	"net"
 
 	"sutext.github.io/cable/internal/safe"
@@ -62,14 +61,14 @@ func (l *udpListener) Listen(address string) error {
 }
 func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.Packet) {
 	if p.Type() != packet.CONNECT {
-		connID, ok := p.Get(packet.PropertyUDPConnID)
+		connID, ok := p.Get(packet.PropertyConnID)
 		if !ok {
-			l.logger.Warn("unknown udp packet", slog.String("packet", p.String()))
+			l.logger.Warn("unknown udp packet", xlog.String("packet", p.String()))
 			return
 		}
 		c, loaded := l.connMap.Get(connID)
 		if !loaded {
-			l.logger.Warn("unknown udp connID", slog.String("connID", connID))
+			l.logger.Warn("unknown udp connID", xlog.String("connID", connID))
 			return
 		}
 		c.recvQueue.AddTask(func() {

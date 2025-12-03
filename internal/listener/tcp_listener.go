@@ -2,7 +2,6 @@ package listener
 
 import (
 	"context"
-	"log/slog"
 	"net"
 	"time"
 
@@ -57,12 +56,12 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 	})
 	p, err := packet.ReadFrom(conn)
 	if err != nil {
-		l.logger.Error("failed to read packet", err)
+		l.logger.Error("failed to read packet", xlog.Err(err))
 		conn.Close()
 		return
 	}
 	if p.Type() != packet.CONNECT {
-		l.logger.Errorf("first packet is not connect packet", slog.String("packetType", p.Type().String()))
+		l.logger.Error("first packet is not connect packet", xlog.String("packetType", p.Type().String()))
 		conn.Close()
 		return
 	}

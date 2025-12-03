@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"log/slog"
 	"sync"
 	"time"
 
@@ -65,7 +64,7 @@ func New(address string, options ...Option) Client {
 	}
 	c.keepalive.PingFunc(func() {
 		if err := c.sendPacket(packet.NewPing()); err != nil {
-			c.logger.Error("send ping error", err)
+			c.logger.Error("send ping error", xlog.Err(err))
 		}
 	})
 	c.keepalive.TimeoutFunc(func() {
@@ -99,7 +98,7 @@ func (c *client) tryClose(err error) {
 	if c.id == nil {
 		return
 	}
-	c.logger.Error("try close", err)
+	c.logger.Error("try close", xlog.Err(err))
 	if c.status == StatusClosed || c.status == StatusClosing {
 		return
 	}
@@ -149,7 +148,7 @@ func (c *client) reconnect() error {
 	if ack.Code != packet.ConnectAccepted {
 		return ErrConntionFailed
 	}
-	if connID, ok := ack.Get(packet.PropertyUDPConnID); ok {
+	if connID, ok := ack.Get(packet.PropertyConnID); ok {
 		c.packetConnID = connID
 	}
 	c.setStatus(StatusOpened)
@@ -192,7 +191,7 @@ func (c *client) sendPacket(p packet.Packet) error {
 			return
 		}
 		if c.packetConnID != "" {
-			p.Set(packet.PropertyUDPConnID, c.packetConnID)
+			p.Set(packet.PropertyConnID, c.packetConnID)
 		}
 		err := c.conn.WritePacket(p)
 		if err != nil {
@@ -216,7 +215,7 @@ func (c *client) _setStatus(status Status) {
 	if c.status == status {
 		return
 	}
-	c.logger.Debug("client status change", slog.String("from", c.status.String()), slog.String("to", status.String()))
+	c.logger.Debug("client status change", xlog.String("from", c.status.String()), xlog.String("to", status.String()))
 	c.status = status
 	switch status {
 	case StatusClosed:
@@ -244,9 +243,9 @@ func (c *client) recv() {
 			c.tryClose(err)
 			return
 		}
-		if connID, ok := p.Get(packet.PropertyUDPConnID); ok {
+		if connID, ok := p.Get(packet.PropertyConnID); ok {
 			if connID != c.packetConnID {
-				c.logger.Errorf("packet conn id not match", slog.String("connID", connID), slog.String("expect", c.packetConnID))
+				c.logger.Error("packet conn id not match", xlog.String("connID", connID), xlog.String("expect", c.packetConnID))
 				c.tryClose(ErrConntionFailed)
 				return
 			}
@@ -264,12 +263,12 @@ func (c *client) handlePacket(p packet.Packet) {
 		msg := p.(*packet.Message)
 		err := c.handler.OnMessage(msg)
 		if err != nil {
-			c.logger.Error("message handler error", err)
+			c.logger.Error("message handler error", xlog.Err(err))
 			return
 		}
 		if msg.Qos == packet.MessageQos1 {
 			if err := c.sendPacket(packet.NewMessack(msg.ID)); err != nil {
-				c.logger.Error("send messack packet error", err)
+				c.logger.Error("send messack packet error", xlog.Err(err))
 			}
 		}
 	case packet.MESSACK:
@@ -278,12 +277,12 @@ func (c *client) handlePacket(p packet.Packet) {
 	case packet.REQUEST:
 		res, err := c.handler.OnRequest(p.(*packet.Request))
 		if err != nil {
-			c.logger.Error("request handler error", err)
+			c.logger.Error("request handler error", xlog.Err(err))
 			return
 		}
 		if res != nil {
 			if err := c.sendPacket(res); err != nil {
-				c.logger.Error("send response packet error", err)
+				c.logger.Error("send response packet error", xlog.Err(err))
 			}
 		}
 	case packet.RESPONSE:
@@ -291,11 +290,11 @@ func (c *client) handlePacket(p packet.Packet) {
 		if t, ok := c.requestTasks.Load(p.ID); ok {
 			t.(chan *packet.Response) <- p
 		} else {
-			c.logger.Errorf("response task not found", slog.Int64("id", p.ID))
+			c.logger.Error("response task not found", xlog.Int64("id", p.ID))
 		}
 	case packet.PING:
 		if err := c.SendPong(); err != nil {
-			c.logger.Error("send pong error", err)
+			c.logger.Error("send pong error", xlog.Err(err))
 		}
 	case packet.PONG:
 		c.keepalive.HandlePong()

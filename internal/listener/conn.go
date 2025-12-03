@@ -97,7 +97,7 @@ func (c *Conn) ClosePacket(p packet.Packet) error {
 			return
 		}
 		if err := c.raw.writePacket(p); err != nil {
-			c.logger.Error("failed to send packet", err)
+			c.logger.Error("failed to send packet", xlog.Err(err))
 		}
 		c.Close()
 	})
@@ -108,12 +108,12 @@ func (c *Conn) SendPacket(p packet.Packet) error {
 	}
 	return c.sendQueue.AddTask(func() {
 		if c.closed.Load() {
-			c.logger.Errorf("try to send packet on closed connection")
+			c.logger.Error("try to send packet on closed connection")
 			return
 		}
 		err := c.raw.writePacket(p)
 		if err != nil {
-			c.logger.Error("failed to send packet", err)
+			c.logger.Error("failed to send packet", xlog.Err(err))
 			switch err.(type) {
 			case packet.Error, coder.Error:
 				break

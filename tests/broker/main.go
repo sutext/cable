@@ -22,7 +22,7 @@ func main() {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		if err := http.ListenAndServe("localhost:6060", nil); err != nil {
-			xlog.Error("pprof server error:", err)
+			xlog.Error("pprof server error:", xlog.Err(err))
 		}
 	}()
 	go func() {

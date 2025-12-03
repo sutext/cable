@@ -181,23 +181,23 @@ func (s *server) onConnect(p *packet.Connect, c *listener.Conn) packet.ConnectCo
 func (s *server) onMessage(c *listener.Conn, p *packet.Message) {
 	err := s.messageHandler(p, c.ID())
 	if err != nil {
-		s.logger.Error("failed to handle message", err)
+		s.logger.Error("failed to handle message", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 		return
 	}
 	if p.Qos == packet.MessageQos1 {
 		if err := c.SendPacket(packet.NewMessack(p.ID)); err != nil {
-			s.logger.Error("failed to send messack", err)
+			s.logger.Error("failed to send messack", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 		}
 	}
 }
 func (s *server) onRequest(c *listener.Conn, p *packet.Request) {
 	res, err := s.requestHandler(p, c.ID())
 	if err != nil {
-		s.logger.Error("failed to handle request", err)
+		s.logger.Error("failed to handle request", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 		return
 	}
 	if err := c.SendPacket(res); err != nil {
-		s.logger.Error("failed to send response", err)
+		s.logger.Error("failed to send response", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 	}
 }
 func (s *server) onClose(c *listener.Conn) {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"math"
 	"strings"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xerr"
+	"sutext.github.io/cable/xlog"
 )
 
 type peer struct {
@@ -52,7 +52,7 @@ func (p *peer) Connect() {
 func (p *peer) OnStatus(status client.Status) {
 	switch status {
 	case client.StatusOpened:
-		p.broker.logger.Info("peer connected", slog.String("peerid", p.id))
+		p.broker.logger.Info("peer connected", xlog.String("peerid", p.id))
 	case client.StatusClosed:
 		p.broker.delPeer(p.id)
 	}

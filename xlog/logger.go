@@ -24,12 +24,8 @@ func Info(msg string, fields ...slog.Attr) {
 func Warn(msg string, fields ...slog.Attr) {
 	Defualt().Warn(msg, fields...)
 }
-
-func Error(msg string, err error) {
-	Defualt().Error(msg, err)
-}
-func Errorf(msg string, fields ...slog.Attr) {
-	Defualt().Errorf(msg, fields...)
+func Error(msg string, fields ...slog.Attr) {
+	Defualt().Error(msg, fields...)
 }
 
 type Logger struct {
@@ -44,6 +40,33 @@ const (
 	LevelError slog.Level = slog.LevelError
 )
 
+var (
+	Int      = slog.Int
+	Any      = slog.Any
+	Bool     = slog.Bool
+	Time     = slog.Time
+	Int64    = slog.Int64
+	Uint64   = slog.Uint64
+	String   = slog.String
+	Float64  = slog.Float64
+	Duration = slog.Duration
+)
+
+func Err(e error) slog.Attr {
+	return slog.Any("error", e)
+}
+func Uid(user string) slog.Attr {
+	return slog.String("userId", user)
+}
+func Cid(user string) slog.Attr {
+	return slog.String("clientId", user)
+}
+func Msg(msg string) slog.Attr {
+	return slog.String("message", msg)
+}
+func Channel(ch string) slog.Attr {
+	return slog.String("channelId", ch)
+}
 func With(args ...any) *Logger {
 	return Defualt().With(args...)
 }
@@ -89,10 +112,6 @@ func (l *Logger) Info(msg string, fields ...slog.Attr) {
 func (l *Logger) Warn(msg string, fields ...slog.Attr) {
 	l.s.LogAttrs(context.Background(), slog.LevelWarn, msg, fields...)
 }
-
-func (l *Logger) Error(msg string, err error) {
-	l.s.LogAttrs(context.Background(), slog.LevelError, msg, slog.Any("error", err))
-}
-func (l *Logger) Errorf(msg string, fields ...slog.Attr) {
+func (l *Logger) Error(msg string, fields ...slog.Attr) {
 	l.s.LogAttrs(context.Background(), slog.LevelError, msg, fields...)
 }

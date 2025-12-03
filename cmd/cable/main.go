@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	_ "net/http/pprof"
@@ -13,7 +12,6 @@ import (
 	"time"
 
 	"sutext.github.io/cable/broker"
-	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
 )
@@ -21,6 +19,11 @@ import (
 type Handler struct {
 	b broker.Broker
 }
+
+const (
+	MessageKindChat  packet.MessageKind = 1
+	MessageKindGroup packet.MessageKind = 2
+)
 
 func (h *Handler) OnConnect(c *packet.Connect) packet.ConnectCode {
 	return packet.ConnectAccepted
@@ -30,49 +33,32 @@ func (h *Handler) OnClosed(id *packet.Identity) {
 }
 func (h *Handler) OnMessage(m *packet.Message, id *packet.Identity) error {
 	switch m.Kind {
-	case 1:
-		dec := coder.NewDecoder(m.Payload)
-		toUserID, err := dec.ReadString()
-		if err != nil {
-			return err
+	case MessageKindChat:
+		toUserID, ok := m.Get(packet.PropertyUserID)
+		if !ok {
+			return fmt.Errorf("no user id in message")
 		}
-		msg, err := dec.ReadString()
+		totla, success, err := h.b.SendToUser(context.Background(), toUserID, packet.NewMessage(m.Payload))
 		if err != nil {
-			return err
-		}
-		totla, success, err := h.b.SendToUser(context.Background(), toUserID, packet.NewMessage([]byte(msg)))
-		if err != nil {
-			xlog.Errorf("send message to ", slog.String("toId", toUserID), slog.String("msg", msg), slog.Any("error", err))
+			xlog.Error("Failed to send message to ", xlog.String("toId", toUserID), xlog.Err(err))
 		} else {
-			xlog.Info("send message to ", slog.String("toId", toUserID), slog.String("msg", msg), slog.Uint64("total", totla), slog.Uint64("success", success))
+			xlog.Info("Success to send message to ", xlog.String("toId", toUserID), xlog.Uint64("total", totla), xlog.Uint64("success", success))
 		}
-	case 2:
-		dec := coder.NewDecoder(m.Payload)
-		channel, err := dec.ReadString()
-		if err != nil {
-			return err
+	case MessageKindGroup:
+		channel, ok := m.Get(packet.PropertyChannel)
+		if !ok {
+			return fmt.Errorf("no user id in message")
 		}
-		msg, err := dec.ReadString()
+		totla, success, err := h.b.SendToChannel(context.Background(), channel, packet.NewMessage(m.Payload))
 		if err != nil {
-			return err
-		}
-		totla, success, err := h.b.SendToChannel(context.Background(), channel, packet.NewMessage([]byte(msg)))
-		if err != nil {
-			xlog.Errorf("send message to ", slog.String("channel", channel), slog.String("msg", msg), slog.Any("error", err))
+			xlog.Error("Failed to send message to ", xlog.Channel(channel), xlog.Err(err))
 		} else {
-			xlog.Info("send message to ", slog.String("channel", channel), slog.String("msg", msg), slog.Uint64("total", totla), slog.Uint64("success", success))
-		}
-	case 3:
-		msg := string(m.Payload)
-		total, success, err := h.b.SendToAll(context.Background(), packet.NewMessage(m.Payload))
-		if err != nil {
-			xlog.Errorf("send message to all ", slog.String("msg", msg), slog.Any("error", err))
-		} else {
-			xlog.Info("send message to all ", slog.String("msg", msg), slog.Uint64("total", total), slog.Uint64("success", success))
+			xlog.Info("Success to send message to ", xlog.Channel(channel), xlog.Uint64("total", totla), xlog.Uint64("success", success))
 		}
 	}
 	return nil
 }
+
 func (h *Handler) GetChannels(uid string) ([]string, error) {
 	channels := make([]string, 2)
 	for i := range channels {
@@ -89,7 +75,7 @@ func main() {
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		if err := http.ListenAndServe(":6060", nil); err != nil {
-			xlog.Error("pprof server start :", err)
+			xlog.Error("pprof server start :", xlog.Err(err))
 		}
 	}()
 	go func() {
@@ -100,7 +86,7 @@ func main() {
 	b := broker.NewBroker(broker.WithHandler(h))
 	h.b = b
 	if err := b.Start(); err != nil {
-		xlog.Error("cable server start :", err)
+		xlog.Error("cable server start :", xlog.Err(err))
 		return
 	}
 	xlog.Info("cable server started")
@@ -108,7 +94,7 @@ func main() {
 	done := make(chan struct{})
 	go func() {
 		if err := b.Shutdown(context.Background()); err != nil {
-			xlog.Error("cable server shutdown :", err)
+			xlog.Error("cable server shutdown :", xlog.Err(err))
 		}
 		close(done)
 	}()

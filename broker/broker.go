@@ -3,7 +3,6 @@ package broker
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	"strings"
@@ -93,7 +92,7 @@ func (b *broker) clusterSize() int32 {
 	return b.peers.Len() + 1
 }
 func (b *broker) delPeer(id string) {
-	b.logger.Debug("del peer", slog.String("peerid", id))
+	b.logger.Debug("del peer", xlog.String("peerid", id))
 	if _, ok := b.peers.Get(id); ok {
 		b.peers.Delete(id)
 	}
@@ -109,7 +108,7 @@ func (b *broker) addPeer(id string) {
 	if peer == nil {
 		return
 	}
-	b.logger.Debug("add peer", slog.String("peerid", id))
+	b.logger.Debug("add peer", xlog.String("peerid", id))
 	b.peers.Set(id, peer)
 	go peer.Connect()
 }
@@ -117,23 +116,23 @@ func (b *broker) Start() error {
 	for _, l := range b.listeners {
 		go func() {
 			if err := l.Serve(); err != nil {
-				b.logger.Error("listener serve", err)
+				b.logger.Error("listener serve", xlog.Err(err))
 			}
 		}()
 	}
 	go func() {
 		if err := b.muticast.Serve(); err != nil {
-			b.logger.Error("muticast serve ", err)
+			b.logger.Error("muticast serve ", xlog.Err(err))
 		}
 	}()
 	go func() {
 		if err := b.peerServer.Serve(); err != nil {
-			b.logger.Error("peer server serve", err)
+			b.logger.Error("peer server serve", xlog.Err(err))
 		}
 	}()
 	go func() {
 		if err := b.httpServer.ListenAndServe(); err != nil {
-			b.logger.Error("http server serve", err)
+			b.logger.Error("http server serve", xlog.Err(err))
 		}
 	}()
 	time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.syncBroker)
@@ -143,10 +142,10 @@ func (b *broker) Start() error {
 func (b *broker) syncBroker() {
 	m, err := b.muticast.Request()
 	if err != nil {
-		b.logger.Error("failed to sync broker", err)
+		b.logger.Error("failed to sync broker", xlog.Err(err))
 	}
 	if len(m) == 0 {
-		b.logger.Warn("Auto discovery got endpoints", slog.Any("endpoints", m))
+		b.logger.Warn("Auto discovery got empty endpoints")
 		time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.syncBroker)
 	}
 	max := b.clusterSize()
@@ -161,24 +160,24 @@ func (b *broker) syncBroker() {
 		b.addPeer(id)
 	}
 	if max != min {
-		b.logger.Warn("broker count mismatch", slog.Int("max", int(max)), slog.Int("min", int(min)))
+		b.logger.Warn("broker count mismatch", xlog.Int("max", int(max)), xlog.Int("min", int(min)))
 		time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.syncBroker)
 	}
 }
 func (b *broker) Shutdown(ctx context.Context) (err error) {
 	for _, l := range b.listeners {
 		if err = l.Shutdown(ctx); err != nil {
-			b.logger.Error("listener shutdown", err)
+			b.logger.Error("listener shutdown", xlog.Err(err))
 		}
 	}
 	if err = b.muticast.Shutdown(); err != nil {
-		b.logger.Error("muticast shutdown", err)
+		b.logger.Error("muticast shutdown", xlog.Err(err))
 	}
 	if err = b.httpServer.Shutdown(ctx); err != nil {
-		b.logger.Error("http server shutdown", err)
+		b.logger.Error("http server shutdown", xlog.Err(err))
 	}
 	if err = b.peerServer.Shutdown(ctx); err != nil {
-		b.logger.Error("peer server shutdown", err)
+		b.logger.Error("peer server shutdown", xlog.Err(err))
 	}
 	return err
 }
@@ -190,7 +189,7 @@ func (b *broker) IsOnline(ctx context.Context, uid string) (online bool) {
 	b.peers.Range(func(id string, peer *peer) bool {
 		online, err := peer.isOnline(ctx, uid)
 		if err != nil {
-			b.logger.Error("check online from peer failed", err)
+			b.logger.Error("check online from peer failed", xlog.Err(err))
 			return true
 		}
 		if online {
@@ -205,7 +204,7 @@ func (b *broker) KickConn(ctx context.Context, cid string) {
 	b.kickConn(cid)
 	b.peers.Range(func(id string, peer *peer) bool {
 		if err := peer.kickConn(ctx, cid); err != nil {
-			b.logger.Error("kick conn from peer failed", err)
+			b.logger.Error("kick conn from peer failed", xlog.Err(err))
 		}
 		return true
 	})
@@ -214,7 +213,7 @@ func (b *broker) KickUser(ctx context.Context, uid string) {
 	b.kickUser(uid)
 	b.peers.Range(func(id string, peer *peer) bool {
 		if err := peer.kickUser(ctx, uid); err != nil {
-			b.logger.Error("kick user from peer failed", err)
+			b.logger.Error("kick user from peer failed", xlog.Err(err))
 		}
 		return true
 	})
@@ -226,7 +225,7 @@ func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (total, succe
 			total += t
 			success += s
 		} else {
-			b.logger.Error("send to all from peer failed", err)
+			b.logger.Error("send to all from peer failed", xlog.Err(err))
 		}
 		return true
 	})
@@ -240,7 +239,7 @@ func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 	b.peers.Range(func(id string, peer *peer) bool {
 		t, s, err := peer.sendMessage(ctx, m, uid, 1)
 		if err != nil {
-			b.logger.Error("send to user from peer failed", err)
+			b.logger.Error("send to user from peer failed", xlog.Err(err))
 			return true
 		}
 		total += t
@@ -259,7 +258,7 @@ func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Me
 			total += t
 			success += s
 		} else {
-			b.logger.Error("send to channel from peer failed", err)
+			b.logger.Error("send to channel from peer failed", xlog.Err(err))
 		}
 		return true
 	})
@@ -271,7 +270,7 @@ func (b *broker) JoinChannel(ctx context.Context, uid string, channels ...string
 		if c, err := peer.joinChannel(ctx, uid, channels); err == nil {
 			count += c
 		} else {
-			b.logger.Error("join channel from peer failed", err)
+			b.logger.Error("join channel from peer failed", xlog.Err(err))
 		}
 		return true
 	})
@@ -283,7 +282,7 @@ func (b *broker) LeaveChannel(ctx context.Context, uid string, channels ...strin
 		if c, err := peer.leaveChannel(ctx, uid, channels); err == nil {
 			count += c
 		} else {
-			b.logger.Error("leave channel from peer failed", err)
+			b.logger.Error("leave channel from peer failed", xlog.Err(err))
 		}
 		return true
 	})
@@ -375,7 +374,7 @@ func (b *broker) sendToAll(m *packet.Message) (total, success uint64) {
 		total += t
 		success += s
 		if err != nil {
-			b.logger.Error("send message to all failed", err)
+			b.logger.Error("send message to all failed", xlog.Err(err))
 		}
 	}
 	return total, success
@@ -388,7 +387,7 @@ func (b *broker) sendToUser(uid string, m *packet.Message) (total, success uint6
 			return true
 		}
 		if err := l.SendMessage(cid, m); err != nil {
-			b.logger.Error("send message to user failed", err)
+			b.logger.Error("send message to user failed", xlog.Err(err))
 		} else {
 			success++
 		}
@@ -404,7 +403,7 @@ func (b *broker) sendToChannel(channel string, m *packet.Message) (total, succes
 			return true
 		}
 		if err := l.SendMessage(cid, m); err != nil {
-			b.logger.Error("send message to channel failed", err)
+			b.logger.Error("send message to channel failed", xlog.Err(err))
 		} else {
 			success++
 		}

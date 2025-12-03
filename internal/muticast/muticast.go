@@ -39,14 +39,14 @@ func New(id string) *muticast {
 }
 
 func (m *muticast) Serve() error {
-	listener, err := net.ListenMulticastUDP("udp4", nil, m.addr)
+	listener, err := net.ListenMulticastUDP("udp", nil, m.addr)
 	if err != nil {
 		return err
 	}
 	m.listener = listener
 	go func() {
 		if err := m.listen(); err != nil {
-			m.logger.Error("listen error", err)
+			m.logger.Error("listen error", xlog.Err(err))
 		}
 	}()
 	defer listener.Close()
@@ -58,32 +58,30 @@ func (m *muticast) Serve() error {
 		}
 		p, err := packet.Unmarshal(buffer[:n])
 		if err != nil {
-			m.logger.Error("unmarshal packet error", err)
+			m.logger.Error("unmarshal packet error", xlog.Err(err))
 			continue
 		}
 		if p.Type() != packet.REQUEST {
-			m.logger.Errorf("packet type is not request")
+			m.logger.Error("packet type is not request")
 			continue
 		}
 		req := p.(*packet.Request)
 		if req.Method != "discovery" {
-			m.logger.Errorf("request method is not discovery")
+			m.logger.Error("request method is not discovery")
 			continue
 		}
-		go func() {
-			count := m.req(string(req.Content))
-			enc := coder.NewEncoder()
-			enc.WriteInt32(count)
-			enc.WriteString(m.id)
-			resp := packet.NewResponse(req.ID, enc.Bytes())
-			bytes, err := packet.Marshal(resp)
-			if err != nil {
-				m.logger.Error("marshal response error", err)
-			}
-			if _, err = listener.WriteToUDP(bytes, addr); err != nil {
-				m.logger.Error("write response error", err)
-			}
-		}()
+		count := m.req(string(req.Content))
+		enc := coder.NewEncoder()
+		enc.WriteInt32(count)
+		enc.WriteString(m.id)
+		resp := packet.NewResponse(req.ID, enc.Bytes())
+		bytes, err := packet.Marshal(resp)
+		if err != nil {
+			m.logger.Error("marshal response error", xlog.Err(err))
+		}
+		if _, err = listener.WriteToUDP(bytes, addr); err != nil {
+			m.logger.Error("write response error", xlog.Err(err))
+		}
 	}
 }
 
@@ -96,7 +94,7 @@ func (m *muticast) OnRequest(f func(string) int32) {
 	m.req = f
 }
 func (m *muticast) listen() error {
-	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 	if err != nil {
 		return err
 	}
@@ -110,11 +108,11 @@ func (m *muticast) listen() error {
 		}
 		p, err := packet.Unmarshal(buffer[:n])
 		if err != nil {
-			m.logger.Error("unmarshal packet error", err)
+			m.logger.Error("unmarshal packet error", xlog.Err(err))
 			continue
 		}
 		if p.Type() != packet.RESPONSE {
-			m.logger.Errorf("packet type is not response")
+			m.logger.Error("packet type is not response")
 			continue
 		}
 		m.respChan <- p.(*packet.Response)
@@ -145,12 +143,12 @@ func (m *muticast) Request() (r map[string]int32, err error) {
 		denc := coder.NewDecoder(resp.Content)
 		count, err := denc.ReadInt32()
 		if err != nil {
-			m.logger.Error("decode response error", err)
+			m.logger.Error("decode response error", xlog.Err(err))
 			continue
 		}
 		id, err := denc.ReadString()
 		if err != nil {
-			m.logger.Error("decode response error", err)
+			m.logger.Error("decode response error", xlog.Err(err))
 			continue
 		}
 		r[id] = count

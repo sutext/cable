@@ -67,7 +67,7 @@ func (p *Close) Type() PacketType {
 	return CLOSE
 }
 func (p *Close) String() string {
-	return fmt.Sprintf("CLOSE(%d)", p.Code)
+	return fmt.Sprintf("CLOSE(Code=%s, Props=%v)", p.Code, p.props)
 }
 
 func (p *Close) Equal(other Packet) bool {

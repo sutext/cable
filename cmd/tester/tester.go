@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"sutext.github.io/cable/client"
-	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
@@ -25,51 +26,44 @@ func (c *Client) run() {
 		if c.cli.Status() == client.StatusClosed {
 			return
 		}
-		switch rand.Int() % 3 {
+		switch rand.Int() % 2 {
 		case 0:
-			c.sendToAll()
-		case 1:
 			c.sendToUser()
-		case 2:
+		case 1:
 			c.sendToChannel()
 		}
-		time.Sleep(time.Second * time.Duration(100+rand.IntN(10)))
+		time.Sleep(time.Second * time.Duration(30+rand.IntN(10)))
 	}
 }
 
 func (c *Client) sendToUser() {
-	enc := coder.NewEncoder()
-	toUserID := fmt.Sprintf("u%d", rand.IntN(100000))
-	enc.WriteString(toUserID)
-	enc.WriteString(fmt.Sprintf("hello i am %s", c.id.UserID))
-	msg := packet.NewMessage(enc.Bytes())
+	msg := packet.NewMessage(fmt.Appendf(nil, "hello, i am %s", c.id.UserID))
 	msg.Qos = packet.MessageQos1
-	msg.Kind = packet.MessageKind(1)
+	msg.Kind = packet.MessageKind(2)
+	msg.Set(packet.PropertyUserID, randomUserID())
 	err := c.cli.SendMessage(context.Background(), msg)
 	if err != nil {
-		xlog.Error("sendToUser message error", err)
+		xlog.Error("sendToChannel message error", xlog.Err(err))
 	}
 }
 func (c *Client) sendToChannel() {
-	enc := coder.NewEncoder()
-	channel := fmt.Sprintf("channel%d", rand.IntN(100000))
-	enc.WriteString(channel)
-	enc.WriteString(fmt.Sprintf("hello group, i am %s", c.id.UserID))
-	msg := packet.NewMessage(enc.Bytes())
+	msg := packet.NewMessage(fmt.Appendf(nil, "hello group, i am %s", c.id.UserID))
 	msg.Qos = packet.MessageQos1
-	// msg.Kind = packet.MessageKind(2)
+	msg.Kind = packet.MessageKind(2)
+	msg.Set(packet.PropertyChannel, randomChannel())
 	err := c.cli.SendMessage(context.Background(), msg)
 	if err != nil {
-		xlog.Error("sendToChannel message error", err)
+		xlog.Error("sendToChannel message error", xlog.Err(err))
 	}
 }
-func (c *Client) sendToAll() {
-	msg := packet.NewMessage(fmt.Appendf(nil, "hello every one, i am %s", c.id.UserID))
-	// msg.Kind = packet.MessageKind(3)
-	err := c.cli.SendMessage(context.Background(), msg)
-	if err != nil {
-		xlog.Error("sendToAll message error", err)
-	}
+func randomUserID() string {
+	return fmt.Sprintf("u%d", rand.IntN(100000))
+}
+func randomClientID() string {
+	return fmt.Sprintf("c%d", rand.Int64())
+}
+func randomChannel() string {
+	return fmt.Sprintf("channel%d", rand.IntN(100000))
 }
 func (c *Client) OnStatus(status client.Status) {
 	if status == client.StatusOpened {
@@ -78,6 +72,7 @@ func (c *Client) OnStatus(status client.Status) {
 	}
 }
 func (c *Client) OnMessage(msg *packet.Message) error {
+	xlog.Info("receive message", xlog.Msg(string(msg.Payload)))
 	return nil
 }
 func (c *Client) OnRequest(req *packet.Request) (*packet.Response, error) {
@@ -112,15 +107,21 @@ func (t *Tester) Run() {
 	}
 }
 func (t *Tester) addClient() *Client {
+	endpoint := os.Getenv("ENDPOINT")
+	if endpoint == "" {
+		endpoint = "tcp://localhost:1883"
+	}
+	strs := strings.Split(endpoint, "://")
+	if len(strs) != 2 {
+		panic("invalid endpoint")
+	}
 	result := &Client{}
-	result.cli = client.New("cable-cluster:1883",
-		client.WithNetwork(client.NewworkTCP),
+	result.cli = client.New(strs[1],
+		client.WithNetwork(client.Network(strs[0])),
 		client.WithKeepAlive(time.Second*5, time.Second*60),
 		client.WithHandler(result),
 	)
-	uid := fmt.Sprintf("u%d", rand.IntN(100000))
-	cid := fmt.Sprintf("%s_%d", uid, rand.Int())
-	result.id = &packet.Identity{UserID: uid, ClientID: cid}
+	result.id = &packet.Identity{UserID: randomUserID(), ClientID: randomClientID()}
 	t.clients.Set(result.id.ClientID, result)
 	result.cli.Connect(result.id)
 	return result

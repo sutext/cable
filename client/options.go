@@ -7,23 +7,12 @@ import (
 	"sutext.github.io/cable/packet"
 )
 
-type Network uint8
+type Network string
 
 const (
-	NewworkTCP Network = iota
-	NetworkUDP
+	NewworkTCP Network = "tcp"
+	NetworkUDP Network = "udp"
 )
-
-func (n Network) String() string {
-	switch n {
-	case NewworkTCP:
-		return "tcp"
-	case NetworkUDP:
-		return "udp"
-	default:
-		return "unknown"
-	}
-}
 
 type Handler interface {
 	OnStatus(status Status)
