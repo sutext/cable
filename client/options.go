@@ -5,6 +5,7 @@ import (
 
 	"sutext.github.io/cable/backoff"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/xlog"
 )
 
 type Network string
@@ -31,6 +32,7 @@ func (h *emptyHandler) OnRequest(p *packet.Request) (*packet.Response, error) {
 }
 
 type Options struct {
+	logger         *xlog.Logger
 	network        Network
 	handler        Handler
 	retrier        *Retrier
@@ -45,6 +47,7 @@ type Option struct {
 
 func newOptions(options ...Option) *Options {
 	opts := &Options{
+		logger:         xlog.With("GROUP", "CLIENT"),
 		handler:        &emptyHandler{},
 		retrier:        NewRetrier(10, backoff.Exponential(2, 1.5)),
 		network:        NewworkTCP,
@@ -56,6 +59,11 @@ func newOptions(options ...Option) *Options {
 		o.f(opts)
 	}
 	return opts
+}
+func WithLogger(logger *xlog.Logger) Option {
+	return Option{f: func(o *Options) {
+		o.logger = logger
+	}}
 }
 func WithNetwork(network Network) Option {
 	return Option{f: func(o *Options) {

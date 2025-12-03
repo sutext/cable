@@ -22,6 +22,7 @@ type peer struct {
 	ip     string
 	ipmu   sync.Mutex
 	broker *broker
+	logger *xlog.Logger
 	client client.Client
 }
 
@@ -30,6 +31,7 @@ func newPeer(id, ip string, broker *broker) *peer {
 		id:     id,
 		ip:     ip,
 		broker: broker,
+		logger: xlog.With("GROUP", "PEER", "peerid", id),
 	}
 	p.client = p.createClient()
 	return p
@@ -44,7 +46,7 @@ func (p *peer) SetIP(ip string) {
 	if p.ip == ip {
 		return
 	}
-	p.broker.logger.Warn("peer ip updated", xlog.String("peerid", p.id), xlog.String("ip", ip))
+	p.logger.Warn("peer ip updated", xlog.String("ip", ip))
 	p.ip = ip
 	p.client = p.createClient()
 	p.Connect()
@@ -61,7 +63,7 @@ func (p *peer) Connect() {
 func (p *peer) OnStatus(status client.Status) {
 	switch status {
 	case client.StatusOpened:
-		p.broker.logger.Info("peer connected", xlog.String("peerid", p.id))
+		p.logger.Info("peer connected")
 	case client.StatusClosed:
 		p.broker.delPeer(p.id)
 	}
@@ -103,6 +105,7 @@ func (p *peer) createClient() client.Client {
 		return strings.Contains(err.Error(), "no route")
 	})
 	return client.New(fmt.Sprintf("%s%s", p.ip, p.broker.peerPort),
+		client.WithLogger(p.logger),
 		client.WithRetrier(retrier),
 		client.WithHandler(p),
 		client.WithKeepAlive(time.Second*3, time.Second*60),

@@ -38,7 +38,7 @@ type server struct {
 func New(address string, opts ...Option) *server {
 	options := NewOptions(opts...)
 	s := &server{
-		logger:         xlog.With("GROUP", "SERVER"),
+		logger:         options.logger,
 		address:        address,
 		network:        options.network,
 		closeHandler:   options.closeHandler,

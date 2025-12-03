@@ -78,7 +78,10 @@ func NewBroker(opts ...Option) Broker {
 		)
 	}
 	b.peerPort = options.peerPort
-	b.peerServer = server.New(options.peerPort, server.WithRequest(b.onPeerRequest))
+	b.peerServer = server.New(options.peerPort,
+		server.WithRequest(b.onPeerRequest),
+		server.WithLogger(xlog.With("GROUP", "PEER")),
+	)
 	b.handlePeer("SendMessage", b.handleSendMessage)
 	b.handlePeer("IsOnline", b.handleIsOnline)
 	b.handlePeer("KickConn", b.handleKickConn)

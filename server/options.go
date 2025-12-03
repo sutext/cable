@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/xlog"
 )
 
 type ClosedHandler func(p *packet.Identity)
@@ -40,6 +41,7 @@ type Option struct {
 }
 type options struct {
 	network Network
+	logger  *xlog.Logger
 	// QuicConfig     *quic.Config
 	closeHandler   ClosedHandler
 	connectHandler ConnectHandler
@@ -50,6 +52,7 @@ type options struct {
 func NewOptions(opts ...Option) *options {
 	var options = &options{
 		network: NetworkTCP,
+		logger:  xlog.With("GROUP", "SERVER"),
 		closeHandler: func(p *packet.Identity) {
 
 		},
@@ -81,7 +84,9 @@ func WithUDP() Option {
 //			o.QuicConfig = config
 //		}}
 //	}
-
+func WithLogger(logger *xlog.Logger) Option {
+	return Option{f: func(o *options) { o.logger = logger }}
+}
 func WithClose(handler ClosedHandler) Option {
 	return Option{f: func(o *options) { o.closeHandler = handler }}
 }
