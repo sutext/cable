@@ -39,6 +39,7 @@ type broker struct {
 	handler        Handler
 	muticast       muticast.Muticast
 	listeners      map[server.Network]server.Server
+	peerPort       string
 	peerServer     server.Server
 	httpServer     *http.Server
 	userClients    safe.KeyMap[server.Network] //map[uid]map[cid]net
@@ -55,11 +56,16 @@ func NewBroker(opts ...Option) Broker {
 	b.handler = options.handler
 	b.muticast = muticast.New(b.id)
 	b.muticast.OnRequest(func(s string) int32 {
-		b.addPeer(s)
+		strs := strings.Split(s, ":")
+		b.addPeer(strs[0], strs[1])
 		return b.clusterSize()
 	})
 	for _, p := range options.peers {
-		b.addPeer(p)
+		strs := strings.Split(p, ":")
+		if len(strs) != 2 {
+			panic("peers format error want id:ip")
+		}
+		b.addPeer(strs[0], strs[1])
 	}
 	b.listeners = make(map[server.Network]server.Server, len(options.listeners))
 	for net, addr := range options.listeners {
@@ -72,7 +78,8 @@ func NewBroker(opts ...Option) Broker {
 			server.WithRequest(b.onUserRequest),
 		)
 	}
-	b.peerServer = server.New(fmt.Sprintf(":%s", strings.Split(b.id, ":")[1]), server.WithRequest(b.onPeerRequest))
+	b.peerPort = options.peerPort
+	b.peerServer = server.New(fmt.Sprintf(":%s", options.peerPort), server.WithRequest(b.onPeerRequest))
 	b.handlePeer("SendMessage", b.handleSendMessage)
 	b.handlePeer("IsOnline", b.handleIsOnline)
 	b.handlePeer("KickConn", b.handleKickConn)
@@ -101,14 +108,15 @@ func (b *broker) delPeer(id string) {
 		b.peers.Delete(id)
 	}
 }
-func (b *broker) addPeer(id string) {
+func (b *broker) addPeer(id, ip string) {
 	if id == b.id {
 		return
 	}
-	if _, ok := b.peers.Get(id); ok {
+	if p, ok := b.peers.Get(id); ok {
+		p.SetIP(ip)
 		return
 	}
-	peer := newPeer(id, b)
+	peer := newPeer(id, ip, b)
 	if peer == nil {
 		return
 	}
@@ -154,14 +162,15 @@ func (b *broker) syncBroker() {
 	}
 	max := b.clusterSize()
 	min := b.clusterSize()
-	for id, count := range m {
+	for key, count := range m {
 		if count > max {
 			max = count
 		}
 		if count < min {
 			min = count
 		}
-		b.addPeer(id)
+		strs := strings.Split(key, ":")
+		b.addPeer(strs[0], strs[1])
 	}
 	if max != min {
 		b.logger.Warn("broker count mismatch", xlog.Int("max", int(max)), xlog.Int("min", int(min)))

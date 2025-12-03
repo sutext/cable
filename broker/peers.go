@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"sutext.github.io/cable/backoff"
@@ -18,33 +19,41 @@ import (
 
 type peer struct {
 	id     string
+	ip     string
+	ipmu   *sync.Mutex
 	broker *broker
 	client client.Client
 }
 
-func newPeer(id string, broker *broker) *peer {
-	strs := strings.Split(id, "@")
-	if len(strs) != 2 {
-		return nil
+func newPeer(id, ip string, broker *broker) *peer {
+	p := &peer{
+		id:     id,
+		ip:     ip,
+		broker: broker,
 	}
-	p := &peer{}
-	p.id = id
-	p.broker = broker
-	retrier := client.NewRetrier(math.MaxInt, backoff.ConstantD())
-	retrier.Filter(func(err error) bool {
-		return strings.Contains(err.Error(), "no route")
-	})
-	p.client = client.New(strs[1],
-		client.WithRetrier(retrier),
-		client.WithHandler(p),
-		client.WithKeepAlive(time.Second*3, time.Second*60),
-		client.WithRequestTimeout(time.Second*3),
-	)
+	p.client = p.createClient()
 	return p
 }
 
 func (p *peer) IsReady() bool {
 	return p.client.Status() == client.StatusOpened
+}
+func (p *peer) SetIP(ip string) {
+	p.ipmu.Lock()
+	defer p.ipmu.Unlock()
+	if p.ip == ip {
+		return
+	}
+	p.broker.logger.Warn("peer ip updated", xlog.String("peerid", p.id), xlog.String("ip", ip))
+	p.ip = ip
+	p.client = p.createClient()
+	p.Connect()
+}
+func (p *peer) SendMessage(ctx context.Context, m *packet.Message, target string, flag uint8) (total, success uint64, err error) {
+	return p.sendMessage(ctx, m, target, flag)
+}
+func (p *peer) IsOnline(ctx context.Context, uid string) (bool, error) {
+	return p.isOnline(ctx, uid)
 }
 func (p *peer) Connect() {
 	p.client.Connect(&packet.Identity{ClientID: p.broker.id, UserID: p.broker.id})
@@ -87,6 +96,18 @@ func (p *peer) sendMessage(ctx context.Context, m *packet.Message, target string
 		return 0, 0, err
 	}
 	return
+}
+func (p *peer) createClient() client.Client {
+	retrier := client.NewRetrier(math.MaxInt, backoff.ConstantD())
+	retrier.Filter(func(err error) bool {
+		return strings.Contains(err.Error(), "no route")
+	})
+	return client.New(fmt.Sprintf("%s:%d", p.ip, p.broker.peerPort),
+		client.WithRetrier(retrier),
+		client.WithHandler(p),
+		client.WithKeepAlive(time.Second*3, time.Second*60),
+		client.WithRequestTimeout(time.Second*3),
+	)
 }
 func (p *peer) isOnline(ctx context.Context, uid string) (bool, error) {
 	if p.client.Status() != client.StatusOpened {

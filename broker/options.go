@@ -3,7 +3,8 @@ package broker
 import (
 	"fmt"
 	"math/rand/v2"
-	"net"
+	"os"
+	"strings"
 
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
@@ -38,18 +39,16 @@ type options struct {
 	handler   Handler
 	brokerID  string
 	httpAddr  string
+	peerPort  string
 	listeners map[server.Network]string
 }
 
 func newOptions(opts ...Option) *options {
-	ip, err := getLocalIP()
-	if err != nil {
-		panic(err)
-	}
 	options := &options{
 		handler:  &emptyHandler{},
 		httpAddr: ":8888",
-		brokerID: fmt.Sprintf("%d@%s:4567", rand.Int64(), ip),
+		peerPort: ":4567",
+		brokerID: getBrokerID(),
 		listeners: map[server.Network]string{
 			server.NetworkTCP: ":1883",
 			server.NetworkUDP: ":1884",
@@ -73,7 +72,6 @@ func WithPeers(peers []string) Option {
 		o.peers = peers
 	}}
 }
-
 func WithHandler(h Handler) Option {
 	return Option{func(o *options) {
 		o.handler = h
@@ -83,6 +81,11 @@ func WithHandler(h Handler) Option {
 func WithHTTPAddr(addr string) Option {
 	return Option{func(o *options) {
 		o.httpAddr = addr
+	}}
+}
+func WithPeerPort(port string) Option {
+	return Option{func(o *options) {
+		o.peerPort = port
 	}}
 }
 
@@ -98,27 +101,16 @@ func WithBrokerID(id string) Option {
 		o.brokerID = id
 	}}
 }
-
-// getLocalIP retrieves the non-loopback local IPv4 address of the machine.
-func getLocalIP() (string, error) {
-	interfaces, err := net.Interfaces()
-	if err != nil {
-		return "", err
+func getBrokerID() string {
+	if id := os.Getenv("BROKER_ID"); id != "" {
+		return id
 	}
-	for _, iface := range interfaces {
-		// Check if the interface is up and not a loopback
-		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
-			continue
+	if hostname, err := os.Hostname(); err == nil {
+		strs := strings.Split(hostname, "-")
+		if len(strs) > 1 {
+			return fmt.Sprintf("cable%s", strs[len(strs)-1])
 		}
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-		for _, addr := range addrs {
-			if ipNet, ok := addr.(*net.IPNet); ok && ipNet.IP.To4() != nil {
-				return ipNet.IP.String(), nil
-			}
-		}
+		return hostname
 	}
-	return "", fmt.Errorf("no network interface found")
+	return fmt.Sprintf("cable%d", rand.Int())
 }

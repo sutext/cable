@@ -29,9 +29,13 @@ type muticast struct {
 	respChan chan *packet.Response
 }
 
-func New(id string) *muticast {
+func New(brokerID string) *muticast {
+	ip, err := getLocalIP()
+	if err != nil {
+		panic(err)
+	}
 	m := &muticast{
-		id:     id,
+		id:     fmt.Sprintf("%s@%s", brokerID, ip),
 		logger: xlog.With("GROUP", "MUTICAST"),
 		addr:   &net.UDPAddr{IP: net.IPv4(224, 0, 0, 9), Port: 9999},
 	}
@@ -154,4 +158,28 @@ func (m *muticast) Request() (r map[string]int32, err error) {
 		r[id] = count
 	}
 	return r, nil
+}
+
+// getLocalIP retrieves the non-loopback local IPv4 address of the machine.
+func getLocalIP() (string, error) {
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return "", err
+	}
+	for _, iface := range interfaces {
+		// Check if the interface is up and not a loopback
+		if iface.Flags&net.FlagUp == 0 || iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			if ipNet, ok := addr.(*net.IPNet); ok && ipNet.IP.To4() != nil {
+				return ipNet.IP.String(), nil
+			}
+		}
+	}
+	return "", fmt.Errorf("no network interface found")
 }
