@@ -32,28 +32,23 @@ func TestQueue(t *testing.T) {
 	}()
 	time.Sleep(time.Second * 20)
 }
-func TestChan(t *testing.T) {
-	ch := make(chan int, 5)
-	go func() {
-		for i := range 10 {
-			ch <- i
-			fmt.Println("Sent:", i)
-		}
-		time.Sleep(10 * time.Second)
-		close(ch)
-		fmt.Println("Channel closed")
-	}()
 
-	go func() {
-		for {
-			value, ok := <-ch
-			if ok {
-				fmt.Println("Received:", value)
-			} else {
-				fmt.Println("Channel closed and no more data to receive.")
-				return
-			}
+func BenchmarkAddTask(b *testing.B) {
+	mq := NewQueue(1000)
+	for b.Loop() {
+		mq.AddTask(func() {
+			// do something
+		})
+	}
+}
+
+func BenchmarkAddTaskParallel(b *testing.B) {
+	mq := NewQueue(1000)
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			mq.AddTask(func() {
+				// do something
+			})
 		}
-	}()
-	time.Sleep(11 * time.Second)
+	})
 }

@@ -35,7 +35,7 @@ func TestXMap(t *testing.T) {
 	}
 }
 func BenchmarkMap(b *testing.B) {
-	b.Run("safe.LMap", func(b *testing.B) {
+	b.Run("safe.XMap", func(b *testing.B) {
 		m := XMap[string, string]{}
 		for i := 0; b.Loop(); i++ {
 			str := fmt.Sprintf("%d", i)
@@ -74,7 +74,7 @@ func BenchmarkKeyMap(b *testing.B) {
 		}
 
 	})
-	b.Run("sync.LKeyMap", func(b *testing.B) {
+	b.Run("sync.XKeyMap", func(b *testing.B) {
 		m := XKeyMap[string]{}
 		for b.Loop() {
 			m.SetKey("foo", "bar", "baz")
