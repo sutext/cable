@@ -3,7 +3,6 @@ package queue
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 )
 
 type Error uint8
@@ -25,10 +24,8 @@ func (e Error) Error() string {
 }
 
 type Queue struct {
-	wg     sync.WaitGroup
-	mu     sync.Mutex
-	tasks  chan func()
-	closed atomic.Bool
+	mu    sync.Mutex
+	tasks chan func()
 }
 
 // Create a new instance of Queue
@@ -45,35 +42,43 @@ func New(length int, workerCount ...int) *Queue {
 	}
 	mq := &Queue{tasks: make(chan func(), length)}
 	for range count {
-		mq.wg.Go(func() {
+		go func() {
 			for task := range mq.tasks {
 				task()
 			}
-		})
+		}()
 	}
 	return mq
 }
+
 func (mq *Queue) IsIdle() bool {
+	mq.mu.Lock()
+	defer mq.mu.Unlock()
 	return len(mq.tasks) == 0
+}
+func (mq *Queue) IsClosed() bool {
+	mq.mu.Lock()
+	defer mq.mu.Unlock()
+	return mq.tasks == nil
 }
 
 // Close is used to terminate the internal goroutines and close the channel.
 func (mq *Queue) Close() {
-	if mq.closed.CompareAndSwap(false, true) {
-		mq.mu.Lock()
+	mq.mu.Lock()
+	defer mq.mu.Unlock()
+	if mq.tasks != nil {
 		close(mq.tasks)
-		mq.mu.Unlock()
-		mq.wg.Wait()
+		mq.tasks = nil
 	}
 }
 
 // AddTask a task to the queue. If the queue is full, it will return ErrQueueIsFull.
 func (mq *Queue) AddTask(task func()) error {
-	if mq.closed.Load() {
-		return ErrQueueIsStoped
-	}
 	mq.mu.Lock()
 	defer mq.mu.Unlock()
+	if mq.tasks == nil {
+		return ErrQueueIsStoped
+	}
 	select {
 	case mq.tasks <- task:
 		return nil
@@ -82,11 +87,11 @@ func (mq *Queue) AddTask(task func()) error {
 	}
 }
 func (mq *Queue) AddTaskCtx(ctx context.Context, task func()) error {
-	if mq.closed.Load() {
-		return ErrQueueIsStoped
-	}
 	mq.mu.Lock()
 	defer mq.mu.Unlock()
+	if mq.tasks == nil {
+		return ErrQueueIsStoped
+	}
 	select {
 	case mq.tasks <- task:
 		return nil

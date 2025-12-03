@@ -39,7 +39,7 @@ func (c *Client) run() {
 func (c *Client) sendToUser() {
 	msg := packet.NewMessage(fmt.Appendf(nil, "hello, i am %s", c.id.UserID))
 	msg.Qos = packet.MessageQos1
-	msg.Kind = packet.MessageKind(2)
+	msg.Kind = packet.MessageKind(1)
 	msg.Set(packet.PropertyUserID, randomUserID())
 	err := c.cli.SendMessage(context.Background(), msg)
 	if err != nil {

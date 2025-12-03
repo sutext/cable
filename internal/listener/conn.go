@@ -79,9 +79,9 @@ func (c *Conn) RecvResponse(p *packet.Response) {
 	}
 }
 func (c *Conn) Close() {
-	c.recvQueue.Close()
-	c.sendQueue.Close()
 	if c.closed.CompareAndSwap(false, true) {
+		c.recvQueue.Close()
+		c.sendQueue.Close()
 		c.raw.close()
 		if c.closeHandler != nil {
 			c.closeHandler(c)

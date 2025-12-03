@@ -23,6 +23,9 @@ spec:
         app: cable-tester
     spec:
       containers:
-        - image: sutext/cable-tester:latest
+        - name: cable-tester
           imagePullPolicy: Never
-          name: cable-tester
+          image: sutext/cable-tester:latest
+          env:
+            - name: ENDPOINT
+              value: "tcp://cable-cluster:1883"

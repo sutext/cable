@@ -14,7 +14,7 @@ func main() {
 	tester := NewTester()
 	defer cancel()
 	go func() {
-		ticker := time.NewTicker(time.Millisecond * 10)
+		ticker := time.NewTicker(time.Millisecond * 1000)
 		defer ticker.Stop()
 		for {
 			select {
