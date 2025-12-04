@@ -86,9 +86,12 @@ func (c *client) Connect(identity *packet.Identity) {
 	}
 	c._setStatus(StatusOpening)
 	if err := c.reconnect(); err != nil {
+		c.retrying = false
+		c.retrier.Reset()
 		c.tryClose(err)
 	}
 }
+
 func (c *client) tryClose(err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -112,17 +115,19 @@ func (c *client) tryClose(err error) {
 		c._setStatus(StatusClosed)
 		return
 	}
-	delay, ok := c.retrier.can(err)
+	delay, ok := c.retrier.Retry(err)
 	if !ok {
 		c._setStatus(StatusClosed)
 		return
 	}
 	c.retrying = true
 	c._setStatus(StatusOpening)
-	c.retrier.retry(delay, func() {
-		err := c.reconnect()
-		c.retrying = false
-		if err != nil {
+	time.AfterFunc(delay, func() {
+		if c.Status() != StatusOpening {
+			return
+		}
+		if err := c.reconnect(); err != nil {
+			c.retrying = false
 			c.tryClose(err)
 		}
 	})
@@ -221,9 +226,6 @@ func (c *client) _setStatus(status Status) {
 	case StatusClosed:
 		c.keepalive.Stop()
 		c.inflights.Stop()
-		if c.retrier != nil {
-			c.retrier.cancel()
-		}
 		c.conn.Close()
 	case StatusOpening, StatusClosing:
 		c.keepalive.Stop()
