@@ -102,6 +102,21 @@ func (c *Conn) ClosePacket(p packet.Packet) error {
 		c.Close()
 	})
 }
+func (c *Conn) DuplicateClose() error {
+	if c.closed.Load() {
+		return xerr.ConnectionIsClosed
+	}
+	return c.sendQueue.AddTask(func() {
+		if c.closed.Load() {
+			return
+		}
+		if err := c.raw.writePacket(packet.NewClose(packet.CloseDuplicateLogin)); err != nil {
+			c.logger.Error("failed to send packet", xlog.Err(err))
+		}
+		c.closeHandler = nil
+		c.Close()
+	})
+}
 func (c *Conn) SendPacket(p packet.Packet) error {
 	if c.closed.Load() {
 		return xerr.ConnectionIsClosed

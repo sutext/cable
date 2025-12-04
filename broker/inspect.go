@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
 )
@@ -16,13 +17,11 @@ type PeerInspect struct {
 	Status string `json:"status"`
 }
 type Inspect struct {
-	ID            string         `json:"id"`
-	Peers         []*PeerInspect `json:"peers"`
-	Users         int            `json:"users"`
-	Clients       int            `json:"clients"`
-	ClusterSize   int32          `json:"cluster_size"`
-	OnlienUsers   int            `json:"online_users"`
-	OnlineClients int            `json:"online_clients"`
+	ID          string         `json:"id"`
+	Peers       []*PeerInspect `json:"peers"`
+	UserCount   int            `json:"user_count"`
+	ClientCount int            `json:"client_count"`
+	ClusterSize int32          `json:"cluster_size"`
 }
 
 func NewInspect() *Inspect {
@@ -31,11 +30,9 @@ func NewInspect() *Inspect {
 
 func (i *Inspect) merge(o *Inspect) {
 	i.ID = "all"
-	i.Users += o.Users
-	i.Clients += o.Clients
+	i.UserCount += o.UserCount
+	i.ClientCount += o.ClientCount
 	i.ClusterSize = max(i.ClusterSize, o.ClusterSize)
-	i.OnlienUsers += o.OnlienUsers
-	i.OnlineClients += o.OnlineClients
 }
 
 func (b *broker) inspect() *Inspect {
@@ -44,37 +41,18 @@ func (b *broker) inspect() *Inspect {
 		peersInpsects = append(peersInpsects, v.peerInspect())
 		return true
 	})
-	users := 0
+	users := b.userClients.Len()
 	clients := 0
-	onlienUsers := 0
-	onlineClients := 0
-	b.userClients.Range(func(uid string) bool {
-		if b.isOnline(uid) {
-			onlienUsers++
-		}
-		oldClients := clients
-		b.userClients.RangeKey(uid, func(cid string, net server.Network) bool {
-			clients++
-			if b.isActive(cid, net) {
-				onlineClients++
-			}
-			return true
-		})
-		if oldClients != clients {
-			users++
-		} else {
-			b.userClients.Delete(uid)
-		}
+	b.userClients.Range(func(uid string, cs *safe.XMap[string, server.Network]) bool {
+		clients += int(cs.Len())
 		return true
 	})
 	return &Inspect{
-		ID:            b.id,
-		Peers:         peersInpsects,
-		Users:         users,
-		Clients:       clients,
-		ClusterSize:   b.clusterSize(),
-		OnlienUsers:   onlienUsers,
-		OnlineClients: onlineClients,
+		ID:          b.id,
+		Peers:       peersInpsects,
+		UserCount:   users,
+		ClientCount: clients,
+		ClusterSize: b.clusterSize(),
 	}
 }
 func (p *peer) peerInspect() *PeerInspect {

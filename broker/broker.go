@@ -41,9 +41,9 @@ type broker struct {
 	peerPort       string
 	peerServer     server.Server
 	httpServer     *http.Server
-	userClients    safe.KeyMap[server.Network] //map[uid]map[cid]net
-	channelClients safe.KeyMap[server.Network] //map[channel]map[cid]net
-	clientChannels safe.KeyMap[server.Network] //map[cid]map[channel]net
+	userClients    safe.XKeyMap[server.Network] //map[uid]map[cid]net
+	channelClients safe.XKeyMap[server.Network] //map[channel]map[cid]net
+	clientChannels safe.XKeyMap[server.Network] //map[cid]map[channel]net
 	peerHandlers   safe.Map[string, server.RequestHandler]
 	userHandlers   safe.Map[string, server.RequestHandler]
 }
@@ -315,7 +315,9 @@ func (b *broker) LeaveChannel(ctx context.Context, uid string, channels ...strin
 	})
 	return count, nil
 }
-
+func (b *broker) HandleRequest(method string, handler server.RequestHandler) {
+	b.userHandlers.Set(method, handler)
+}
 func (b *broker) onUserClosed(id *packet.Identity) {
 	b.userClients.DeleteKey(id.UserID, id.ClientID)
 	b.clientChannels.RangeKey(id.ClientID, func(channel string, net server.Network) bool {
@@ -324,9 +326,6 @@ func (b *broker) onUserClosed(id *packet.Identity) {
 	})
 	b.clientChannels.Delete(id.ClientID)
 	b.handler.OnClosed(id)
-}
-func (b *broker) HandleRequest(method string, handler server.RequestHandler) {
-	b.userHandlers.Set(method, handler)
 }
 func (b *broker) onUserConnect(p *packet.Connect, net server.Network) packet.ConnectCode {
 	code := b.handler.OnConnect(p)

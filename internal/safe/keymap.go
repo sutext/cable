@@ -48,18 +48,3 @@ func (s *KeyMap[T]) Range(f func(string) bool) {
 func (s *KeyMap[T]) Delete(key string) {
 	s.m.Delete(key)
 }
-
-// Warn: This functoin is expencive. O(n*m) complexity.
-func (s *KeyMap[T]) Statistics() map[string]int {
-	m := make(map[string]int)
-	s.m.Range(func(k, v any) bool {
-		key := k.(string)
-		m[key] = 0
-		v.(*sync.Map).Range(func(k, v any) bool {
-			m[key] += 1
-			return true
-		})
-		return true
-	})
-	return m
-}

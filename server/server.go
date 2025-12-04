@@ -173,7 +173,7 @@ func (s *server) onConnect(p *packet.Connect, c *listener.Conn) packet.ConnectCo
 	if code == packet.ConnectAccepted {
 		c.OnClose(s.onClose)
 		if old, loaded := s.conns.Swap(p.Identity.ClientID, c); loaded {
-			old.ClosePacket(packet.NewClose(packet.CloseDuplicateLogin))
+			old.DuplicateClose()
 		}
 	}
 	return code

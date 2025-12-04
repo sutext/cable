@@ -55,6 +55,7 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 		conn.Close()
 	})
 	p, err := packet.ReadFrom(conn)
+	timer.Stop()
 	if err != nil {
 		l.logger.Error("failed to read packet", xlog.Err(err))
 		conn.Close()
@@ -72,7 +73,6 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 		c.ClosePacket(packet.NewConnack(code))
 		return
 	}
-	timer.Stop()
 	c.SendPacket(packet.NewConnack(packet.ConnectAccepted))
 	for {
 		p, err := packet.ReadFrom(conn)

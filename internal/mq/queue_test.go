@@ -9,7 +9,7 @@ import (
 
 // 添加并发测试
 func TestQueue(t *testing.T) {
-	mq := NewQueue(5)
+	mq := NewQueue(10)
 	time.AfterFunc(time.Second*2, func() {
 		mq.Pause()
 		fmt.Println("Pause")
@@ -17,17 +17,20 @@ func TestQueue(t *testing.T) {
 			mq.Resume()
 			fmt.Println("Resume")
 			time.AfterFunc(time.Second*2, func() {
-				mq.Clear()
-				fmt.Println("Clear")
+				mq.Close()
+				fmt.Println("Close")
 			})
 		})
 	})
 	go func() {
 		for i := range 1000 {
 			time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
-			mq.AddTask(func() {
+			err := mq.AddTask(func() {
 				fmt.Println("Task", i, "done")
 			})
+			if err != nil {
+				fmt.Println(err)
+			}
 		}
 	}()
 	time.Sleep(time.Second * 20)
