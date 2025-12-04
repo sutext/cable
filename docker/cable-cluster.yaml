@@ -1,33 +1,30 @@
 ---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   namespace: default
   name: cable-cluster
   labels:
     app: cable-cluster
 spec:
-  replicas: 4
+  replicas: 5
   selector:
     matchLabels:
       app: cable-cluster
-  strategy:
-    rollingUpdate:
-      maxSurge: 0
-      maxUnavailable: 25%
-    type: RollingUpdate
-  revisionHistoryLimit: 5
   template:
     metadata:
       labels:
         app: cable-cluster
     spec:
-      imagePullSecrets:
-        - name: pull-image
       containers:
         - image: sutext/cable:latest
           imagePullPolicy: Never
           name: cable
+          env:
+            - name: DEBUG
+              value: true
+            - name: LOG_LEVEL
+              value: debug
 ---
 apiVersion: v1
 kind: Service

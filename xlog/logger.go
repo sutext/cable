@@ -73,6 +73,20 @@ func With(args ...any) *Logger {
 func WithLevel(level slog.Level) *Logger {
 	return Defualt().WithLevel(level)
 }
+func ParseLevel(level string) slog.Level {
+	switch level {
+	case "debug":
+		return slog.LevelDebug
+	case "info":
+		return slog.LevelInfo
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}
 func NewText(level slog.Level) *Logger {
 	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
 		Level: level,

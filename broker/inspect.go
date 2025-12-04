@@ -10,15 +10,20 @@ import (
 	"sutext.github.io/cable/server"
 )
 
+type PeerInspect struct {
+	ID     string `json:"id"`
+	IP     string `json:"ip"`
+	Status string `json:"status"`
+}
 type Inspect struct {
-	ID            string `json:"id"`
-	Peers         int    `json:"peers"`
-	Users         int    `json:"users"`
-	Clients       int    `json:"clients"`
-	ClusterSize   int32  `json:"cluster_size"`
-	OnlienUsers   int    `json:"online_users"`
-	ChannelCount  int    `json:"channel_count"`
-	OnlineClients int    `json:"online_clients"`
+	ID            string         `json:"id"`
+	Peers         []*PeerInspect `json:"peers"`
+	Users         int            `json:"users"`
+	Clients       int            `json:"clients"`
+	ClusterSize   int32          `json:"cluster_size"`
+	OnlienUsers   int            `json:"online_users"`
+	ChannelCount  int            `json:"channel_count"`
+	OnlineClients int            `json:"online_clients"`
 }
 
 func NewInspect() *Inspect {
@@ -27,7 +32,6 @@ func NewInspect() *Inspect {
 
 func (i *Inspect) merge(o *Inspect) {
 	i.ID = "all"
-	i.Peers += o.Peers
 	i.Users += o.Users
 	i.Clients += o.Clients
 	i.ClusterSize = max(i.ClusterSize, o.ClusterSize)
@@ -37,11 +41,9 @@ func (i *Inspect) merge(o *Inspect) {
 }
 
 func (b *broker) inspect() *Inspect {
-	peers := 0
+	var peersInpsects []*PeerInspect
 	b.peers.Range(func(k string, v *peer) bool {
-		if v.IsReady() {
-			peers++
-		}
+		peersInpsects = append(peersInpsects, v.peerInspect())
 		return true
 	})
 	users := 0
@@ -75,7 +77,7 @@ func (b *broker) inspect() *Inspect {
 
 	return &Inspect{
 		ID:            b.id,
-		Peers:         peers,
+		Peers:         peersInpsects,
 		Users:         users,
 		Clients:       clients,
 		ClusterSize:   b.clusterSize(),
@@ -84,7 +86,13 @@ func (b *broker) inspect() *Inspect {
 		OnlineClients: onlineClients,
 	}
 }
-
+func (p *peer) peerInspect() *PeerInspect {
+	return &PeerInspect{
+		ID:     p.id,
+		IP:     p.ip,
+		Status: p.client.Status().String(),
+	}
+}
 func (b *broker) Inspects() ([]*Inspect, error) {
 	ctx := context.Background()
 	inspects := make([]*Inspect, 2)

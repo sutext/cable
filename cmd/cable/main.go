@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"math/rand/v2"
 	"net/http"
 	_ "net/http/pprof"
@@ -67,17 +68,34 @@ func (h *Handler) GetChannels(uid string) ([]string, error) {
 	return channels, nil
 }
 
+type Config struct {
+	Debug    bool
+	LogLevel slog.Level
+}
+
+func EnvConfig() *Config {
+	debug := os.Getenv("DEBUG")
+	level := os.Getenv("LOG_LEVEL")
+	return &Config{
+		Debug:    debug == "true",
+		LogLevel: xlog.ParseLevel(level),
+	}
+}
+
 func main() {
-	xlog.SetDefault(xlog.WithLevel(xlog.LevelWarn))
+	cfg := EnvConfig()
+	xlog.SetDefault(xlog.WithLevel(cfg.LogLevel))
 	ctx := context.Background()
 	ctx, cancel := context.WithCancelCause(ctx)
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		if err := http.ListenAndServe(":6060", nil); err != nil {
-			xlog.Error("pprof server start :", xlog.Err(err))
-		}
-	}()
+	if cfg.Debug {
+		go func() {
+			if err := http.ListenAndServe(":6060", nil); err != nil {
+				xlog.Error("pprof server start :", xlog.Err(err))
+			}
+		}()
+	}
 	go func() {
 		<-sigs
 		cancel(fmt.Errorf("cable signal received"))
