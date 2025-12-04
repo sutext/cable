@@ -25,6 +25,10 @@ spec:
               value: true
             - name: LOG_LEVEL
               value: debug
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+  serviceName: cable-cluster
 ---
 apiVersion: v1
 kind: Service
