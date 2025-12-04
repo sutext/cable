@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"os"
+	"strconv"
 	"time"
 
 	"sutext.github.io/cable/xlog"
@@ -9,12 +11,13 @@ import (
 
 func main() {
 	xlog.SetDefault(xlog.WithLevel(xlog.LevelInfo))
+
 	ctx := context.Background()
-	ctx, cancel := context.WithTimeout(ctx, time.Minute*4)
+	ctx, cancel := context.WithTimeout(ctx, time.Millisecond*getFrequency()*time.Duration(getMaxConns()))
 	tester := NewTester()
 	defer cancel()
 	go func() {
-		ticker := time.NewTicker(time.Millisecond * 10)
+		ticker := time.NewTicker(time.Millisecond * getFrequency())
 		defer ticker.Stop()
 		for {
 			select {
@@ -26,4 +29,26 @@ func main() {
 		}
 	}()
 	select {}
+}
+func getMaxConns() int64 {
+	count := os.Getenv("MAX_CONNS")
+	if count == "" {
+		return 25000
+	}
+	i, err := strconv.ParseInt(count, 10, 64)
+	if err != nil {
+		return 25000
+	}
+	return i
+}
+func getFrequency() time.Duration {
+	freq := os.Getenv("FREQ")
+	if freq == "" {
+		return 100
+	}
+	d, err := time.ParseDuration(freq)
+	if err != nil {
+		return 100
+	}
+	return d
 }

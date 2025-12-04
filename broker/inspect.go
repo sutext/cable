@@ -48,12 +48,12 @@ func (b *broker) inspect() *Inspect {
 	clients := 0
 	onlienUsers := 0
 	onlineClients := 0
-	b.userClients.Range(func(cid string) bool {
-		if b.isOnline(cid) {
+	b.userClients.Range(func(uid string) bool {
+		if b.isOnline(uid) {
 			onlienUsers++
 		}
 		oldClients := clients
-		b.userClients.RangeKey(cid, func(cid string, net server.Network) bool {
+		b.userClients.RangeKey(uid, func(cid string, net server.Network) bool {
 			clients++
 			if b.isActive(cid, net) {
 				onlineClients++
@@ -63,7 +63,7 @@ func (b *broker) inspect() *Inspect {
 		if oldClients != clients {
 			users++
 		} else {
-			b.userClients.Delete(cid)
+			b.userClients.Delete(uid)
 		}
 		return true
 	})
