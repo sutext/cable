@@ -54,7 +54,7 @@ func New(address string, options ...Option) Client {
 		mu:             new(sync.RWMutex),
 		conn:           NewConn(opts.network, address),
 		status:         StatusUnknown,
-		logger:         xlog.With("GROUP", "CLIENT"),
+		logger:         opts.logger,
 		retrier:        opts.retrier,
 		handler:        opts.handler,
 		recvQueue:      queue.New(1024),

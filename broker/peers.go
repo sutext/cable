@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"math"
-	"strings"
 	"sync"
 	"time"
 
@@ -44,6 +42,7 @@ func (p *peer) SetIP(ip string) {
 	p.ipmu.Lock()
 	defer p.ipmu.Unlock()
 	if p.ip == ip {
+		p.Connect()
 		return
 	}
 	p.logger.Warn("peer ip updated", xlog.String("ip", ip))
@@ -65,7 +64,7 @@ func (p *peer) OnStatus(status client.Status) {
 	case client.StatusOpened:
 		p.logger.Info("peer connected")
 	case client.StatusClosed:
-		p.broker.delPeer(p.id)
+		p.broker.syncBroker()
 	}
 }
 
@@ -100,10 +99,7 @@ func (p *peer) sendMessage(ctx context.Context, m *packet.Message, target string
 	return
 }
 func (p *peer) createClient() client.Client {
-	retrier := client.NewRetrier(math.MaxInt, backoff.ConstantD())
-	retrier.Filter(func(err error) bool {
-		return strings.Contains(err.Error(), "no route")
-	})
+	retrier := client.NewRetrier(10, backoff.ConstantD())
 	return client.New(fmt.Sprintf("%s%s", p.ip, p.broker.peerPort),
 		client.WithLogger(p.logger),
 		client.WithRetrier(retrier),

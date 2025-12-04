@@ -24,8 +24,8 @@ func NewQueue(cap int) *Queue {
 	}
 	mq := &Queue{
 		cap:   cap,
-		tasks: make([]func(), cap),
 		cond:  sync.NewCond(&sync.Mutex{}),
+		tasks: make([]func(), cap),
 	}
 	go mq.run()
 	return mq

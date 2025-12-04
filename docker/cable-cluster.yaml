@@ -1,9 +1,9 @@
 ---
-apiVersion: apps/v1
 kind: StatefulSet
+apiVersion: apps/v1
 metadata:
-  namespace: default
   name: cable-cluster
+  namespace: default
   labels:
     app: cable-cluster
 spec:
@@ -11,24 +11,24 @@ spec:
   selector:
     matchLabels:
       app: cable-cluster
+  serviceName: cable-cluster
   template:
     metadata:
       labels:
         app: cable-cluster
     spec:
       containers:
-        - image: sutext/cable:latest
+        - name: cable
+          image: sutext/cable:latest
           imagePullPolicy: Never
-          name: cable
           env:
             - name: DEBUG
-              value: true
+              value: "true"
             - name: LOG_LEVEL
               value: debug
   podManagementPolicy: Parallel
   updateStrategy:
     type: RollingUpdate
-  serviceName: cable-cluster
 ---
 apiVersion: v1
 kind: Service

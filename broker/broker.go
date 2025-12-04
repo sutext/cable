@@ -162,8 +162,8 @@ func (b *broker) syncBroker() {
 		b.logger.Warn("Auto discovery got empty endpoints")
 		time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.syncBroker)
 	}
-	max := b.clusterSize()
 	min := b.clusterSize()
+	max := b.clusterSize()
 	for idip, count := range m {
 		if count > max {
 			max = count
@@ -174,6 +174,12 @@ func (b *broker) syncBroker() {
 		strs := strings.Split(idip, ":")
 		b.addPeer(strs[0], strs[1])
 	}
+	b.peers.Range(func(id string, peer *peer) bool {
+		if _, ok := m[id+":"+peer.ip]; !ok {
+			b.delPeer(id)
+		}
+		return true
+	})
 	if max != min {
 		b.logger.Warn("broker count mismatch", xlog.Int("max", int(max)), xlog.Int("min", int(min)))
 		time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.syncBroker)
