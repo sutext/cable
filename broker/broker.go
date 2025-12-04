@@ -115,7 +115,7 @@ func (b *broker) addPeer(id, ip string) {
 		return
 	}
 	if p, ok := b.peers.Get(id); ok {
-		p.SetIP(ip)
+		p.UpdateIP(ip)
 		return
 	}
 	peer := newPeer(id, ip, b)

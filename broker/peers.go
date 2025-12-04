@@ -38,7 +38,7 @@ func newPeer(id, ip string, broker *broker) *peer {
 func (p *peer) IsReady() bool {
 	return p.client.Status() == client.StatusOpened
 }
-func (p *peer) SetIP(ip string) {
+func (p *peer) UpdateIP(ip string) {
 	p.ipmu.Lock()
 	defer p.ipmu.Unlock()
 	if p.ip == ip {
@@ -99,7 +99,7 @@ func (p *peer) sendMessage(ctx context.Context, m *packet.Message, target string
 	return
 }
 func (p *peer) createClient() client.Client {
-	retrier := client.NewRetrier(10, backoff.ConstantD())
+	retrier := client.NewRetrier(5, backoff.Constant(time.Second))
 	return client.New(fmt.Sprintf("%s%s", p.ip, p.broker.peerPort),
 		client.WithLogger(p.logger),
 		client.WithRetrier(retrier),

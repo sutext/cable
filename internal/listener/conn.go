@@ -28,8 +28,8 @@ func newConn(raw conn) *Conn {
 	c := &Conn{
 		raw:       raw,
 		logger:    xlog.With("GROUP", "SERVER"),
-		recvQueue: queue.New(1024),
-		sendQueue: queue.New(1024),
+		recvQueue: queue.New(10240),
+		sendQueue: queue.New(10240),
 	}
 	c.inflights = inflight.New(func(m *packet.Message) {
 		c.SendPacket(m)

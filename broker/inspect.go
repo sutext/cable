@@ -22,7 +22,6 @@ type Inspect struct {
 	Clients       int            `json:"clients"`
 	ClusterSize   int32          `json:"cluster_size"`
 	OnlienUsers   int            `json:"online_users"`
-	ChannelCount  int            `json:"channel_count"`
 	OnlineClients int            `json:"online_clients"`
 }
 
@@ -36,7 +35,6 @@ func (i *Inspect) merge(o *Inspect) {
 	i.Clients += o.Clients
 	i.ClusterSize = max(i.ClusterSize, o.ClusterSize)
 	i.OnlienUsers += o.OnlienUsers
-	i.ChannelCount += o.ChannelCount
 	i.OnlineClients += o.OnlineClients
 }
 
@@ -69,12 +67,6 @@ func (b *broker) inspect() *Inspect {
 		}
 		return true
 	})
-	channelCount := 0
-	b.channelClients.Range(func(s string) bool {
-		channelCount++
-		return true
-	})
-
 	return &Inspect{
 		ID:            b.id,
 		Peers:         peersInpsects,
@@ -82,7 +74,6 @@ func (b *broker) inspect() *Inspect {
 		Clients:       clients,
 		ClusterSize:   b.clusterSize(),
 		OnlienUsers:   onlienUsers,
-		ChannelCount:  channelCount,
 		OnlineClients: onlineClients,
 	}
 }
