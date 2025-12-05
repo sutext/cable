@@ -7,6 +7,7 @@ import (
 	"net"
 	"sync/atomic"
 
+	"sutext.github.io/cable/internal/poll"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
@@ -16,6 +17,7 @@ type udpListener struct {
 	logger        *xlog.Logger
 	connMap       safe.Map[string, *Conn]
 	listener      *net.UDPConn
+	recvPoll      atomic.Pointer[poll.Poll]
 	closeHandler  func(c *Conn)
 	packetHandler func(p packet.Packet, c *Conn)
 	acceptHandler func(p *packet.Connect, c *Conn) packet.ConnectCode
@@ -62,6 +64,15 @@ func (l *udpListener) Listen(address string) error {
 		go l.handleConn(listener, addr, p)
 	}
 }
+func (l *udpListener) getPoll() *poll.Poll {
+	p := l.recvPoll.Load()
+	if p == nil {
+		p = poll.New(10240, 128)
+		l.recvPoll.Store(p)
+	}
+	return p
+}
+
 func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.Packet) {
 	if p.Type() != packet.CONNECT {
 		connID, ok := p.Get(packet.PropertyConnID)
@@ -74,7 +85,9 @@ func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.
 			l.logger.Warn("unknown udp connID", xlog.String("connID", connID))
 			return
 		}
-		go l.packetHandler(p, c)
+		l.getPoll().Push(func() {
+			l.packetHandler(p, c)
+		})
 		return
 	}
 	connPacket := p.(*packet.Connect)

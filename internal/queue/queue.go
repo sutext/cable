@@ -2,6 +2,7 @@ package queue
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 type Error uint8
@@ -23,9 +24,10 @@ func (e Error) Error() string {
 }
 
 type Queue struct {
-	mu    sync.Mutex
-	jumps chan func()
-	tasks chan func()
+	mu     sync.Mutex
+	jumps  chan func()
+	tasks  chan func()
+	closed atomic.Bool
 }
 
 // Create a new instance of Queue
@@ -35,7 +37,7 @@ func New(length int) *Queue {
 		panic("length and workerCount must be greater than 1")
 	}
 	mq := &Queue{
-		tasks: make(chan func()),
+		tasks: make(chan func(), length),
 		jumps: make(chan func(), 3),
 	}
 	go mq.run()
@@ -44,16 +46,20 @@ func New(length int) *Queue {
 func (mq *Queue) run() {
 	for {
 		select {
-		case task := <-mq.jumps:
+		case task, ok := <-mq.jumps:
+			if !ok {
+				return
+			}
 			task()
 		default:
 			select {
-			case task := <-mq.jumps:
+			case task, ok := <-mq.jumps:
+				if !ok {
+					return
+				}
 				task()
 			case task, ok := <-mq.tasks:
 				if !ok {
-					close(mq.jumps)
-					mq.jumps = nil
 					return
 				}
 				task()
@@ -75,18 +81,15 @@ func (mq *Queue) IsFull() bool {
 	return len(mq.tasks) == cap(mq.tasks)
 }
 func (mq *Queue) IsClosed() bool {
-	mq.mu.Lock()
-	defer mq.mu.Unlock()
-	return mq.tasks == nil
+	return mq.closed.Load()
 }
 
 // Close is used to terminate the internal goroutines and close the channel.
+// After calling Close, the queue cannot be used again.
 func (mq *Queue) Close() {
-	mq.mu.Lock()
-	defer mq.mu.Unlock()
-	if mq.tasks != nil {
-		close(mq.tasks)
-		mq.tasks = nil
+	if mq.closed.CompareAndSwap(false, true) {
+		close(mq.jumps) //close jumps channel to stop the queue
+		mq.tasks = nil  //discard tasks channel to free resources
 	}
 }
 
@@ -94,7 +97,7 @@ func (mq *Queue) Close() {
 func (mq *Queue) Push(task func()) error {
 	mq.mu.Lock()
 	defer mq.mu.Unlock()
-	if mq.tasks == nil {
+	if mq.closed.Load() {
 		return ErrQueueIsStoped
 	}
 	select {
@@ -110,7 +113,7 @@ func (mq *Queue) Push(task func()) error {
 func (mq *Queue) Jump(task func()) error {
 	mq.mu.Lock()
 	defer mq.mu.Unlock()
-	if mq.tasks == nil {
+	if mq.closed.Load() {
 		return ErrQueueIsStoped
 	}
 	mq.jumps <- task

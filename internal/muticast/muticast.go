@@ -136,7 +136,6 @@ func (m *muticast) Request() (r map[string]int32, err error) {
 	m.respChan = make(chan *packet.Response, 128)
 	time.AfterFunc(time.Second*5, func() {
 		close(m.respChan)
-		m.respChan = nil
 	})
 	_, err = m.conn.WriteToUDP(reqdata, m.addr)
 	if err != nil {

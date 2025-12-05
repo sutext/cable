@@ -52,7 +52,7 @@ func New(address string, opts ...Option) *server {
 func (s *server) Serve() error {
 	switch s.network {
 	case NetworkTCP:
-		s.listener = listener.NewNIO()
+		s.listener = listener.NewTCP()
 	case NetworkUDP:
 		s.listener = listener.NewUDP()
 	default:

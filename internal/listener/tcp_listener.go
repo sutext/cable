@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"sutext.github.io/cable/internal/poll"
 	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
@@ -14,6 +15,7 @@ import (
 type tcpListener struct {
 	logger        *xlog.Logger
 	listener      *net.TCPListener
+	recvPoll      *poll.Poll
 	closeHandler  func(c *Conn)
 	packetHandler func(p packet.Packet, c *Conn)
 	acceptHandler func(*packet.Connect, *Conn) packet.ConnectCode
@@ -21,7 +23,8 @@ type tcpListener struct {
 
 func NewTCP() Listener {
 	return &tcpListener{
-		logger: xlog.With("GROUP", "SERVER"),
+		logger:   xlog.With("GROUP", "SERVER"),
+		recvPoll: poll.New(10240, 128),
 	}
 }
 func (l *tcpListener) OnClose(handler func(c *Conn)) {
@@ -90,7 +93,9 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 			c.ClosePacket(packet.NewClose(packet.AsCloseCode(err)))
 			return
 		}
-		go l.packetHandler(p, c)
+		l.recvPoll.Push(func() {
+			l.packetHandler(p, c)
+		})
 	}
 }
 

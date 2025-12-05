@@ -78,8 +78,6 @@ func (k *KeepAlive) sendPing() {
 	k.mu.Unlock()
 	k.sendFunc()
 	select {
-	case <-k.stop:
-		return
 	case <-k.pong:
 		return
 	case <-time.After(k.timeout):
