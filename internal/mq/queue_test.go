@@ -9,7 +9,7 @@ import (
 
 // 添加并发测试
 func TestQueue(t *testing.T) {
-	mq := NewQueue(10)
+	mq := NewLQueue()
 	time.AfterFunc(time.Second*2, func() {
 		mq.Pause()
 		fmt.Println("Pause")
@@ -37,19 +37,29 @@ func TestQueue(t *testing.T) {
 }
 
 func BenchmarkAddTask(b *testing.B) {
-	mq := NewQueue(1000)
-	for b.Loop() {
-		mq.AddTask(func() {
-			// do something
-		})
-	}
+	b.Run("slice_queue", func(b *testing.B) {
+		mq := NewQueue(1000)
+		for b.Loop() {
+			mq.Push(func() {
+				// do something
+			})
+		}
+	})
+	b.Run("list_queue", func(b *testing.B) {
+		mq := NewLQueue()
+		for b.Loop() {
+			mq.AddTask(func() {
+				// do something
+			})
+		}
+	})
 }
 
 func BenchmarkAddTaskParallel(b *testing.B) {
 	mq := NewQueue(1000)
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			mq.AddTask(func() {
+			mq.Push(func() {
 				// do something
 			})
 		}

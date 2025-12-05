@@ -1,7 +1,6 @@
 package safe
 
 import (
-	"fmt"
 	"sync/atomic"
 	"testing"
 )
@@ -37,29 +36,20 @@ func TestXMap(t *testing.T) {
 func BenchmarkMap(b *testing.B) {
 	b.Run("safe.XMap", func(b *testing.B) {
 		m := XMap[string, string]{}
-		for i := 0; b.Loop(); i++ {
-			str := fmt.Sprintf("%d", i)
-			m.Set(str, str)
-			m.Get(str)
-			m.Delete(str)
+		for b.Loop() {
+			m.Set("foo", "bar")
 		}
 	})
 	b.Run("safe.Map", func(b *testing.B) {
 		m := Map[string, string]{}
-		for i := 0; b.Loop(); i++ {
-			str := fmt.Sprintf("%d", i)
-			m.Set(str, str)
-			m.Get(str)
-			m.Delete(str)
+		for b.Loop() {
+			m.Set("foo", "bar")
 		}
 	})
 	b.Run("map", func(b *testing.B) {
 		m := map[string]string{}
-		for i := 0; b.Loop(); i++ {
-			str := fmt.Sprintf("%d", i)
-			m[str] = str
-			_ = m[str]
-			delete(m, str)
+		for b.Loop() {
+			m["foo"] = "bar"
 		}
 	})
 }

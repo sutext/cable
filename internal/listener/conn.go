@@ -3,11 +3,8 @@ package listener
 import (
 	"context"
 	"sync"
-	"sync/atomic"
 
-	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/internal/inflight"
-	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xerr"
 	"sutext.github.io/cable/xlog"
@@ -15,38 +12,35 @@ import (
 
 type Conn struct {
 	raw          conn
-	closed       atomic.Bool
 	logger       *xlog.Logger
-	recvQueue    *queue.Queue
-	sendQueue    *queue.Queue
 	inflights    *inflight.Inflight
-	closeHandler func(c *Conn)
 	requestTasks sync.Map
 }
 
 func newConn(raw conn) *Conn {
 	c := &Conn{
-		raw:       raw,
-		logger:    xlog.With("GROUP", "SERVER"),
-		recvQueue: queue.New(10240),
-		sendQueue: queue.New(10240),
+		raw:    raw,
+		logger: xlog.With("GROUP", "SERVER"),
 	}
 	c.inflights = inflight.New(func(m *packet.Message) {
 		c.SendPacket(m)
 	})
 	return c
 }
+
 func (c *Conn) ID() *packet.Identity {
 	return c.raw.ID()
 }
+
 func (c *Conn) IsIdle() bool {
-	return c.recvQueue.IsIdle()
+	return true
 }
-func (c *Conn) OnClose(handler func(c *Conn)) {
-	c.closeHandler = handler
-}
+
+//	func (c *Conn) OnClose(handler func(c *Conn)) {
+//		c.closeHandler = handler
+//	}
 func (c *Conn) IsClosed() bool {
-	return c.closed.Load()
+	return c.raw.isClosed()
 }
 
 func (c *Conn) SendMessage(p *packet.Message) error {
@@ -78,63 +72,30 @@ func (c *Conn) RecvResponse(p *packet.Response) {
 		resp.(chan *packet.Response) <- p
 	}
 }
-func (c *Conn) Close() {
-	if c.closed.CompareAndSwap(false, true) {
-		c.recvQueue.Close()
-		c.sendQueue.Close()
-		c.raw.close()
-		if c.closeHandler != nil {
-			c.closeHandler(c)
-		}
-	}
+func (c *Conn) Close() error {
+	return c.raw.close()
 }
 func (c *Conn) ClosePacket(p packet.Packet) error {
-	if c.closed.Load() {
+	if c.IsClosed() {
 		return xerr.ConnectionIsClosed
 	}
-	return c.sendQueue.AddTask(func() {
-		if c.closed.Load() {
-			return
-		}
-		if err := c.raw.writePacket(p); err != nil {
-			c.logger.Error("failed to send packet", xlog.Err(err))
-		}
-		c.Close()
-	})
+	return c.raw.writePacket(p, true)
 }
 func (c *Conn) DuplicateClose() error {
-	if c.closed.Load() {
+	if c.IsClosed() {
 		return xerr.ConnectionIsClosed
 	}
-	return c.sendQueue.AddTask(func() {
-		if c.closed.Load() {
-			return
-		}
-		if err := c.raw.writePacket(packet.NewClose(packet.CloseDuplicateLogin)); err != nil {
-			c.logger.Error("failed to send packet", xlog.Err(err))
-		}
-		c.closeHandler = nil
-		c.Close()
-	})
+	return c.raw.writePacket(packet.NewClose(packet.CloseDuplicateLogin), true)
+}
+func (c *Conn) SendPong() error {
+	if c.IsClosed() {
+		return xerr.ConnectionIsClosed
+	}
+	return c.raw.writePacket(packet.NewPong(), true)
 }
 func (c *Conn) SendPacket(p packet.Packet) error {
-	if c.closed.Load() {
+	if c.IsClosed() {
 		return xerr.ConnectionIsClosed
 	}
-	return c.sendQueue.AddTask(func() {
-		if c.closed.Load() {
-			c.logger.Error("try to send packet on closed connection")
-			return
-		}
-		err := c.raw.writePacket(p)
-		if err != nil {
-			c.logger.Error("failed to send packet", xlog.Err(err))
-			switch err.(type) {
-			case packet.Error, coder.Error:
-				break
-			default:
-				c.Close()
-			}
-		}
-	})
+	return c.raw.writePacket(p, false)
 }

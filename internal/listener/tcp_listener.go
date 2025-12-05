@@ -3,8 +3,10 @@ package listener
 import (
 	"context"
 	"net"
+	"sync/atomic"
 	"time"
 
+	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
 )
@@ -12,6 +14,7 @@ import (
 type tcpListener struct {
 	logger        *xlog.Logger
 	listener      *net.TCPListener
+	closeHandler  func(c *Conn)
 	packetHandler func(p packet.Packet, c *Conn)
 	acceptHandler func(*packet.Connect, *Conn) packet.ConnectCode
 }
@@ -20,6 +23,9 @@ func NewTCP() Listener {
 	return &tcpListener{
 		logger: xlog.With("GROUP", "SERVER"),
 	}
+}
+func (l *tcpListener) OnClose(handler func(c *Conn)) {
+	l.closeHandler = handler
 }
 func (l *tcpListener) OnAccept(handler func(*packet.Connect, *Conn) packet.ConnectCode) {
 	l.acceptHandler = handler
@@ -67,7 +73,11 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 		return
 	}
 	connPacket := p.(*packet.Connect)
-	c := newTCPConn(connPacket.Identity, conn)
+	tc := newTCPConn(connPacket.Identity, conn)
+	c := newConn(tc)
+	tc.closeHandler = func() {
+		l.closeHandler(c)
+	}
 	code := l.acceptHandler(connPacket, c)
 	if code != packet.ConnectAccepted {
 		c.ClosePacket(packet.NewConnack(code))
@@ -80,8 +90,59 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 			c.ClosePacket(packet.NewClose(packet.AsCloseCode(err)))
 			return
 		}
-		c.recvQueue.AddTask(func() {
-			l.packetHandler(p, c)
+		go l.packetHandler(p, c)
+	}
+}
+
+type tcpConn struct {
+	id           *packet.Identity
+	raw          *net.TCPConn
+	closed       atomic.Bool
+	sendQueue    *queue.Queue
+	closeHandler func()
+}
+
+func (c *tcpConn) ID() *packet.Identity {
+	return c.id
+}
+func (c *tcpConn) close() error {
+	if c.closed.CompareAndSwap(false, true) {
+		c.sendQueue.Close()
+		err := c.raw.Close()
+		if c.closeHandler != nil {
+			c.closeHandler()
+		}
+		return err
+	}
+	return nil
+}
+func (c *tcpConn) isClosed() bool {
+	return c.closed.Load()
+}
+func (c *tcpConn) writePacket(p packet.Packet, jump bool) error {
+	data, err := packet.Marshal(p)
+	if err != nil {
+		return err
+	}
+	if jump {
+		return c.sendQueue.Jump(func() {
+			_, err := c.raw.Write(data)
+			if err != nil {
+				c.close()
+			}
 		})
+	}
+	return c.sendQueue.Push(func() {
+		_, err := c.raw.Write(data)
+		if err != nil {
+			c.close()
+		}
+	})
+}
+func newTCPConn(id *packet.Identity, raw *net.TCPConn) *tcpConn {
+	return &tcpConn{
+		id:        id,
+		raw:       raw,
+		sendQueue: queue.New(10240),
 	}
 }

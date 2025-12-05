@@ -52,12 +52,13 @@ func New(address string, opts ...Option) *server {
 func (s *server) Serve() error {
 	switch s.network {
 	case NetworkTCP:
-		s.listener = listener.NewTCP()
+		s.listener = listener.NewNIO()
 	case NetworkUDP:
 		s.listener = listener.NewUDP()
 	default:
 		return xerr.NetworkNotSupported
 	}
+	s.listener.OnClose(s.onClose)
 	s.listener.OnAccept(s.onConnect)
 	s.listener.OnPacket(s.onPacket)
 	return s.listener.Listen(s.address)
@@ -158,7 +159,7 @@ func (s *server) onPacket(p packet.Packet, c *listener.Conn) {
 	case packet.RESPONSE:
 		c.RecvResponse(p.(*packet.Response))
 	case packet.PING:
-		c.SendPacket(packet.NewPong())
+		c.SendPong()
 	case packet.PONG:
 		break
 	case packet.CLOSE:
@@ -171,7 +172,6 @@ func (s *server) onPacket(p packet.Packet, c *listener.Conn) {
 func (s *server) onConnect(p *packet.Connect, c *listener.Conn) packet.ConnectCode {
 	code := s.connectHander(p)
 	if code == packet.ConnectAccepted {
-		c.OnClose(s.onClose)
 		if old, loaded := s.conns.Swap(p.Identity.ClientID, c); loaded {
 			old.DuplicateClose()
 		}

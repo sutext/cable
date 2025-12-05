@@ -1,7 +1,6 @@
 package queue
 
 import (
-	"context"
 	"sync"
 )
 
@@ -25,36 +24,55 @@ func (e Error) Error() string {
 
 type Queue struct {
 	mu    sync.Mutex
+	jumps chan func()
 	tasks chan func()
 }
 
 // Create a new instance of Queue
 // size is the maximum number of tasks that can be in the queue at any given time.
-// workerCount is the number of worker goroutines to be created.
-// If workerCount is not specified, it will default to 1.
-func New(length int, workerCount ...int) *Queue {
-	count := 1
-	if len(workerCount) > 0 {
-		count = workerCount[0]
-	}
-	if length < 1 || count < 1 {
+func New(length int) *Queue {
+	if length < 1 {
 		panic("length and workerCount must be greater than 1")
 	}
-	mq := &Queue{tasks: make(chan func(), length)}
-	for range count {
-		go func() {
-			for task := range mq.tasks {
-				task()
-			}
-		}()
+	mq := &Queue{
+		tasks: make(chan func()),
+		jumps: make(chan func(), 3),
 	}
+	go mq.run()
 	return mq
 }
-
-func (mq *Queue) IsIdle() bool {
+func (mq *Queue) run() {
+	for {
+		select {
+		case task := <-mq.jumps:
+			task()
+		default:
+			select {
+			case task := <-mq.jumps:
+				task()
+			case task, ok := <-mq.tasks:
+				if !ok {
+					close(mq.jumps)
+					mq.jumps = nil
+					return
+				}
+				task()
+			}
+		}
+	}
+}
+func (mq *Queue) Len() int {
 	mq.mu.Lock()
 	defer mq.mu.Unlock()
-	return len(mq.tasks) == 0
+	return len(mq.tasks) + len(mq.jumps)
+}
+func (mq *Queue) IsIdle() bool {
+	return mq.Len() == 0
+}
+func (mq *Queue) IsFull() bool {
+	mq.mu.Lock()
+	defer mq.mu.Unlock()
+	return len(mq.tasks) == cap(mq.tasks)
 }
 func (mq *Queue) IsClosed() bool {
 	mq.mu.Lock()
@@ -72,8 +90,8 @@ func (mq *Queue) Close() {
 	}
 }
 
-// AddTask a task to the queue. If the queue is full, it will return ErrQueueIsFull.
-func (mq *Queue) AddTask(task func()) error {
+// Push a task to the queue. If the queue is full, it will return ErrQueueIsFull.
+func (mq *Queue) Push(task func()) error {
 	mq.mu.Lock()
 	defer mq.mu.Unlock()
 	if mq.tasks == nil {
@@ -86,16 +104,15 @@ func (mq *Queue) AddTask(task func()) error {
 		return ErrQueueIsFull
 	}
 }
-func (mq *Queue) AddTaskCtx(ctx context.Context, task func()) error {
+
+// Jump the queue to the front . If the queue is stop or empty, it will return ErrQueueIsStoped.
+// Warning: Only one task is supported to jump the queue at the same time.
+func (mq *Queue) Jump(task func()) error {
 	mq.mu.Lock()
 	defer mq.mu.Unlock()
 	if mq.tasks == nil {
 		return ErrQueueIsStoped
 	}
-	select {
-	case mq.tasks <- task:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	mq.jumps <- task
+	return nil
 }

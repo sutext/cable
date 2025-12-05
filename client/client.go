@@ -191,7 +191,7 @@ func (c *client) SendRequest(ctx context.Context, p *packet.Request) (*packet.Re
 }
 
 func (c *client) sendPacket(p packet.Packet) error {
-	return c.sendQueue.AddTask(func() {
+	return c.sendQueue.Push(func() {
 		if c.Status() != StatusOpened {
 			return
 		}
@@ -252,7 +252,7 @@ func (c *client) recv() {
 				return
 			}
 		}
-		c.recvQueue.AddTask(func() {
+		c.recvQueue.Push(func() {
 			c.handlePacket(p)
 			c.keepalive.UpdateTime()
 		})

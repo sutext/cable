@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"net"
+	"sync/atomic"
 
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
@@ -15,6 +16,7 @@ type udpListener struct {
 	logger        *xlog.Logger
 	connMap       safe.Map[string, *Conn]
 	listener      *net.UDPConn
+	closeHandler  func(c *Conn)
 	packetHandler func(p packet.Packet, c *Conn)
 	acceptHandler func(p *packet.Connect, c *Conn) packet.ConnectCode
 }
@@ -23,12 +25,13 @@ func NewUDP() Listener {
 	return &udpListener{
 		logger: xlog.With("GROUP", "SERVER"),
 	}
-
+}
+func (l *udpListener) OnClose(handler func(*Conn)) {
+	l.closeHandler = handler
 }
 func (l *udpListener) OnAccept(handler func(*packet.Connect, *Conn) packet.ConnectCode) {
 	l.acceptHandler = handler
 }
-
 func (l *udpListener) OnPacket(handler func(p packet.Packet, c *Conn)) {
 	l.packetHandler = handler
 }
@@ -71,9 +74,7 @@ func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.
 			l.logger.Warn("unknown udp connID", xlog.String("connID", connID))
 			return
 		}
-		c.recvQueue.AddTask(func() {
-			l.packetHandler(p, c)
-		})
+		go l.packetHandler(p, c)
 		return
 	}
 	connPacket := p.(*packet.Connect)
@@ -91,4 +92,40 @@ func md5Hash(s string) string {
 	h := md5.New()
 	h.Write([]byte(s))
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+type udpConn struct {
+	id     *packet.Identity
+	raw    *net.UDPConn
+	addr   atomic.Pointer[net.UDPAddr]
+	connID string
+}
+
+func (c *udpConn) ID() *packet.Identity {
+	return c.id
+}
+func (c *udpConn) close() error {
+	return nil
+}
+func (c *udpConn) isClosed() bool {
+	return false
+}
+func (c *udpConn) writePacket(p packet.Packet, jump bool) error {
+	p.Set(packet.PropertyConnID, c.connID)
+	data, err := packet.Marshal(p)
+	if err != nil {
+		return err
+	}
+	_, err = c.raw.WriteToUDP(data, c.addr.Load())
+	return err
+}
+
+func newUDPConn(id *packet.Identity, raw *net.UDPConn, addr *net.UDPAddr, connID string) *Conn {
+	c := &udpConn{
+		id:     id,
+		raw:    raw,
+		connID: connID,
+	}
+	c.addr.Store(addr)
+	return newConn(c)
 }

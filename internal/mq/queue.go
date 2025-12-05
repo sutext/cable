@@ -14,7 +14,7 @@ type Queue struct {
 	head   int
 	tail   int
 	cond   *sync.Cond
-	tasks  []Task
+	slots  []Task
 	paused bool
 	closed bool
 }
@@ -26,7 +26,7 @@ func NewQueue(cap int) *Queue {
 	mq := &Queue{
 		cap:   cap,
 		cond:  sync.NewCond(&sync.Mutex{}),
-		tasks: make([]Task, cap),
+		slots: make([]Task, cap),
 	}
 	go mq.run()
 	return mq
@@ -53,10 +53,10 @@ func (mq *Queue) Clear() {
 	if mq.len() > mq.cap/2 {
 		mq.head = 0
 		mq.tail = 0
-		mq.tasks = make([]Task, mq.cap)
+		mq.slots = make([]Task, mq.cap)
 	} else {
 		for i := mq.tail; i < mq.head; i++ {
-			mq.tasks[i%mq.cap] = nil
+			mq.slots[i%mq.cap] = nil
 		}
 		mq.head = 0
 		mq.tail = 0
@@ -102,8 +102,8 @@ func (mq *Queue) IsClosed() bool {
 	return mq.closed
 }
 
-// AddTask adds a task to the queue.
-func (mq *Queue) AddTask(task func()) error {
+// Push adds a task to the queue.
+func (mq *Queue) Push(task func()) error {
 	mq.cond.L.Lock()
 	defer mq.cond.L.Unlock()
 	if mq.closed {
@@ -118,7 +118,7 @@ func (mq *Queue) AddTask(task func()) error {
 	}
 	return err
 }
-func (mq *Queue) AddFirstTask(task func()) error {
+func (mq *Queue) Jump(task func()) error {
 	mq.cond.L.Lock()
 	defer mq.cond.L.Unlock()
 	if mq.closed {
@@ -149,7 +149,7 @@ func (mq *Queue) run() {
 		if stop {
 			mq.cond.L.Lock()
 			mq.closed = true
-			mq.tasks = nil
+			mq.slots = nil
 			mq.cond.L.Unlock()
 			break
 		}
@@ -160,14 +160,14 @@ func (mq *Queue) enqueueFirst(task Task) error {
 		return errors.New("task array is full")
 	}
 	mq.head = (mq.head - 1) % mq.cap
-	mq.tasks[mq.head] = task
+	mq.slots[mq.head] = task
 	return nil
 }
 func (mq *Queue) enqueue(task Task) error {
 	if mq.len() == mq.cap {
 		return errors.New("task array is full")
 	}
-	mq.tasks[mq.tail%mq.cap] = task
+	mq.slots[mq.tail%mq.cap] = task
 	mq.tail = (mq.tail + 1)
 	return nil
 }
@@ -175,7 +175,7 @@ func (mq *Queue) dequeue() Task {
 	if mq.len() == 0 {
 		return nil
 	}
-	task := mq.tasks[mq.head%mq.cap]
+	task := mq.slots[mq.head%mq.cap]
 	mq.head = (mq.head + 1)
 	return task
 }
