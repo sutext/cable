@@ -29,3 +29,5 @@ spec:
           env:
             - name: ENDPOINT
               value: "tcp://cable-cluster:1883"
+            - name: FREQ
+              value: "10"
