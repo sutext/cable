@@ -13,18 +13,20 @@ import (
 )
 
 type tcpListener struct {
-	logger        *xlog.Logger
-	listener      *net.TCPListener
-	recvPoll      *poll.Poll
-	closeHandler  func(c *Conn)
-	packetHandler func(p packet.Packet, c *Conn)
-	acceptHandler func(*packet.Connect, *Conn) packet.ConnectCode
+	logger          *xlog.Logger
+	listener        *net.TCPListener
+	recvPoll        *poll.Poll
+	closeHandler    func(c *Conn)
+	packetHandler   func(p packet.Packet, c *Conn)
+	acceptHandler   func(*packet.Connect, *Conn) packet.ConnectCode
+	sendQueueLength int
 }
 
-func NewTCP() Listener {
+func NewTCP(sendQueueLength int) Listener {
 	return &tcpListener{
-		logger:   xlog.With("GROUP", "SERVER"),
-		recvPoll: poll.New(10240, 128),
+		logger:          xlog.With("GROUP", "SERVER"),
+		recvPoll:        poll.New(10240, 128),
+		sendQueueLength: sendQueueLength,
 	}
 }
 func (l *tcpListener) OnClose(handler func(c *Conn)) {
@@ -76,7 +78,7 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 		return
 	}
 	connPacket := p.(*packet.Connect)
-	tc := newTCPConn(connPacket.Identity, conn)
+	tc := newTCPConn(connPacket.Identity, conn, l.sendQueueLength)
 	c := newConn(tc)
 	tc.closeHandler = func() {
 		l.closeHandler(c)
@@ -144,10 +146,10 @@ func (c *tcpConn) writePacket(p packet.Packet, jump bool) error {
 		}
 	})
 }
-func newTCPConn(id *packet.Identity, raw *net.TCPConn) *tcpConn {
+func newTCPConn(id *packet.Identity, raw *net.TCPConn, sendQueueLength int) *tcpConn {
 	return &tcpConn{
 		id:        id,
 		raw:       raw,
-		sendQueue: queue.New(10240),
+		sendQueue: queue.New(sendQueueLength),
 	}
 }

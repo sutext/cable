@@ -29,6 +29,7 @@ type server struct {
 	address        string
 	network        Network
 	listener       listener.Listener
+	queueLength    int
 	closeHandler   ClosedHandler
 	connectHander  ConnectHandler
 	messageHandler MessageHandler
@@ -41,6 +42,7 @@ func New(address string, opts ...Option) *server {
 		logger:         options.logger,
 		address:        address,
 		network:        options.network,
+		queueLength:    options.queueLength,
 		closeHandler:   options.closeHandler,
 		connectHander:  options.connectHandler,
 		messageHandler: options.messageHandler,
@@ -52,7 +54,7 @@ func New(address string, opts ...Option) *server {
 func (s *server) Serve() error {
 	switch s.network {
 	case NetworkTCP:
-		s.listener = listener.NewTCP()
+		s.listener = listener.NewTCP(s.queueLength)
 	case NetworkUDP:
 		s.listener = listener.NewUDP()
 	default:

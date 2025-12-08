@@ -40,9 +40,9 @@ type Option struct {
 	f func(*options)
 }
 type options struct {
-	network Network
-	logger  *xlog.Logger
-	// QuicConfig     *quic.Config
+	logger         *xlog.Logger
+	network        Network
+	queueLength    int
 	closeHandler   ClosedHandler
 	connectHandler ConnectHandler
 	messageHandler MessageHandler
@@ -51,8 +51,9 @@ type options struct {
 
 func NewOptions(opts ...Option) *options {
 	var options = &options{
-		network: NetworkTCP,
-		logger:  xlog.With("GROUP", "SERVER"),
+		logger:      xlog.With("GROUP", "SERVER"),
+		network:     NetworkTCP,
+		queueLength: 2048,
 		closeHandler: func(p *packet.Identity) {
 
 		},
@@ -98,4 +99,7 @@ func WithMessage(handler MessageHandler) Option {
 }
 func WithRequest(handler RequestHandler) Option {
 	return Option{f: func(o *options) { o.requestHandler = handler }}
+}
+func WithQueueLength(length int) Option {
+	return Option{f: func(o *options) { o.queueLength = length }}
 }

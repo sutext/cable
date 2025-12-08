@@ -75,21 +75,23 @@ func NewBroker(opts ...Option) Broker {
 			}),
 			server.WithMessage(b.onUserMessage),
 			server.WithRequest(b.onUserRequest),
+			server.WithQueueLength(10240),
 		)
 	}
 	b.peerPort = options.peerPort
 	b.peerServer = server.New(options.peerPort,
-		server.WithRequest(b.onPeerRequest),
 		server.WithLogger(xlog.With("GROUP", "PEER")),
+		server.WithRequest(b.onPeerRequest),
+		server.WithQueueLength(102400),
 	)
-	b.handlePeer("SendMessage", b.handleSendMessage)
-	b.handlePeer("IsOnline", b.handleIsOnline)
-	b.handlePeer("KickConn", b.handleKickConn)
-	b.handlePeer("JoinChannel", b.handleJoinChannel)
-	b.handlePeer("LeaveChannel", b.handleLeaveChannel)
 	b.handlePeer("Inspect", b.handlePeerInspect)
 	b.handlePeer("KickUser", b.handleKickUser)
+	b.handlePeer("IsOnline", b.handleIsOnline)
+	b.handlePeer("KickConn", b.handleKickConn)
 	b.handlePeer("FreeMemory", b.handlePeerFreeMemory)
+	b.handlePeer("SendMessage", b.handleSendMessage)
+	b.handlePeer("JoinChannel", b.handleJoinChannel)
+	b.handlePeer("LeaveChannel", b.handleLeaveChannel)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/join", b.handleJoin)
 	mux.HandleFunc("/inspect", b.handleInspect)

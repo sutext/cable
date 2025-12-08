@@ -133,8 +133,8 @@ func (p *Messack) Equal(other Packet) bool {
 	if p.Type() != other.Type() {
 		return false
 	}
-	otherData := other.(*Messack)
-	return maps.Equal(p.props, otherData.props) && p.ID == otherData.ID
+	o := other.(*Messack)
+	return maps.Equal(p.props, o.props) && p.ID == o.ID
 }
 func (p *Messack) WriteTo(w coder.Encoder) error {
 	w.WriteInt64(p.ID)

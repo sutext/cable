@@ -256,7 +256,6 @@ func pack(p Packet) (header, data []byte, err error) {
 		header = make([]byte, 2)
 		header[0] = byte(p.Type()<<4) | byte(length>>8)
 		header[1] = byte(length)
-
 	}
 	return header, data, nil
 }

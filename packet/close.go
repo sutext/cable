@@ -77,8 +77,8 @@ func (p *Close) Equal(other Packet) bool {
 	if other.Type() != CLOSE {
 		return false
 	}
-	otherClose := other.(*Close)
-	return maps.Equal(p.props, otherClose.props) && p.Code == otherClose.Code
+	o := other.(*Close)
+	return maps.Equal(p.props, o.props) && p.Code == o.Code
 }
 
 func (p *Close) WriteTo(w coder.Encoder) error {

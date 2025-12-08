@@ -11,10 +11,10 @@ import (
 type ResponseCode uint8
 
 const (
-	OK         ResponseCode = 0
-	NotFound   ResponseCode = 100
-	Forbidden  ResponseCode = 101
-	BadRequest ResponseCode = 255
+	RequestOK        ResponseCode = 0
+	RequestNotFound  ResponseCode = 100
+	RequestForbidden ResponseCode = 101
+	BadRequest       ResponseCode = 255
 )
 
 type Response struct {
