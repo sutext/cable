@@ -146,6 +146,9 @@ func (c *tcpConn) writePacket(p packet.Packet, jump bool) error {
 		}
 	})
 }
+func (c *tcpConn) sendQueueLength() int {
+	return c.sendQueue.Len()
+}
 func newTCPConn(id *packet.Identity, raw *net.TCPConn, sendQueueLength int) *tcpConn {
 	return &tcpConn{
 		id:        id,

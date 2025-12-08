@@ -51,7 +51,7 @@ type broker struct {
 func NewBroker(opts ...Option) Broker {
 	options := newOptions(opts...)
 	b := &broker{id: options.brokerID}
-	b.logger = xlog.With("GROUP", "BROKER")
+	b.logger = xlog.With("BROKER", b.id)
 	b.handler = options.handler
 	b.muticast = muticast.New(b.id)
 	b.muticast.OnRequest(func(idip string) int32 {
@@ -75,14 +75,14 @@ func NewBroker(opts ...Option) Broker {
 			}),
 			server.WithMessage(b.onUserMessage),
 			server.WithRequest(b.onUserRequest),
-			server.WithQueueLength(10240),
+			server.WithQueueCapacity(10240),
 		)
 	}
 	b.peerPort = options.peerPort
 	b.peerServer = server.New(options.peerPort,
 		server.WithLogger(xlog.With("GROUP", "PEER")),
 		server.WithRequest(b.onPeerRequest),
-		server.WithQueueLength(102400),
+		server.WithQueueCapacity(102400),
 	)
 	b.handlePeer("Inspect", b.handlePeerInspect)
 	b.handlePeer("KickUser", b.handleKickUser)

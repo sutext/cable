@@ -31,14 +31,14 @@ type Queue struct {
 }
 
 // Create a new instance of Queue
-// size is the maximum number of tasks that can be in the queue at any given time.
-func New(length int) *Queue {
-	if length < 1 {
+// capacity is the maximum number of tasks that can be stored in the queue.
+func New(capacity int) *Queue {
+	if capacity < 1 {
 		panic("length and workerCount must be greater than 1")
 	}
 	mq := &Queue{
-		tasks: make(chan func(), length),
-		jumps: make(chan func(), 3),
+		tasks: make(chan func(), capacity),
+		jumps: make(chan func(), 5),
 	}
 	go mq.run()
 	return mq

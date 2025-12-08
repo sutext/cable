@@ -42,7 +42,9 @@ func (c *Conn) IsIdle() bool {
 func (c *Conn) IsClosed() bool {
 	return c.raw.isClosed()
 }
-
+func (c *Conn) SendQueueLength() int {
+	return 0
+}
 func (c *Conn) SendMessage(p *packet.Message) error {
 	if p.Qos == packet.MessageQos1 {
 		c.inflights.Add(p)

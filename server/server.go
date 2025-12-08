@@ -42,7 +42,7 @@ func New(address string, opts ...Option) *server {
 		logger:         options.logger,
 		address:        address,
 		network:        options.network,
-		queueLength:    options.queueLength,
+		queueLength:    options.queueCapacity,
 		closeHandler:   options.closeHandler,
 		connectHander:  options.connectHandler,
 		messageHandler: options.messageHandler,
