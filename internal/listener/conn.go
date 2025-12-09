@@ -43,7 +43,7 @@ func (c *Conn) IsClosed() bool {
 	return c.raw.isClosed()
 }
 func (c *Conn) SendQueueLength() int {
-	return 0
+	return c.raw.sendQueueLength()
 }
 func (c *Conn) SendMessage(p *packet.Message) error {
 	if p.Qos == packet.MessageQos1 {
