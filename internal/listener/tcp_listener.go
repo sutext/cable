@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"sutext.github.io/cable/internal/metrics"
 	"sutext.github.io/cable/internal/poll"
 	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
@@ -13,20 +14,20 @@ import (
 )
 
 type tcpListener struct {
-	logger          *xlog.Logger
-	listener        *net.TCPListener
-	recvPoll        *poll.Poll
-	closeHandler    func(c *Conn)
-	packetHandler   func(p packet.Packet, c *Conn)
-	acceptHandler   func(*packet.Connect, *Conn) packet.ConnectCode
-	sendQueueLength int
+	logger            *xlog.Logger
+	listener          *net.TCPListener
+	recvPoll          *poll.Poll
+	closeHandler      func(c *Conn)
+	packetHandler     func(p packet.Packet, c *Conn)
+	acceptHandler     func(*packet.Connect, *Conn) packet.ConnectCode
+	sendQueueCapacity int
 }
 
-func NewTCP(sendQueueLength int) Listener {
+func NewTCP(sendQueueCapacity int) Listener {
 	return &tcpListener{
-		logger:          xlog.With("GROUP", "SERVER"),
-		recvPoll:        poll.New(10240, 128),
-		sendQueueLength: sendQueueLength,
+		logger:            xlog.With("GROUP", "SERVER"),
+		recvPoll:          poll.New(10240, 128),
+		sendQueueCapacity: sendQueueCapacity,
 	}
 }
 func (l *tcpListener) OnClose(handler func(c *Conn)) {
@@ -78,7 +79,7 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 		return
 	}
 	connPacket := p.(*packet.Connect)
-	tc := newTCPConn(connPacket.Identity, conn, l.sendQueueLength)
+	tc := newTCPConn(connPacket.Identity, conn, l.sendQueueCapacity)
 	c := newConn(tc)
 	tc.closeHandler = func() {
 		l.closeHandler(c)
@@ -105,6 +106,8 @@ type tcpConn struct {
 	id           *packet.Identity
 	raw          *net.TCPConn
 	closed       atomic.Bool
+	sendMeter    metrics.Meter
+	writeMeter   metrics.Meter
 	sendQueue    *queue.Queue
 	closeHandler func()
 }
@@ -127,6 +130,7 @@ func (c *tcpConn) isClosed() bool {
 	return c.closed.Load()
 }
 func (c *tcpConn) writePacket(p packet.Packet, jump bool) error {
+	c.sendMeter.Mark(1)
 	data, err := packet.Marshal(p)
 	if err != nil {
 		return err
@@ -134,6 +138,7 @@ func (c *tcpConn) writePacket(p packet.Packet, jump bool) error {
 	if jump {
 		return c.sendQueue.Jump(func() {
 			_, err := c.raw.Write(data)
+			c.writeMeter.Mark(1)
 			if err != nil {
 				c.close()
 			}
@@ -141,6 +146,7 @@ func (c *tcpConn) writePacket(p packet.Packet, jump bool) error {
 	}
 	return c.sendQueue.Push(func() {
 		_, err := c.raw.Write(data)
+		c.writeMeter.Mark(1)
 		if err != nil {
 			c.close()
 		}
@@ -151,8 +157,10 @@ func (c *tcpConn) sendQueueLength() int {
 }
 func newTCPConn(id *packet.Identity, raw *net.TCPConn, sendQueueLength int) *tcpConn {
 	return &tcpConn{
-		id:        id,
-		raw:       raw,
-		sendQueue: queue.New(sendQueueLength),
+		id:         id,
+		raw:        raw,
+		writeMeter: metrics.NewRegisteredMeter("tcp.write", metrics.DefaultRegistry),
+		sendMeter:  metrics.NewRegisteredMeter("tcp.send", metrics.DefaultRegistry),
+		sendQueue:  queue.New(sendQueueLength),
 	}
 }

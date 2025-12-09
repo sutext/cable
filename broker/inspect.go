@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"sutext.github.io/cable/internal/metrics"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
@@ -19,7 +20,11 @@ type PeerInspect struct {
 type Inspect struct {
 	ID          string         `json:"id"`
 	Peers       []*PeerInspect `json:"peers"`
+	TopConns    map[string]int `json:"top_conns"`
+	TopPeers    map[string]int `json:"top_peers"`
 	UserCount   int            `json:"user_count"`
+	SendRate    float64        `json:"send_rate"`
+	WriteRate   float64        `json:"write_rate"`
 	ClientCount int            `json:"client_count"`
 	ClusterSize int32          `json:"cluster_size"`
 }
@@ -47,9 +52,16 @@ func (b *broker) inspect() *Inspect {
 		clients += int(cs.Len())
 		return true
 	})
+	l := b.listeners[server.NetworkTCP]
+	writeRate := metrics.GetOrRegisterMeter("tcp.write", metrics.DefaultRegistry)
+	sendRate := metrics.GetOrRegisterMeter("tcp.send", metrics.DefaultRegistry)
 	return &Inspect{
 		ID:          b.id,
 		Peers:       peersInpsects,
+		TopPeers:    b.peerServer.Top(),
+		TopConns:    l.Top(),
+		SendRate:    sendRate.Rate1(),
+		WriteRate:   writeRate.Rate1(),
 		UserCount:   users,
 		ClientCount: clients,
 		ClusterSize: b.clusterSize(),

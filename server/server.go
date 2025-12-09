@@ -13,6 +13,7 @@ import (
 )
 
 type Server interface {
+	Top() map[string]int
 	Serve() error
 	Network() Network
 	IsActive(cid string) bool
@@ -64,6 +65,19 @@ func (s *server) Serve() error {
 	s.listener.OnAccept(s.onConnect)
 	s.listener.OnPacket(s.onPacket)
 	return s.listener.Listen(s.address)
+}
+func (s *server) Top() map[string]int {
+	top := make(map[string]int)
+	count := 7
+	s.conns.Range(func(key string, conn *listener.Conn) bool {
+		top[key] = conn.SendQueueLength()
+		count--
+		if count == 0 {
+			return false
+		}
+		return true
+	})
+	return top
 }
 func (s *server) IsActive(cid string) bool {
 	if c, ok := s.conns.Get(cid); ok {
