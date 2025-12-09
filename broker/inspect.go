@@ -12,21 +12,16 @@ import (
 	"sutext.github.io/cable/server"
 )
 
-type PeerInspect struct {
-	ID     string `json:"id"`
-	IP     string `json:"ip"`
-	Status string `json:"status"`
-}
 type Inspect struct {
-	ID          string         `json:"id"`
-	Peers       []*PeerInspect `json:"peers"`
-	TopConns    map[string]int `json:"top_conns"`
-	TopPeers    map[string]int `json:"top_peers"`
-	UserCount   int            `json:"user_count"`
-	SendRate    float64        `json:"send_rate"`
-	WriteRate   float64        `json:"write_rate"`
-	ClientCount int            `json:"client_count"`
-	ClusterSize int32          `json:"cluster_size"`
+	ID          string            `json:"id"`
+	Peers       map[string]string `json:"peers"`
+	TopConns    map[string]int    `json:"top_conns"`
+	TopPeers    map[string]int    `json:"top_peers"`
+	UserCount   int               `json:"user_count"`
+	SendRate    float64           `json:"send_rate"`
+	WriteRate   float64           `json:"write_rate"`
+	ClientCount int               `json:"client_count"`
+	ClusterSize int32             `json:"cluster_size"`
 }
 
 func NewInspect() *Inspect {
@@ -41,9 +36,9 @@ func (i *Inspect) merge(o *Inspect) {
 }
 
 func (b *broker) inspect() *Inspect {
-	var peersInpsects []*PeerInspect
+	peersInpsects := make(map[string]string)
 	b.peers.Range(func(k string, v *peer) bool {
-		peersInpsects = append(peersInpsects, v.peerInspect())
+		peersInpsects[k] = v.client.Status().String()
 		return true
 	})
 	users := b.userClients.Len()
@@ -67,13 +62,7 @@ func (b *broker) inspect() *Inspect {
 		ClusterSize: b.clusterSize(),
 	}
 }
-func (p *peer) peerInspect() *PeerInspect {
-	return &PeerInspect{
-		ID:     p.id,
-		IP:     p.ip,
-		Status: p.client.Status().String(),
-	}
-}
+
 func (b *broker) Inspects() ([]*Inspect, error) {
 	ctx := context.Background()
 	inspects := make([]*Inspect, 2)
