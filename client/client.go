@@ -29,6 +29,7 @@ type Client interface {
 	ID() *packet.Identity
 	Status() Status
 	Connect(identity *packet.Identity)
+	IsReady() bool
 	SendRate() float64
 	WriteRate() float64
 	SendQueueLength() int
@@ -92,7 +93,9 @@ func (c *client) Connect(identity *packet.Identity) {
 		c.tryClose(err)
 	}
 }
-
+func (c *client) IsReady() bool {
+	return c.Status() == StatusOpened
+}
 func (c *client) tryClose(err error) {
 	c.statusLock.Lock()
 	defer c.statusLock.Unlock()
@@ -152,7 +155,7 @@ func (c *client) reconnect() error {
 	}
 	ack := p.(*packet.Connack)
 	if ack.Code != packet.ConnectAccepted {
-		return ErrConntionFailed
+		return ack.Code
 	}
 	if connID, ok := ack.Get(packet.PropertyConnID); ok {
 		c.packetConnID = connID
@@ -204,11 +207,11 @@ func (c *client) SendRequest(ctx context.Context, p *packet.Request) (*packet.Re
 }
 
 func (c *client) sendPacket(p packet.Packet) error {
-	if c.Status() != StatusOpened {
+	if !c.IsReady() {
 		return ErrConntionFailed
 	}
 	return c.sendQueue.Push(func() {
-		if c.Status() != StatusOpened {
+		if !c.IsReady() {
 			return
 		}
 		if c.packetConnID != "" {
@@ -259,7 +262,7 @@ func (c *client) _setStatus(status Status) {
 			c.inflights = nil
 		}
 	case StatusOpened:
-		go c.run()
+		c.run()
 	}
 	c.handler.OnStatus(status)
 }
@@ -277,24 +280,26 @@ func (c *client) run() {
 	c.inflights = inflight.New(func(m *packet.Message) {
 		c.sendPacket(m)
 	})
-	for {
-		p, err := c.conn.ReadPacket()
-		if err != nil {
-			c.tryClose(err)
-			return
-		}
-		if connID, ok := p.Get(packet.PropertyConnID); ok {
-			if connID != c.packetConnID {
-				c.logger.Error("packet conn id not match", xlog.Str("connID", connID), xlog.Str("expect", c.packetConnID))
-				c.tryClose(ErrConntionFailed)
+	go func() {
+		for {
+			p, err := c.conn.ReadPacket()
+			if err != nil {
+				c.tryClose(err)
 				return
 			}
+			if connID, ok := p.Get(packet.PropertyConnID); ok {
+				if connID != c.packetConnID {
+					c.logger.Error("packet conn id not match", xlog.Str("connID", connID), xlog.Str("expect", c.packetConnID))
+					c.tryClose(ErrConntionFailed)
+					return
+				}
+			}
+			c.recvPoll.Push(func() {
+				c.handlePacket(p)
+				c.keepalive.UpdateTime()
+			})
 		}
-		c.recvPoll.Push(func() {
-			c.handlePacket(p)
-			c.keepalive.UpdateTime()
-		})
-	}
+	}()
 }
 
 func (c *client) handlePacket(p packet.Packet) {
