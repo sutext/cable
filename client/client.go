@@ -7,6 +7,7 @@ import (
 
 	"sutext.github.io/cable/internal/inflight"
 	"sutext.github.io/cable/internal/keepalive"
+	"sutext.github.io/cable/internal/metrics"
 	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
@@ -27,6 +28,9 @@ type Client interface {
 	ID() *packet.Identity
 	Status() Status
 	Connect(identity *packet.Identity)
+	SendRate() float64
+	WriteRate() float64
+	SendQueueLength() int
 	SendMessage(ctx context.Context, p *packet.Message) error
 	SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error)
 }
@@ -43,6 +47,8 @@ type client struct {
 	sendQueue      *queue.Queue
 	keepalive      *keepalive.KeepAlive
 	inflights      *inflight.Inflight
+	sendMeter      metrics.Meter
+	writeMeter     metrics.Meter
 	packetConnID   string
 	requestTasks   sync.Map
 	requestTimeout time.Duration
@@ -57,8 +63,10 @@ func New(address string, options ...Option) Client {
 		logger:         opts.logger,
 		retrier:        opts.retrier,
 		handler:        opts.handler,
+		sendMeter:      metrics.NewMeter(),
+		writeMeter:     metrics.NewMeter(),
 		recvQueue:      queue.New(1024),
-		sendQueue:      queue.New(1024),
+		sendQueue:      queue.New(102400),
 		keepalive:      keepalive.New(opts.pingInterval, opts.pingTimeout),
 		requestTimeout: opts.requestTimeout,
 	}
@@ -165,6 +173,15 @@ func (c *client) SendPing() error {
 func (c *client) SendPong() error {
 	return c.sendPacket(packet.NewPong())
 }
+func (c *client) SendQueueLength() int {
+	return c.sendQueue.Len()
+}
+func (c *client) SendRate() float64 {
+	return c.sendMeter.Rate1()
+}
+func (c *client) WriteRate() float64 {
+	return c.writeMeter.Rate1()
+}
 func (c *client) SendMessage(ctx context.Context, p *packet.Message) error {
 	if p.Qos == packet.MessageQos1 {
 		c.inflights.Add(p)
@@ -220,7 +237,7 @@ func (c *client) _setStatus(status Status) {
 	if c.status == status {
 		return
 	}
-	c.logger.Debug("client status change", xlog.String("from", c.status.String()), xlog.String("to", status.String()))
+	c.logger.Debug("client status change", xlog.Str("from", c.status.String()), xlog.Str("to", status.String()))
 	c.status = status
 	switch status {
 	case StatusClosed:
@@ -247,7 +264,7 @@ func (c *client) recv() {
 		}
 		if connID, ok := p.Get(packet.PropertyConnID); ok {
 			if connID != c.packetConnID {
-				c.logger.Error("packet conn id not match", xlog.String("connID", connID), xlog.String("expect", c.packetConnID))
+				c.logger.Error("packet conn id not match", xlog.Str("connID", connID), xlog.Str("expect", c.packetConnID))
 				c.tryClose(ErrConntionFailed)
 				return
 			}
@@ -292,7 +309,7 @@ func (c *client) handlePacket(p packet.Packet) {
 		if t, ok := c.requestTasks.Load(p.ID); ok {
 			t.(chan *packet.Response) <- p
 		} else {
-			c.logger.Error("response task not found", xlog.Int64("id", p.ID))
+			c.logger.Error("response task not found", xlog.I64("id", p.ID))
 		}
 	case packet.PING:
 		if err := c.SendPong(); err != nil {

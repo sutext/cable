@@ -45,7 +45,7 @@ func (p *peer) UpdateIP(ip string) {
 		p.Connect()
 		return
 	}
-	p.logger.Warn("peer ip updated", xlog.String("ip", ip))
+	p.logger.Warn("peer ip updated", xlog.Str("ip", ip))
 	p.ip = ip
 	p.client = p.createClient()
 	p.Connect()

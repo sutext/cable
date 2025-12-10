@@ -45,6 +45,7 @@ func (c *Conn) IsClosed() bool {
 func (c *Conn) SendQueueLength() int {
 	return c.raw.sendQueueLength()
 }
+
 func (c *Conn) SendMessage(p *packet.Message) error {
 	if p.Qos == packet.MessageQos1 {
 		c.inflights.Add(p)

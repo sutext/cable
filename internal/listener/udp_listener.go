@@ -77,12 +77,12 @@ func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.
 	if p.Type() != packet.CONNECT {
 		connID, ok := p.Get(packet.PropertyConnID)
 		if !ok {
-			l.logger.Warn("unknown udp packet", xlog.String("packet", p.String()))
+			l.logger.Warn("unknown udp packet", xlog.Str("packet", p.String()))
 			return
 		}
 		c, loaded := l.connMap.Get(connID)
 		if !loaded {
-			l.logger.Warn("unknown udp connID", xlog.String("connID", connID))
+			l.logger.Warn("unknown udp connID", xlog.Str("connID", connID))
 			return
 		}
 		l.getPoll().Push(func() {

@@ -10,18 +10,25 @@ import (
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
+	"sutext.github.io/cable/xlog"
 )
 
+type InspectPeer struct {
+	Status      string  `json:"status"`
+	QueueLength int     `json:"queue_length"`
+	SendRate    float64 `json:"send_rate"`
+	WriteRate   float64 `json:"write_rate"`
+}
 type Inspect struct {
-	ID          string            `json:"id"`
-	Peers       map[string]string `json:"peers"`
-	TopConns    map[string]int    `json:"top_conns"`
-	TopPeers    map[string]int    `json:"top_peers"`
-	UserCount   int               `json:"user_count"`
-	SendRate    float64           `json:"send_rate"`
-	WriteRate   float64           `json:"write_rate"`
-	ClientCount int               `json:"client_count"`
-	ClusterSize int32             `json:"cluster_size"`
+	ID          string                  `json:"id"`
+	Peers       map[string]*InspectPeer `json:"peers"`
+	TopConns    map[string]int          `json:"top_conns"`
+	TopPeers    map[string]int          `json:"top_peers"`
+	UserCount   int                     `json:"user_count"`
+	SendRate    float64                 `json:"send_rate"`
+	WriteRate   float64                 `json:"write_rate"`
+	ClientCount int                     `json:"client_count"`
+	ClusterSize int32                   `json:"cluster_size"`
 }
 
 func NewInspect() *Inspect {
@@ -36,9 +43,14 @@ func (i *Inspect) merge(o *Inspect) {
 }
 
 func (b *broker) inspect() *Inspect {
-	peersInpsects := make(map[string]string)
+	peersInpsects := make(map[string]*InspectPeer)
 	b.peers.Range(func(k string, v *peer) bool {
-		peersInpsects[k] = v.client.Status().String()
+		peersInpsects[k] = &InspectPeer{
+			Status:      v.client.Status().String(),
+			SendRate:    v.client.SendRate(),
+			WriteRate:   v.client.WriteRate(),
+			QueueLength: v.client.SendQueueLength(),
+		}
 		return true
 	})
 	users := b.userClients.Len()
@@ -72,6 +84,7 @@ func (b *broker) Inspects() ([]*Inspect, error) {
 	b.peers.Range(func(k string, v *peer) bool {
 		isp, err := v.inspect(ctx)
 		if err != nil {
+			b.logger.Error("inspect failed", xlog.Peer(k), xlog.Err(err))
 			return true
 		}
 		inspects[0].merge(isp)

@@ -41,28 +41,40 @@ const (
 )
 
 var (
-	Int      = slog.Int
-	Any      = slog.Any
-	Bool     = slog.Bool
-	Time     = slog.Time
-	Int64    = slog.Int64
-	Uint64   = slog.Uint64
-	String   = slog.String
-	Float64  = slog.Float64
-	Duration = slog.Duration
+	Int  = slog.Int
+	I64  = slog.Int64
+	U64  = slog.Uint64
+	F64  = slog.Float64
+	Str  = slog.String
+	Dur  = slog.Duration
+	Any  = slog.Any
+	Bool = slog.Bool
+	Time = slog.Time
 )
 
+func I32(key string, i int32) slog.Attr {
+	return slog.Int(key, int(i))
+}
+func U32(key string, i uint32) slog.Attr {
+	return slog.Uint64(key, uint64(i))
+}
+func F32(key string, f float32) slog.Attr {
+	return slog.Float64(key, float64(f))
+}
 func Err(e error) slog.Attr {
 	return slog.Any("error", e)
 }
-func Uid(user string) slog.Attr {
-	return slog.String("userId", user)
+func Uid(id string) slog.Attr {
+	return slog.String("userId", id)
 }
-func Cid(user string) slog.Attr {
-	return slog.String("clientId", user)
+func Cid(id string) slog.Attr {
+	return slog.String("clientId", id)
 }
 func Msg(msg string) slog.Attr {
 	return slog.String("message", msg)
+}
+func Peer(id string) slog.Attr {
+	return slog.String("peerId", id)
 }
 func Channel(ch string) slog.Attr {
 	return slog.String("channelId", ch)

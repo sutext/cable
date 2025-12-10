@@ -40,6 +40,7 @@ func (l *tcpListener) OnPacket(handler func(p packet.Packet, c *Conn)) {
 	l.packetHandler = handler
 }
 func (l *tcpListener) Close(ctx context.Context) error {
+	l.recvPoll.Close()
 	return l.listener.Close()
 }
 func (l *tcpListener) Listen(address string) error {
@@ -74,7 +75,7 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 		return
 	}
 	if p.Type() != packet.CONNECT {
-		l.logger.Error("first packet is not connect packet", xlog.String("packetType", p.Type().String()))
+		l.logger.Error("first packet is not connect packet", xlog.Str("packetType", p.Type().String()))
 		conn.Close()
 		return
 	}
@@ -159,8 +160,8 @@ func newTCPConn(id *packet.Identity, raw *net.TCPConn, sendQueueLength int) *tcp
 	return &tcpConn{
 		id:         id,
 		raw:        raw,
-		writeMeter: metrics.NewRegisteredMeter("tcp.write", metrics.DefaultRegistry),
-		sendMeter:  metrics.NewRegisteredMeter("tcp.send", metrics.DefaultRegistry),
+		writeMeter: metrics.GetOrRegisterMeter("tcp.write", metrics.DefaultRegistry),
+		sendMeter:  metrics.GetOrRegisterMeter("tcp.send", metrics.DefaultRegistry),
 		sendQueue:  queue.New(sendQueueLength),
 	}
 }

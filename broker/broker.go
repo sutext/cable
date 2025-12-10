@@ -107,7 +107,7 @@ func (b *broker) clusterSize() int32 {
 	return b.peers.Len() + 1
 }
 func (b *broker) delPeer(id string) {
-	b.logger.Debug("del peer", xlog.String("peerid", id))
+	b.logger.Debug("del peer", xlog.Peer(id))
 	if _, ok := b.peers.Get(id); ok {
 		b.peers.Delete(id)
 	}
@@ -124,7 +124,7 @@ func (b *broker) addPeer(id, ip string) {
 	if peer == nil {
 		return
 	}
-	b.logger.Debug("add peer", xlog.String("peerid", id))
+	b.logger.Debug("add peer", xlog.Peer(id))
 	b.peers.Set(id, peer)
 	go peer.Connect()
 }
@@ -183,7 +183,7 @@ func (b *broker) syncBroker() {
 		return true
 	})
 	if max != min {
-		b.logger.Warn("broker count mismatch", xlog.Int("max", int(max)), xlog.Int("min", int(min)))
+		b.logger.Warn("broker count mismatch", xlog.I32("max", max), xlog.I32("min", min))
 		time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.syncBroker)
 	}
 }
@@ -218,7 +218,7 @@ func (b *broker) IsOnline(ctx context.Context, uid string) (online bool) {
 	b.peers.Range(func(id string, peer *peer) bool {
 		online, err := peer.isOnline(ctx, uid)
 		if err != nil {
-			b.logger.Error("check online from peer failed", xlog.String("peer", id), xlog.Uid(uid), xlog.Err(err))
+			b.logger.Error("check online from peer failed", xlog.Str("peer", id), xlog.Uid(uid), xlog.Err(err))
 			return true
 		}
 		if online {
@@ -233,7 +233,7 @@ func (b *broker) KickConn(ctx context.Context, cid string) {
 	b.kickConn(cid)
 	b.peers.Range(func(id string, peer *peer) bool {
 		if err := peer.kickConn(ctx, cid); err != nil {
-			b.logger.Error("kick conn from peer failed", xlog.String("peer", id), xlog.Cid(cid), xlog.Err(err))
+			b.logger.Error("kick conn from peer failed", xlog.Peer(id), xlog.Cid(cid), xlog.Err(err))
 		}
 		return true
 	})
@@ -242,7 +242,7 @@ func (b *broker) KickUser(ctx context.Context, uid string) {
 	b.kickUser(uid)
 	b.peers.Range(func(id string, peer *peer) bool {
 		if err := peer.kickUser(ctx, uid); err != nil {
-			b.logger.Error("kick user from peer failed", xlog.String("peer", id), xlog.Uid(uid), xlog.Err(err))
+			b.logger.Error("kick user from peer failed", xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
 		}
 		return true
 	})
@@ -254,7 +254,7 @@ func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (total, succe
 			total += t
 			success += s
 		} else {
-			b.logger.Error("send to all from peer failed", xlog.String("peer", id), xlog.Err(err))
+			b.logger.Error("send to all from peer failed", xlog.Peer(id), xlog.Err(err))
 		}
 		return true
 	})
@@ -268,7 +268,7 @@ func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 	b.peers.Range(func(id string, peer *peer) bool {
 		t, s, err := peer.sendMessage(ctx, m, uid, 1)
 		if err != nil {
-			b.logger.Error("send to user from peer failed", xlog.String("peer", id), xlog.Uid(uid), xlog.Err(err))
+			b.logger.Error("send to user from peer failed", xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
 			return true
 		}
 		total += t
@@ -287,7 +287,7 @@ func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Me
 			total += t
 			success += s
 		} else {
-			b.logger.Error("send to channel from peer failed", xlog.String("peer", id), xlog.Channel(channel), xlog.Err(err))
+			b.logger.Error("send to channel from peer failed", xlog.Peer(id), xlog.Channel(channel), xlog.Err(err))
 		}
 		return true
 	})
@@ -299,7 +299,7 @@ func (b *broker) JoinChannel(ctx context.Context, uid string, channels ...string
 		if c, err := peer.joinChannel(ctx, uid, channels); err == nil {
 			count += c
 		} else {
-			b.logger.Error("join channel from peer failed", xlog.String("peer", id), xlog.Uid(uid), xlog.Err(err))
+			b.logger.Error("join channel from peer failed", xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
 		}
 		return true
 	})
@@ -311,7 +311,7 @@ func (b *broker) LeaveChannel(ctx context.Context, uid string, channels ...strin
 		if c, err := peer.leaveChannel(ctx, uid, channels); err == nil {
 			count += c
 		} else {
-			b.logger.Error("leave channel from peer failed", xlog.String("peer", id), xlog.Uid(uid), xlog.Err(err))
+			b.logger.Error("leave channel from peer failed", xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
 		}
 		return true
 	})
