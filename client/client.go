@@ -210,6 +210,7 @@ func (c *client) sendPacket(p packet.Packet) error {
 	if !c.IsReady() {
 		return ErrConntionFailed
 	}
+	c.sendMeter.Mark(1)
 	return c.sendQueue.Push(func() {
 		if !c.IsReady() {
 			return
@@ -222,6 +223,7 @@ func (c *client) sendPacket(p packet.Packet) error {
 			c.tryClose(err)
 			return
 		}
+		c.writeMeter.Mark(1)
 		c.keepalive.UpdateTime()
 	})
 }
