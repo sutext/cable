@@ -234,14 +234,24 @@ func (c *client) _setStatus(status Status) {
 	c.status = status
 	switch status {
 	case StatusClosed:
-		c.keepalive.Close()
-		c.keepalive = nil
-		c.inflights.Close()
-		c.inflights = nil
+		if c.keepalive != nil {
+			c.keepalive.Close()
+			c.keepalive = nil
+		}
+		if c.inflights != nil {
+			c.inflights.Close()
+			c.inflights = nil
+		}
 		c.conn.Close()
 	case StatusOpening, StatusClosing:
-		c.keepalive.Close()
-		c.inflights.Close()
+		if c.keepalive != nil {
+			c.keepalive.Close()
+			c.keepalive = nil
+		}
+		if c.inflights != nil {
+			c.inflights.Close()
+			c.inflights = nil
+		}
 	case StatusOpened:
 		go c.run()
 	}
