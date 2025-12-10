@@ -8,10 +8,10 @@ import (
 )
 
 type Conn interface {
-	WritePacket(p packet.Packet) error
-	ReadPacket() (packet.Packet, error)
 	Dail() error
 	Close() error
+	ReadPacket() (packet.Packet, error)
+	WritePacket(p packet.Packet) error
 }
 
 func NewConn(network Network, addr string) Conn {
@@ -81,9 +81,11 @@ func newUDPConn(addr string) Conn {
 	}
 	return &udpConn{
 		addr: udpAddr,
-		bufPool: sync.Pool{New: func() any {
-			return make([]byte, packet.MAX_UDP)
-		}}}
+		bufPool: sync.Pool{
+			New: func() any {
+				return make([]byte, packet.MAX_UDP)
+			},
+		}}
 }
 
 func (c *udpConn) WritePacket(p packet.Packet) error {
@@ -100,7 +102,7 @@ func (c *udpConn) WritePacket(p packet.Packet) error {
 
 func (c *udpConn) ReadPacket() (packet.Packet, error) {
 	buf := c.bufPool.Get().([]byte)
-	defer c.bufPool.Put(buf[:0]) //nolint:errcheck,SA6002
+	defer c.bufPool.Put(buf[:0])
 	n, _, err := c.conn.ReadFromUDP(buf)
 	if err != nil {
 		return nil, err

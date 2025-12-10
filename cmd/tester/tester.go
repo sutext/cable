@@ -23,7 +23,7 @@ type Client struct {
 
 func (c *Client) run() {
 	for {
-		if c.cli.Status() != client.StatusOpened {
+		if !c.cli.IsReady() {
 			return
 		}
 		switch rand.Int() % 2 {
@@ -66,7 +66,7 @@ func randomChannel() string {
 	return fmt.Sprintf("channel%d", rand.IntN(100000))
 }
 func (c *Client) OnStatus(status client.Status) {
-	if status == client.StatusOpened {
+	if c.cli.IsReady() {
 		xlog.Info("client opened")
 		go c.run()
 	}
@@ -139,7 +139,7 @@ func (t *Tester) runOnce() {
 	max := 100
 	xlog.Info("OK we pick 100 clients to send message")
 	t.clients.Range(func(key string, value *Client) bool {
-		if value.cli.Status() == client.StatusOpened {
+		if value.cli.IsReady() {
 			max--
 			value.sendToUser()
 		}

@@ -14,12 +14,12 @@ type message struct {
 	lastTime time.Time
 }
 type Inflight struct {
+	action      func(*packet.Message)
+	closed      atomic.Bool
+	messages    safe.XMap[int64, *message]
+	stopChan    chan struct{}
 	interval    time.Duration
 	maxAttempts int
-	messages    safe.XMap[int64, *message]
-	action      func(*packet.Message)
-	stopChan    chan struct{}
-	closed      atomic.Bool
 }
 
 func New(action func(*packet.Message)) *Inflight {

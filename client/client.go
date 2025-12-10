@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"sutext.github.io/cable/internal/inflight"
@@ -39,6 +40,7 @@ type Client interface {
 type client struct {
 	id             *packet.Identity
 	conn           Conn
+	closed         atomic.Bool
 	status         Status
 	logger         *xlog.Logger
 	retrier        *Retrier
@@ -75,11 +77,35 @@ func New(address string, options ...Option) Client {
 		pingInterval:   opts.pingInterval,
 		requestTimeout: opts.requestTimeout,
 	}
+	c.keepalive = keepalive.New(c.pingInterval, c.pingTimeout)
+	c.keepalive.PingFunc(func() error {
+		if err := c.sendPacket(packet.NewPing()); err != nil {
+			c.logger.Error("send ping error", xlog.Err(err))
+			return err
+		}
+		return nil
+	})
+	c.keepalive.TimeoutFunc(func() {
+		c.tryClose(CloseReasonPingTimeout)
+	})
+	c.inflights = inflight.New(func(m *packet.Message) {
+		c.sendPacket(m)
+	})
 	return c
 }
 func (c *client) ID() *packet.Identity {
 	return c.id
 }
+func (c *client) Close() {
+	if c.closed.CompareAndSwap(false, true) {
+		c.keepalive.Close()
+		c.recvPoll.Close()
+		c.sendQueue.Close()
+		c.inflights.Close()
+		c.conn.Close()
+	}
+}
+
 func (c *client) Connect(identity *packet.Identity) {
 	c.id = identity
 	switch c.Status() {
@@ -179,7 +205,7 @@ func (c *client) WriteRate() float64 {
 	return c.writeMeter.Rate1()
 }
 func (c *client) SendMessage(ctx context.Context, p *packet.Message) error {
-	if c.Status() != StatusOpened {
+	if !c.IsReady() {
 		return ErrConntionFailed
 	}
 	if p.Qos == packet.MessageQos1 {
@@ -245,63 +271,34 @@ func (c *client) _setStatus(status Status) {
 	c.status = status
 	switch status {
 	case StatusClosed:
-		if c.keepalive != nil {
-			c.keepalive.Close()
-			c.keepalive = nil
-		}
-		if c.inflights != nil {
-			c.inflights.Close()
-			c.inflights = nil
-		}
 		c.conn.Close()
 	case StatusOpening, StatusClosing:
-		if c.keepalive != nil {
-			c.keepalive.Close()
-			c.keepalive = nil
-		}
-		if c.inflights != nil {
-			c.inflights.Close()
-			c.inflights = nil
-		}
+		break
 	case StatusOpened:
-		c.run()
+		go c.recv()
 	}
 	c.handler.OnStatus(status)
 }
 
-func (c *client) run() {
-	c.keepalive = keepalive.New(c.pingInterval, c.pingTimeout)
-	c.keepalive.PingFunc(func() {
-		if err := c.sendPacket(packet.NewPing()); err != nil {
-			c.logger.Error("send ping error", xlog.Err(err))
+func (c *client) recv() {
+	for {
+		p, err := c.conn.ReadPacket()
+		if err != nil {
+			c.tryClose(err)
+			return
 		}
-	})
-	c.keepalive.TimeoutFunc(func() {
-		c.tryClose(CloseReasonPingTimeout)
-	})
-	c.inflights = inflight.New(func(m *packet.Message) {
-		c.sendPacket(m)
-	})
-	go func() {
-		for {
-			p, err := c.conn.ReadPacket()
-			if err != nil {
-				c.tryClose(err)
+		if connID, ok := p.Get(packet.PropertyConnID); ok {
+			if connID != c.packetConnID {
+				c.logger.Error("packet conn id not match", xlog.Str("connID", connID), xlog.Str("expect", c.packetConnID))
+				c.tryClose(ErrConntionFailed)
 				return
 			}
-			if connID, ok := p.Get(packet.PropertyConnID); ok {
-				if connID != c.packetConnID {
-					c.logger.Error("packet conn id not match", xlog.Str("connID", connID), xlog.Str("expect", c.packetConnID))
-					c.tryClose(ErrConntionFailed)
-					return
-				}
-			}
-			c.recvPoll.Push(func() {
-				c.handlePacket(p)
-				c.keepalive.UpdateTime()
-			})
 		}
-	}()
+		c.recvPoll.Push(func() {
+			c.handlePacket(p)
+			c.keepalive.UpdateTime()
+		})
+	}
 }
 
 func (c *client) handlePacket(p packet.Packet) {

@@ -13,7 +13,7 @@ type KeepAlive struct {
 	closed         atomic.Bool
 	timeout        time.Duration
 	interval       time.Duration
-	sendFunc       func()
+	sendFunc       func() error
 	timeoutFunc    func()
 	lastPacketTime atomic.Int64
 }
@@ -48,7 +48,7 @@ func (k *KeepAlive) Close() {
 func (k *KeepAlive) UpdateTime() {
 	k.lastPacketTime.Store(time.Now().UnixNano())
 }
-func (k *KeepAlive) PingFunc(f func()) {
+func (k *KeepAlive) PingFunc(f func() error) {
 	k.sendFunc = f
 }
 func (k *KeepAlive) HandlePong() {
