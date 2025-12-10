@@ -23,7 +23,7 @@ type Client struct {
 
 func (c *Client) run() {
 	for {
-		if c.cli.Status() == client.StatusClosed {
+		if c.cli.Status() != client.StatusOpened {
 			return
 		}
 		switch rand.Int() % 2 {

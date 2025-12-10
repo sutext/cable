@@ -176,6 +176,9 @@ func (c *client) WriteRate() float64 {
 	return c.writeMeter.Rate1()
 }
 func (c *client) SendMessage(ctx context.Context, p *packet.Message) error {
+	if c.Status() != StatusOpened {
+		return ErrConntionFailed
+	}
 	if p.Qos == packet.MessageQos1 {
 		c.inflights.Add(p)
 	}
@@ -201,6 +204,9 @@ func (c *client) SendRequest(ctx context.Context, p *packet.Request) (*packet.Re
 }
 
 func (c *client) sendPacket(p packet.Packet) error {
+	if c.Status() != StatusOpened {
+		return ErrConntionFailed
+	}
 	return c.sendQueue.Push(func() {
 		if c.Status() != StatusOpened {
 			return
