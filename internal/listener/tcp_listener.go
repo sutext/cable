@@ -14,20 +14,20 @@ import (
 )
 
 type tcpListener struct {
-	logger            *xlog.Logger
-	listener          *net.TCPListener
-	recvPoll          *poll.Poll
-	closeHandler      func(c *Conn)
-	packetHandler     func(p packet.Packet, c *Conn)
-	acceptHandler     func(*packet.Connect, *Conn) packet.ConnectCode
-	sendQueueCapacity int
+	logger        *xlog.Logger
+	listener      *net.TCPListener
+	recvPoll      *poll.Poll
+	closeHandler  func(c *Conn)
+	packetHandler func(p packet.Packet, c *Conn)
+	acceptHandler func(*packet.Connect, *Conn) packet.ConnectCode
+	queueCapacity int
 }
 
-func NewTCP(sendQueueCapacity int) Listener {
+func NewTCP(queueCapacity, pollCapacity, workerCount int, logger *xlog.Logger) Listener {
 	return &tcpListener{
-		logger:            xlog.With("GROUP", "SERVER"),
-		recvPoll:          poll.New(10240, 128),
-		sendQueueCapacity: sendQueueCapacity,
+		logger:        logger,
+		recvPoll:      poll.New(pollCapacity, workerCount),
+		queueCapacity: queueCapacity,
 	}
 }
 func (l *tcpListener) OnClose(handler func(c *Conn)) {
@@ -80,7 +80,7 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 		return
 	}
 	connPacket := p.(*packet.Connect)
-	tc := newTCPConn(connPacket.Identity, conn, l.sendQueueCapacity)
+	tc := newTCPConn(connPacket.Identity, conn, l.queueCapacity)
 	c := newConn(tc)
 	tc.closeHandler = func() {
 		l.closeHandler(c)
@@ -97,9 +97,13 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 			c.ClosePacket(packet.NewClose(packet.AsCloseCode(err)))
 			return
 		}
-		l.recvPoll.Push(func() {
+		err = l.recvPoll.Push(func() {
 			l.packetHandler(p, c)
 		})
+		if err != nil {
+			l.logger.Error("recv poll overflow", xlog.Err(err))
+			return
+		}
 	}
 }
 

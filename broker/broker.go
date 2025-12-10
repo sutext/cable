@@ -41,11 +41,11 @@ type broker struct {
 	peerPort       string
 	peerServer     server.Server
 	httpServer     *http.Server
+	peerHandlers   safe.Map[string, server.RequestHandler]
+	userHandlers   safe.Map[string, server.RequestHandler]
 	userClients    safe.XKeyMap[server.Network] //map[uid]map[cid]net
 	channelClients safe.XKeyMap[server.Network] //map[channel]map[cid]net
 	clientChannels safe.XKeyMap[server.Network] //map[cid]map[channel]net
-	peerHandlers   safe.Map[string, server.RequestHandler]
-	userHandlers   safe.Map[string, server.RequestHandler]
 }
 
 func NewBroker(opts ...Option) Broker {
@@ -69,20 +69,21 @@ func NewBroker(opts ...Option) Broker {
 	b.listeners = make(map[server.Network]server.Server, len(options.listeners))
 	for net, addr := range options.listeners {
 		b.listeners[net] = server.New(addr,
+			server.WithLogger(b.logger),
 			server.WithClose(b.onUserClosed),
 			server.WithConnect(func(p *packet.Connect) packet.ConnectCode {
 				return b.onUserConnect(p, net)
 			}),
 			server.WithMessage(b.onUserMessage),
 			server.WithRequest(b.onUserRequest),
-			server.WithQueueCapacity(10240),
 		)
 	}
 	b.peerPort = options.peerPort
 	b.peerServer = server.New(options.peerPort,
+		server.WithRecvPool(10240, 256),
+		server.WithSendQueue(10240),
 		server.WithLogger(xlog.With("GROUP", "PEER")),
 		server.WithRequest(b.onPeerRequest),
-		server.WithQueueCapacity(102400),
 	)
 	b.handlePeer("Inspect", b.handlePeerInspect)
 	b.handlePeer("KickUser", b.handleKickUser)

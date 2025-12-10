@@ -2,6 +2,7 @@ package keepalive
 
 import (
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -9,51 +10,43 @@ type KeepAlive struct {
 	mu             *sync.Mutex
 	stop           chan struct{}
 	pong           chan struct{}
+	closed         atomic.Bool
 	timeout        time.Duration
 	interval       time.Duration
 	sendFunc       func()
 	timeoutFunc    func()
-	lastPacketTime time.Time
+	lastPacketTime atomic.Int64
 }
 
 func New(interval time.Duration, timeout time.Duration) *KeepAlive {
-	return &KeepAlive{
-		mu:             new(sync.Mutex),
-		interval:       interval,
-		timeout:        timeout,
-		lastPacketTime: time.Now(),
+	k := &KeepAlive{
+		interval: interval,
+		timeout:  timeout,
+		stop:     make(chan struct{}),
 	}
+	k.lastPacketTime.Store(time.Now().UnixMicro())
+	go k.run()
+	return k
 }
-func (k *KeepAlive) Start() {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	if k.stop != nil {
-		return
-	}
-	k.stop = make(chan struct{})
-	go func() {
-		ticker := time.NewTicker(k.interval)
-		for {
-			select {
-			case <-k.stop:
-				ticker.Stop()
-				return
-			case <-ticker.C:
-				go k.sendPing()
-			}
+func (k *KeepAlive) run() {
+	ticker := time.NewTicker(k.interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-k.stop:
+			return
+		case <-ticker.C:
+			k.sendPing()
 		}
-	}()
+	}
 }
-func (k *KeepAlive) Stop() {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	if k.stop != nil {
+func (k *KeepAlive) Close() {
+	if k.closed.CompareAndSwap(false, true) {
 		close(k.stop)
-		k.stop = nil
 	}
 }
 func (k *KeepAlive) UpdateTime() {
-	k.lastPacketTime = time.Now()
+	k.lastPacketTime.Store(time.Now().UnixNano())
 }
 func (k *KeepAlive) PingFunc(f func()) {
 	k.sendFunc = f
@@ -70,17 +63,19 @@ func (k *KeepAlive) TimeoutFunc(f func()) {
 	k.timeoutFunc = f
 }
 func (k *KeepAlive) sendPing() {
-	if time.Since(k.lastPacketTime) < k.interval {
+	if time.Duration(time.Now().UnixNano()-k.lastPacketTime.Load()) < k.interval {
 		return
 	}
 	k.mu.Lock()
 	k.pong = make(chan struct{})
 	k.mu.Unlock()
 	k.sendFunc()
+	timer := time.NewTimer(k.timeout)
 	select {
 	case <-k.pong:
+		timer.Stop()
 		return
-	case <-time.After(k.timeout):
+	case <-timer.C:
 		k.timeoutFunc()
 	}
 }

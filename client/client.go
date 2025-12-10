@@ -8,6 +8,7 @@ import (
 	"sutext.github.io/cable/internal/inflight"
 	"sutext.github.io/cable/internal/keepalive"
 	"sutext.github.io/cable/internal/metrics"
+	"sutext.github.io/cable/internal/poll"
 	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
@@ -36,19 +37,21 @@ type Client interface {
 }
 type client struct {
 	id             *packet.Identity
-	mu             *sync.RWMutex
 	conn           Conn
 	status         Status
 	logger         *xlog.Logger
 	retrier        *Retrier
 	handler        Handler
 	retrying       bool
-	recvQueue      *queue.Queue
+	recvPoll       *poll.Poll
 	sendQueue      *queue.Queue
 	keepalive      *keepalive.KeepAlive
 	inflights      *inflight.Inflight
 	sendMeter      metrics.Meter
 	writeMeter     metrics.Meter
+	statusLock     *sync.RWMutex
+	pingTimeout    time.Duration
+	pingInterval   time.Duration
 	packetConnID   string
 	requestTasks   sync.Map
 	requestTimeout time.Duration
@@ -57,7 +60,7 @@ type client struct {
 func New(address string, options ...Option) Client {
 	opts := newOptions(options...)
 	c := &client{
-		mu:             new(sync.RWMutex),
+		statusLock:     new(sync.RWMutex),
 		conn:           NewConn(opts.network, address),
 		status:         StatusUnknown,
 		logger:         opts.logger,
@@ -65,22 +68,12 @@ func New(address string, options ...Option) Client {
 		handler:        opts.handler,
 		sendMeter:      metrics.NewMeter(),
 		writeMeter:     metrics.NewMeter(),
-		recvQueue:      queue.New(1024),
-		sendQueue:      queue.New(102400),
-		keepalive:      keepalive.New(opts.pingInterval, opts.pingTimeout),
+		recvPoll:       poll.New(opts.recvPollCapacity, opts.recvPollWorkerCount),
+		sendQueue:      queue.New(opts.sendQueueCapacity),
+		pingTimeout:    opts.pingTimeout,
+		pingInterval:   opts.pingInterval,
 		requestTimeout: opts.requestTimeout,
 	}
-	c.keepalive.PingFunc(func() {
-		if err := c.sendPacket(packet.NewPing()); err != nil {
-			c.logger.Error("send ping error", xlog.Err(err))
-		}
-	})
-	c.keepalive.TimeoutFunc(func() {
-		c.tryClose(CloseReasonPingTimeout)
-	})
-	c.inflights = inflight.New(func(m *packet.Message) {
-		c.sendPacket(m)
-	})
 	return c
 }
 func (c *client) ID() *packet.Identity {
@@ -101,8 +94,8 @@ func (c *client) Connect(identity *packet.Identity) {
 }
 
 func (c *client) tryClose(err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.statusLock.Lock()
+	defer c.statusLock.Unlock()
 	if c.retrying {
 		return
 	}
@@ -224,13 +217,13 @@ func (c *client) sendPacket(p packet.Packet) error {
 	})
 }
 func (c *client) Status() Status {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.statusLock.RLock()
+	defer c.statusLock.RUnlock()
 	return c.status
 }
 func (c *client) setStatus(status Status) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+	c.statusLock.Lock()
+	defer c.statusLock.Unlock()
 	c._setStatus(status)
 }
 func (c *client) _setStatus(status Status) {
@@ -241,21 +234,33 @@ func (c *client) _setStatus(status Status) {
 	c.status = status
 	switch status {
 	case StatusClosed:
-		c.keepalive.Stop()
-		c.inflights.Stop()
+		c.keepalive.Close()
+		c.keepalive = nil
+		c.inflights.Close()
+		c.inflights = nil
 		c.conn.Close()
 	case StatusOpening, StatusClosing:
-		c.keepalive.Stop()
-		c.inflights.Stop()
+		c.keepalive.Close()
+		c.inflights.Close()
 	case StatusOpened:
-		c.keepalive.Start()
-		c.inflights.Start()
-		go c.recv()
+		go c.run()
 	}
 	c.handler.OnStatus(status)
 }
 
-func (c *client) recv() {
+func (c *client) run() {
+	c.keepalive = keepalive.New(c.pingInterval, c.pingTimeout)
+	c.keepalive.PingFunc(func() {
+		if err := c.sendPacket(packet.NewPing()); err != nil {
+			c.logger.Error("send ping error", xlog.Err(err))
+		}
+	})
+	c.keepalive.TimeoutFunc(func() {
+		c.tryClose(CloseReasonPingTimeout)
+	})
+	c.inflights = inflight.New(func(m *packet.Message) {
+		c.sendPacket(m)
+	})
 	for {
 		p, err := c.conn.ReadPacket()
 		if err != nil {
@@ -269,7 +274,7 @@ func (c *client) recv() {
 				return
 			}
 		}
-		c.recvQueue.Push(func() {
+		c.recvPoll.Push(func() {
 			c.handlePacket(p)
 			c.keepalive.UpdateTime()
 		})

@@ -24,30 +24,34 @@ type Server interface {
 	SendRequest(ctx context.Context, cid string, p *packet.Request) (*packet.Response, error)
 }
 type server struct {
-	conns          safe.Map[string, *listener.Conn]
-	logger         *xlog.Logger
-	closed         atomic.Bool
-	address        string
-	network        Network
-	listener       listener.Listener
-	queueLength    int
-	closeHandler   ClosedHandler
-	connectHander  ConnectHandler
-	messageHandler MessageHandler
-	requestHandler RequestHandler
+	conns           safe.Map[string, *listener.Conn]
+	logger          *xlog.Logger
+	closed          atomic.Bool
+	address         string
+	network         Network
+	listener        listener.Listener
+	closeHandler    ClosedHandler
+	connectHander   ConnectHandler
+	messageHandler  MessageHandler
+	requestHandler  RequestHandler
+	queueCapacity   int
+	pollCapacity    int
+	pollWorkerCount int
 }
 
 func New(address string, opts ...Option) *server {
 	options := NewOptions(opts...)
 	s := &server{
-		logger:         options.logger,
-		address:        address,
-		network:        options.network,
-		queueLength:    options.queueCapacity,
-		closeHandler:   options.closeHandler,
-		connectHander:  options.connectHandler,
-		messageHandler: options.messageHandler,
-		requestHandler: options.requestHandler,
+		logger:          options.logger,
+		address:         address,
+		network:         options.network,
+		queueCapacity:   options.queueCapacity,
+		closeHandler:    options.closeHandler,
+		connectHander:   options.connectHandler,
+		messageHandler:  options.messageHandler,
+		requestHandler:  options.requestHandler,
+		pollCapacity:    options.pollCapacity,
+		pollWorkerCount: options.pollWorkerCount,
 	}
 	return s
 }
@@ -55,7 +59,7 @@ func New(address string, opts ...Option) *server {
 func (s *server) Serve() error {
 	switch s.network {
 	case NetworkTCP:
-		s.listener = listener.NewTCP(s.queueLength)
+		s.listener = listener.NewTCP(s.queueCapacity, s.pollCapacity, s.pollWorkerCount, s.logger)
 	case NetworkUDP:
 		s.listener = listener.NewUDP()
 	default:

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"runtime"
 	"sync"
 	"time"
 
@@ -105,7 +106,9 @@ func (p *peer) createClient() client.Client {
 		client.WithRetrier(retrier),
 		client.WithHandler(p),
 		client.WithKeepAlive(time.Second*3, time.Second*60),
-		client.WithRequestTimeout(time.Second*3),
+		client.WithRequest(time.Second*3),
+		client.WithSendQueue(10240),
+		client.WithRecvPoll(1024, runtime.NumCPU()*2),
 	)
 }
 func (p *peer) isOnline(ctx context.Context, uid string) (bool, error) {
