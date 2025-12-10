@@ -1,7 +1,6 @@
 package client
 
 import (
-	"runtime"
 	"time"
 
 	"sutext.github.io/cable/backoff"
@@ -60,7 +59,7 @@ func newOptions(options ...Option) *Options {
 		requestTimeout:      time.Second * 5,
 		sendQueueCapacity:   1024,
 		recvPollCapacity:    1024,
-		recvPollWorkerCount: runtime.NumCPU(),
+		recvPollWorkerCount: 1,
 	}
 	for _, o := range options {
 		o.f(opts)

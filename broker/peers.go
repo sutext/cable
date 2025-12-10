@@ -108,7 +108,7 @@ func (p *peer) createClient() client.Client {
 		client.WithKeepAlive(time.Second*3, time.Second*60),
 		client.WithRequest(time.Second*3),
 		client.WithSendQueue(10240),
-		client.WithRecvPoll(1024, runtime.NumCPU()*2),
+		client.WithRecvPoll(10240, runtime.NumCPU()*2),
 	)
 }
 func (p *peer) isOnline(ctx context.Context, uid string) (bool, error) {
