@@ -52,7 +52,7 @@ type client struct {
 	inflights      *inflight.Inflight
 	sendMeter      metrics.Meter
 	writeMeter     metrics.Meter
-	statusLock     *sync.RWMutex
+	statusLock     sync.RWMutex
 	pingTimeout    time.Duration
 	pingInterval   time.Duration
 	packetConnID   string
@@ -63,7 +63,6 @@ type client struct {
 func New(address string, options ...Option) Client {
 	opts := newOptions(options...)
 	c := &client{
-		statusLock:     new(sync.RWMutex),
 		conn:           NewConn(opts.network, address),
 		status:         StatusUnknown,
 		logger:         opts.logger,

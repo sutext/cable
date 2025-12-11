@@ -7,7 +7,7 @@ import (
 )
 
 type KeepAlive struct {
-	mu             *sync.Mutex
+	mu             sync.Mutex
 	stop           chan struct{}
 	pong           chan struct{}
 	closed         atomic.Bool
@@ -69,7 +69,9 @@ func (k *KeepAlive) sendPing() {
 	k.mu.Lock()
 	k.pong = make(chan struct{})
 	k.mu.Unlock()
-	k.sendFunc()
+	if err := k.sendFunc(); err != nil {
+		return
+	}
 	timer := time.NewTimer(k.timeout)
 	select {
 	case <-k.pong:
