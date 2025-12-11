@@ -71,19 +71,19 @@ func NewBroker(opts ...Option) Broker {
 		b.listeners[net] = server.New(addr,
 			server.WithLogger(b.logger),
 			server.WithClose(b.onUserClosed),
+			server.WithMessage(b.onUserMessage),
+			server.WithRequest(b.onUserRequest),
 			server.WithConnect(func(p *packet.Connect) packet.ConnectCode {
 				return b.onUserConnect(p, net)
 			}),
-			server.WithMessage(b.onUserMessage),
-			server.WithRequest(b.onUserRequest),
 		)
 	}
 	b.peerPort = options.peerPort
 	b.peerServer = server.New(options.peerPort,
-		server.WithRecvPool(10240, 256),
-		server.WithSendQueue(10240),
 		server.WithLogger(xlog.With("GROUP", "PEER")),
 		server.WithRequest(b.onPeerRequest),
+		server.WithRecvPool(10240, 512),
+		server.WithSendQueue(10240),
 	)
 	b.handlePeer("Inspect", b.handlePeerInspect)
 	b.handlePeer("KickUser", b.handleKickUser)
