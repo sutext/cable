@@ -276,7 +276,7 @@ func (c *client) _setStatus(status Status) {
 	case StatusOpened:
 		go c.recv()
 	}
-	c.handler.OnStatus(status)
+	go c.handler.OnStatus(status)
 }
 
 func (c *client) recv() {
