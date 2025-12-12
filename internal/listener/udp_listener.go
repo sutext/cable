@@ -132,7 +132,7 @@ func (c *udpConn) writePacket(p packet.Packet, jump bool) error {
 	_, err = c.raw.WriteToUDP(data, c.addr.Load())
 	return err
 }
-func (c *udpConn) sendQueueLength() int {
+func (c *udpConn) sendQueueLength() int32 {
 	return 0
 }
 func newUDPConn(id *packet.Identity, raw *net.UDPConn, addr *net.UDPAddr, connID string) *Conn {

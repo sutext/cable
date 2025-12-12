@@ -20,10 +20,10 @@ type tcpListener struct {
 	closeHandler  func(c *Conn)
 	packetHandler func(p packet.Packet, c *Conn)
 	acceptHandler func(*packet.Connect, *Conn) packet.ConnectCode
-	queueCapacity int
+	queueCapacity int32
 }
 
-func NewTCP(queueCapacity, pollCapacity, workerCount int, logger *xlog.Logger) Listener {
+func NewTCP(queueCapacity, pollCapacity, workerCount int32, logger *xlog.Logger) Listener {
 	return &tcpListener{
 		logger:        logger,
 		recvPoll:      poll.New(pollCapacity, workerCount),
@@ -157,15 +157,15 @@ func (c *tcpConn) writePacket(p packet.Packet, jump bool) error {
 		}
 	})
 }
-func (c *tcpConn) sendQueueLength() int {
+func (c *tcpConn) sendQueueLength() int32 {
 	return c.sendQueue.Len()
 }
-func newTCPConn(id *packet.Identity, raw *net.TCPConn, sendQueueLength int) *tcpConn {
+func newTCPConn(id *packet.Identity, raw *net.TCPConn, sendQueueCapacity int32) *tcpConn {
 	return &tcpConn{
 		id:         id,
 		raw:        raw,
 		writeMeter: metrics.GetOrRegisterMeter("tcp.write", metrics.DefaultRegistry),
 		sendMeter:  metrics.GetOrRegisterMeter("tcp.send", metrics.DefaultRegistry),
-		sendQueue:  queue.New(sendQueueLength),
+		sendQueue:  queue.New(sendQueueCapacity),
 	}
 }

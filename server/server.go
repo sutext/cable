@@ -13,7 +13,7 @@ import (
 )
 
 type Server interface {
-	Top() map[string]int
+	Top() map[string]int32
 	Serve() error
 	Network() Network
 	IsActive(cid string) bool
@@ -34,9 +34,9 @@ type server struct {
 	connectHander   ConnectHandler
 	messageHandler  MessageHandler
 	requestHandler  RequestHandler
-	queueCapacity   int
-	pollCapacity    int
-	pollWorkerCount int
+	queueCapacity   int32
+	pollCapacity    int32
+	pollWorkerCount int32
 }
 
 func New(address string, opts ...Option) *server {
@@ -70,8 +70,8 @@ func (s *server) Serve() error {
 	s.listener.OnPacket(s.onPacket)
 	return s.listener.Listen(s.address)
 }
-func (s *server) Top() map[string]int {
-	top := make(map[string]int)
+func (s *server) Top() map[string]int32 {
+	top := make(map[string]int32)
 	count := 7
 	s.conns.Range(func(key string, conn *listener.Conn) bool {
 		top[key] = conn.SendQueueLength()

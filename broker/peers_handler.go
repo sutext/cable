@@ -73,7 +73,7 @@ func (b *broker) handleJoinChannel(p *packet.Request, id *packet.Identity) (*pac
 	}
 	count := b.joinChannel(uid, chs)
 	encoder := coder.NewEncoder()
-	encoder.WriteVarint(count)
+	encoder.WriteVarint(uint64(count))
 	return packet.NewResponse(p.ID, encoder.Bytes()), nil
 }
 func (b *broker) handleLeaveChannel(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
@@ -88,7 +88,7 @@ func (b *broker) handleLeaveChannel(p *packet.Request, id *packet.Identity) (*pa
 	}
 	count := b.leaveChannel(uid, chs)
 	encoder := coder.NewEncoder()
-	encoder.WriteVarint(count)
+	encoder.WriteVarint(uint64(count))
 	return packet.NewResponse(p.ID, encoder.Bytes()), nil
 }
 func (b *broker) handlePeerFreeMemory(p *packet.Request, id *packet.Identity) (*packet.Response, error) {

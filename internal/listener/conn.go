@@ -42,7 +42,7 @@ func (c *Conn) IsIdle() bool {
 func (c *Conn) IsClosed() bool {
 	return c.raw.isClosed()
 }
-func (c *Conn) SendQueueLength() int {
+func (c *Conn) SendQueueLength() int32 {
 	return c.raw.sendQueueLength()
 }
 

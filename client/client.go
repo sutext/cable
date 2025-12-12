@@ -33,7 +33,7 @@ type Client interface {
 	IsReady() bool
 	SendRate() float64
 	WriteRate() float64
-	SendQueueLength() int
+	SendQueueLength() int32
 	SendMessage(ctx context.Context, p *packet.Message) error
 	SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error)
 }
@@ -194,7 +194,7 @@ func (c *client) SendPing() error {
 func (c *client) SendPong() error {
 	return c.sendPacket(packet.NewPong())
 }
-func (c *client) SendQueueLength() int {
+func (c *client) SendQueueLength() int32 {
 	return c.sendQueue.Len()
 }
 func (c *client) SendRate() float64 {

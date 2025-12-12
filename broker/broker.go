@@ -4,10 +4,10 @@ import (
 	"context"
 	"math/rand/v2"
 	"net/http"
-	"runtime/debug"
 	"strings"
 	"time"
 
+	"sutext.github.io/cable/broker/protos"
 	"sutext.github.io/cable/internal/muticast"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
@@ -20,26 +20,26 @@ type BrokerID string
 type Broker interface {
 	Start() error
 	Shutdown(ctx context.Context) error
-	Inspects() ([]*Inspect, error)
+	Inspects() ([]*protos.InspectResp, error)
 	IsOnline(ctx context.Context, uid string) (ok bool)
 	KickConn(ctx context.Context, cid string)
 	KickUser(ctx context.Context, uid string)
 	SendToAll(ctx context.Context, m *packet.Message) (total, success uint64, err error)
 	SendToUser(ctx context.Context, uid string, m *packet.Message) (total, success uint64, err error)
 	SendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success uint64, err error)
-	JoinChannel(ctx context.Context, uid string, channels ...string) (count uint64, err error)
-	LeaveChannel(ctx context.Context, uid string, channels ...string) (count uint64, err error)
+	JoinChannel(ctx context.Context, uid string, channels ...string) (count int32, err error)
+	LeaveChannel(ctx context.Context, uid string, channels ...string) (count int32, err error)
 	HandleRequest(method string, handler server.RequestHandler)
 }
 type broker struct {
 	id             string
-	peers          safe.XMap[string, *peer]
+	peers          safe.XMap[string, *peer_client]
 	logger         *xlog.Logger
 	handler        Handler
 	muticast       muticast.Muticast
 	listeners      map[server.Network]server.Server
 	peerPort       string
-	peerServer     server.Server
+	peerServer     *PeerServer
 	httpServer     *http.Server
 	peerHandlers   safe.Map[string, server.RequestHandler]
 	userHandlers   safe.Map[string, server.RequestHandler]
@@ -79,12 +79,13 @@ func NewBroker(opts ...Option) Broker {
 		)
 	}
 	b.peerPort = options.peerPort
-	b.peerServer = server.New(options.peerPort,
-		server.WithLogger(xlog.With("GROUP", "PEER")),
-		server.WithRequest(b.onPeerRequest),
-		server.WithRecvPool(10240, 512),
-		server.WithSendQueue(10240),
-	)
+	b.peerServer = NewPeerServer(b, b.peerPort)
+	// b.peerServer = server.New(options.peerPort,
+	// 	server.WithLogger(xlog.With("GROUP", "PEER")),
+	// 	server.WithRequest(b.onPeerRequest),
+	// 	server.WithRecvPool(10240, 512),
+	// 	server.WithSendQueue(10240),
+	// )
 	b.handlePeer("Inspect", b.handlePeerInspect)
 	b.handlePeer("KickUser", b.handleKickUser)
 	b.handlePeer("IsOnline", b.handleIsOnline)
@@ -100,7 +101,6 @@ func NewBroker(opts ...Option) Broker {
 	mux.HandleFunc("/message", b.handleMessage)
 	mux.HandleFunc("/brodcast", b.handleBrodcast)
 	mux.HandleFunc("/health", b.handleHealth)
-	mux.HandleFunc("/freeMemory", b.handleFreeMemory)
 	b.httpServer = &http.Server{Addr: options.httpPort, Handler: mux}
 	return b
 }
@@ -121,13 +121,14 @@ func (b *broker) addPeer(id, ip string) {
 		p.UpdateIP(ip)
 		return
 	}
-	peer := newPeer(id, ip, b)
+	peer := newPeerClient(id, ip, b)
 	if peer == nil {
 		return
 	}
 	b.logger.Debug("add peer", xlog.Peer(id))
 	b.peers.Set(id, peer)
-	go peer.Connect()
+	// go peer.connect()
+	peer.connect()
 }
 func (b *broker) Start() error {
 	for _, l := range b.listeners {
@@ -177,7 +178,7 @@ func (b *broker) syncBroker() {
 		strs := strings.Split(idip, ":")
 		b.addPeer(strs[0], strs[1])
 	}
-	b.peers.Range(func(id string, peer *peer) bool {
+	b.peers.Range(func(id string, peer *peer_client) bool {
 		if _, ok := m[id+":"+peer.ip]; !ok {
 			b.delPeer(id)
 		}
@@ -205,18 +206,11 @@ func (b *broker) Shutdown(ctx context.Context) (err error) {
 	}
 	return err
 }
-func (b *broker) freeMemory() {
-	debug.FreeOSMemory()
-	b.peers.Range(func(key string, p *peer) bool {
-		p.freeMemory(context.Background())
-		return true
-	})
-}
 func (b *broker) IsOnline(ctx context.Context, uid string) (online bool) {
 	if online = b.isOnline(uid); online {
 		return true
 	}
-	b.peers.Range(func(id string, peer *peer) bool {
+	b.peers.Range(func(id string, peer *peer_client) bool {
 		online, err := peer.isOnline(ctx, uid)
 		if err != nil {
 			b.logger.Error("check online from peer failed", xlog.Str("peer", id), xlog.Uid(uid), xlog.Err(err))
@@ -232,7 +226,7 @@ func (b *broker) IsOnline(ctx context.Context, uid string) (online bool) {
 }
 func (b *broker) KickConn(ctx context.Context, cid string) {
 	b.kickConn(cid)
-	b.peers.Range(func(id string, peer *peer) bool {
+	b.peers.Range(func(id string, peer *peer_client) bool {
 		if err := peer.kickConn(ctx, cid); err != nil {
 			b.logger.Error("kick conn from peer failed", xlog.Peer(id), xlog.Cid(cid), xlog.Err(err))
 		}
@@ -241,7 +235,7 @@ func (b *broker) KickConn(ctx context.Context, cid string) {
 }
 func (b *broker) KickUser(ctx context.Context, uid string) {
 	b.kickUser(uid)
-	b.peers.Range(func(id string, peer *peer) bool {
+	b.peers.Range(func(id string, peer *peer_client) bool {
 		if err := peer.kickUser(ctx, uid); err != nil {
 			b.logger.Error("kick user from peer failed", xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
 		}
@@ -250,7 +244,7 @@ func (b *broker) KickUser(ctx context.Context, uid string) {
 }
 func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (total, success uint64, err error) {
 	total, success = b.sendToAll(m)
-	b.peers.Range(func(id string, peer *peer) bool {
+	b.peers.Range(func(id string, peer *peer_client) bool {
 		if t, s, err := peer.sendMessage(ctx, m, "", 0); err == nil {
 			total += t
 			success += s
@@ -266,7 +260,7 @@ func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 		return 0, 0, xerr.InvalidUserID
 	}
 	total, success = b.sendToUser(uid, m)
-	b.peers.Range(func(id string, peer *peer) bool {
+	b.peers.Range(func(id string, peer *peer_client) bool {
 		t, s, err := peer.sendMessage(ctx, m, uid, 1)
 		if err != nil {
 			b.logger.Error("send to user from peer failed", xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
@@ -283,7 +277,7 @@ func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Me
 		return 0, 0, xerr.InvalidChannel
 	}
 	total, success = b.sendToChannel(channel, m)
-	b.peers.Range(func(id string, peer *peer) bool {
+	b.peers.Range(func(id string, peer *peer_client) bool {
 		if t, s, err := peer.sendMessage(ctx, m, channel, 2); err == nil {
 			total += t
 			success += s
@@ -294,9 +288,9 @@ func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Me
 	})
 	return total, success, nil
 }
-func (b *broker) JoinChannel(ctx context.Context, uid string, channels ...string) (count uint64, err error) {
+func (b *broker) JoinChannel(ctx context.Context, uid string, channels ...string) (count int32, err error) {
 	count = b.joinChannel(uid, channels)
-	b.peers.Range(func(id string, peer *peer) bool {
+	b.peers.Range(func(id string, peer *peer_client) bool {
 		if c, err := peer.joinChannel(ctx, uid, channels); err == nil {
 			count += c
 		} else {
@@ -306,9 +300,9 @@ func (b *broker) JoinChannel(ctx context.Context, uid string, channels ...string
 	})
 	return count, nil
 }
-func (b *broker) LeaveChannel(ctx context.Context, uid string, channels ...string) (count uint64, err error) {
+func (b *broker) LeaveChannel(ctx context.Context, uid string, channels ...string) (count int32, err error) {
 	count = b.leaveChannel(uid, channels)
-	b.peers.Range(func(id string, peer *peer) bool {
+	b.peers.Range(func(id string, peer *peer_client) bool {
 		if c, err := peer.leaveChannel(ctx, uid, channels); err == nil {
 			count += c
 		} else {
@@ -335,7 +329,7 @@ func (b *broker) onUserConnect(p *packet.Connect, net server.Network) packet.Con
 	if code != packet.ConnectAccepted {
 		return code
 	}
-	b.peers.Range(func(id string, peer *peer) bool {
+	b.peers.Range(func(id string, peer *peer_client) bool {
 		peer.kickConn(context.Background(), p.Identity.ClientID)
 		return true
 	})
@@ -441,7 +435,7 @@ func (b *broker) sendToChannel(channel string, m *packet.Message) (total, succes
 	return total, success
 }
 
-func (b *broker) joinChannel(uid string, channels []string) (count uint64) {
+func (b *broker) joinChannel(uid string, channels []string) (count int32) {
 	b.userClients.RangeKey(uid, func(cid string, net server.Network) bool {
 		count++
 		for _, ch := range channels {
@@ -452,7 +446,7 @@ func (b *broker) joinChannel(uid string, channels []string) (count uint64) {
 	})
 	return count
 }
-func (b *broker) leaveChannel(uid string, channels []string) (count uint64) {
+func (b *broker) leaveChannel(uid string, channels []string) (count int32) {
 	b.userClients.RangeKey(uid, func(cid string, net server.Network) bool {
 		count++
 		for _, ch := range channels {

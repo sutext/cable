@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"sutext.github.io/cable/backoff"
+	"sutext.github.io/cable/broker/protos"
 	"sutext.github.io/cable/client"
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
@@ -21,6 +22,7 @@ type peer struct {
 	ipmu   sync.Mutex
 	broker *broker
 	logger *xlog.Logger
+	cli    protos.PeerServiceClient
 	client client.Client
 }
 
@@ -137,7 +139,7 @@ func (p *peer) kickUser(ctx context.Context, uid string) error {
 	_, err := p.client.SendRequest(ctx, req)
 	return err
 }
-func (p *peer) inspect(ctx context.Context) (*Inspect, error) {
+func (p *peer) inspect(ctx context.Context) (*protos.InspectResp, error) {
 	if p.client.Status() != client.StatusOpened {
 		return nil, xerr.BrokerPeerNotReady
 	}
@@ -146,14 +148,14 @@ func (p *peer) inspect(ctx context.Context) (*Inspect, error) {
 	if err != nil {
 		return nil, err
 	}
-	var isp Inspect
+	var isp protos.InspectResp
 	if err := json.Unmarshal(res.Content, &isp); err != nil {
 		return nil, err
 	}
 	return &isp, nil
 }
 
-func (p *peer) joinChannel(ctx context.Context, uid string, channels []string) (count uint64, err error) {
+func (p *peer) joinChannel(ctx context.Context, uid string, channels []string) (count int32, err error) {
 	if p.client.Status() != client.StatusOpened {
 		return 0, xerr.BrokerPeerNotReady
 	}
@@ -166,13 +168,14 @@ func (p *peer) joinChannel(ctx context.Context, uid string, channels []string) (
 		return 0, err
 	}
 	decoder := coder.NewDecoder(res.Content)
-	if count, err = decoder.ReadVarint(); err != nil {
+	c, err := decoder.ReadVarint()
+	if err != nil {
 		return 0, err
 	}
-	return count, nil
+	return int32(c), nil
 }
 
-func (p *peer) leaveChannel(ctx context.Context, uid string, channels []string) (count uint64, err error) {
+func (p *peer) leaveChannel(ctx context.Context, uid string, channels []string) (count int32, err error) {
 	if p.client.Status() != client.StatusOpened {
 		return 0, xerr.BrokerPeerNotReady
 	}
@@ -185,10 +188,11 @@ func (p *peer) leaveChannel(ctx context.Context, uid string, channels []string) 
 		return 0, err
 	}
 	decoder := coder.NewDecoder(res.Content)
-	if count, err = decoder.ReadVarint(); err != nil {
+	c, err := decoder.ReadVarint()
+	if err != nil {
 		return 0, err
 	}
-	return count, nil
+	return int32(c), nil
 }
 func (p *peer) freeMemory(ctx context.Context) {
 	p.client.SendRequest(ctx, packet.NewRequest("FreeMemory"))

@@ -32,7 +32,7 @@ type Queue struct {
 
 // Create a new instance of Queue
 // capacity is the maximum number of tasks that can be stored in the queue.
-func New(capacity int) *Queue {
+func New(capacity int32) *Queue {
 	if capacity < 1 {
 		panic("length and workerCount must be greater than 1")
 	}
@@ -67,10 +67,10 @@ func (mq *Queue) run() {
 		}
 	}
 }
-func (mq *Queue) Len() int {
+func (mq *Queue) Len() int32 {
 	mq.mu.Lock()
 	defer mq.mu.Unlock()
-	return len(mq.tasks) + len(mq.jumps)
+	return int32(len(mq.tasks) + len(mq.jumps))
 }
 func (mq *Queue) IsIdle() bool {
 	return mq.Len() == 0

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"sutext.github.io/cable/broker/protos"
 	"sutext.github.io/cable/internal/metrics"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
@@ -31,28 +32,28 @@ type Inspect struct {
 	ClusterSize int32                   `json:"cluster_size"`
 }
 
-func NewInspect() *Inspect {
-	return &Inspect{}
+func NewInspect() *protos.InspectResp {
+	return &protos.InspectResp{}
 }
 
-func (i *Inspect) merge(o *Inspect) {
-	i.ID = "all"
+func merge(i, o *protos.InspectResp) {
+	i.Id = "all"
 	i.UserCount += o.UserCount
 	i.ClientCount += o.ClientCount
 	i.ClusterSize = max(i.ClusterSize, o.ClusterSize)
 }
 
-func (b *broker) inspect() *Inspect {
-	peersInpsects := make(map[string]*InspectPeer)
-	b.peers.Range(func(k string, v *peer) bool {
-		peersInpsects[k] = &InspectPeer{
-			Status:      v.client.Status().String(),
-			SendRate:    v.client.SendRate(),
-			WriteRate:   v.client.WriteRate(),
-			QueueLength: v.client.SendQueueLength(),
-		}
-		return true
-	})
+func (b *broker) inspect() *protos.InspectResp {
+	// peersInpsects := make(map[string]*protos.PeerInspect)
+	// b.peers.Range(func(k string, v *peer_client) bool {
+	// 	peersInpsects[k] = &protos.PeerInspect{
+	// 		Status:      v.client.Status().String(),
+	// 		SendRate:    v.client.SendRate(),
+	// 		WriteRate:   v.client.WriteRate(),
+	// 		QueueLength: v.client.SendQueueLength(),
+	// 	}
+	// 	return true
+	// })
 	users := b.userClients.Len()
 	clients := 0
 	b.userClients.Range(func(uid string, cs *safe.XMap[string, server.Network]) bool {
@@ -62,32 +63,32 @@ func (b *broker) inspect() *Inspect {
 	l := b.listeners[server.NetworkTCP]
 	writeRate := metrics.GetOrRegisterMeter("tcp.write", metrics.DefaultRegistry)
 	sendRate := metrics.GetOrRegisterMeter("tcp.send", metrics.DefaultRegistry)
-	return &Inspect{
-		ID:          b.id,
-		Peers:       peersInpsects,
-		TopPeers:    b.peerServer.Top(),
+	return &protos.InspectResp{
+		Id: b.id,
+		// Peers: peersInpsects,
+		// TopPeers:    b.peerServer.Top(),
 		TopConns:    l.Top(),
 		SendRate:    sendRate.Rate1(),
 		WriteRate:   writeRate.Rate1(),
-		UserCount:   users,
-		ClientCount: clients,
+		UserCount:   int32(users),
+		ClientCount: int32(clients),
 		ClusterSize: b.clusterSize(),
 	}
 }
 
-func (b *broker) Inspects() ([]*Inspect, error) {
+func (b *broker) Inspects() ([]*protos.InspectResp, error) {
 	ctx := context.Background()
-	inspects := make([]*Inspect, 2)
-	inspects[0] = NewInspect()
+	inspects := make([]*protos.InspectResp, 2)
+	inspects[0] = &protos.InspectResp{}
 	inspects[1] = b.inspect()
-	inspects[0].merge(inspects[1])
-	b.peers.Range(func(k string, v *peer) bool {
+	merge(inspects[0], inspects[1])
+	b.peers.Range(func(k string, v *peer_client) bool {
 		isp, err := v.inspect(ctx)
 		if err != nil {
 			b.logger.Error("inspect failed", xlog.Peer(k), xlog.Err(err))
 			return true
 		}
-		inspects[0].merge(isp)
+		merge(inspects[0], isp)
 		inspects = append(inspects, isp)
 		return true
 	})
@@ -169,7 +170,7 @@ func (b *broker) handleJoin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	resp := map[string]uint64{
+	resp := map[string]int32{
 		"count": count,
 	}
 	data, err := json.MarshalIndent(resp, "", "  ")
@@ -204,11 +205,6 @@ func (b *broker) handleBrodcast(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 func (b *broker) handleHealth(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("ok"))
-}
-func (b *broker) handleFreeMemory(w http.ResponseWriter, r *http.Request) {
-	b.freeMemory()
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("ok"))
 }

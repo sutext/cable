@@ -39,9 +39,9 @@ type Options struct {
 	pingTimeout         time.Duration
 	pingInterval        time.Duration
 	requestTimeout      time.Duration
-	sendQueueCapacity   int
-	recvPollCapacity    int
-	recvPollWorkerCount int
+	sendQueueCapacity   int32
+	recvPollCapacity    int32
+	recvPollWorkerCount int32
 }
 
 type Option struct {
@@ -103,12 +103,12 @@ func WithRequest(timeout time.Duration) Option {
 		o.requestTimeout = timeout
 	}}
 }
-func WithSendQueue(capacity int) Option {
+func WithSendQueue(capacity int32) Option {
 	return Option{f: func(o *Options) {
 		o.sendQueueCapacity = capacity
 	}}
 }
-func WithRecvPoll(capacity, workerCount int) Option {
+func WithRecvPoll(capacity, workerCount int32) Option {
 	return Option{f: func(o *Options) {
 		o.recvPollCapacity = capacity
 		o.recvPollWorkerCount = workerCount

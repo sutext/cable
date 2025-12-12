@@ -43,9 +43,9 @@ type Option struct {
 type options struct {
 	logger          *xlog.Logger
 	network         Network
-	queueCapacity   int
-	pollCapacity    int
-	pollWorkerCount int
+	queueCapacity   int32
+	pollCapacity    int32
+	pollWorkerCount int32
 	closeHandler    ClosedHandler
 	connectHandler  ConnectHandler
 	messageHandler  MessageHandler
@@ -58,7 +58,7 @@ func NewOptions(opts ...Option) *options {
 		network:         NetworkTCP,
 		queueCapacity:   1024,
 		pollCapacity:    1024,
-		pollWorkerCount: runtime.NumCPU() * 2,
+		pollWorkerCount: int32(runtime.NumCPU()) * 2,
 		closeHandler: func(p *packet.Identity) {
 
 		},
@@ -105,9 +105,9 @@ func WithMessage(handler MessageHandler) Option {
 func WithRequest(handler RequestHandler) Option {
 	return Option{f: func(o *options) { o.requestHandler = handler }}
 }
-func WithRecvPool(cap, worker int) Option {
+func WithRecvPool(cap, worker int32) Option {
 	return Option{f: func(o *options) { o.pollCapacity = cap; o.pollWorkerCount = worker }}
 }
-func WithSendQueue(cap int) Option {
+func WithSendQueue(cap int32) Option {
 	return Option{f: func(o *options) { o.queueCapacity = cap }}
 }

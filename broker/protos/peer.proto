@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+option go_package = "./protos";
+
+package protos;
+
+message IsOnlineReq{
+  string uid = 1;
+}
+message IsOnlineResp{
+  bool online = 1;
+}
+
+message SendMessageReq{
+  int32 flag = 1;
+  string target = 2;
+  bytes message = 3;
+}
+message SendMessageResp{
+ int32 total = 1;
+ int32 success = 2;
+}
+
+message KickUserReq{
+  string uid = 1;
+}
+message KickConnReq{
+  string cid = 1;
+}
+
+message InspectReq{
+}
+message PeerInspect{
+  string status = 1;
+  int32 queue_length = 2;
+  double send_rate = 3;
+  double write_rate = 4;
+}
+message InspectResp{
+ string id = 1;
+ map<string, PeerInspect> peers = 2;
+ map<string, int32> topConns = 3;
+ map<string, int32> topPeers = 4;
+ int32 user_count = 5;
+ double send_rate = 6;
+ double write_rate = 7;
+ int32 client_count = 8;
+ int32 cluster_size = 9;
+}
+message ChannelReq{
+  string uid = 1;
+  repeated string channels = 2;
+}
+message ChannelResp{
+  int32 count = 1;
+}
+message EmptyResp{
+}
+// The greeting service definition.
+service PeerService {
+  rpc IsOnline (IsOnlineReq) returns (IsOnlineResp) {}
+  rpc SendMessage (SendMessageReq) returns (SendMessageResp) {}
+  rpc KickUser (KickUserReq) returns (EmptyResp) {}
+  rpc KickConn (KickConnReq) returns (EmptyResp) {}
+  rpc Inspect (InspectReq) returns (InspectResp) {}
+  rpc JoinChannel (ChannelReq) returns (ChannelResp) {}
+  rpc LeaveChannel (ChannelReq) returns (ChannelResp) {}
+}

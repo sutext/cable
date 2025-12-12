@@ -29,7 +29,7 @@ type Poll struct {
 
 // Create a new instance of Queue
 // size is the maximum number of tasks that can be in the queue at any given time.
-func New(length int, workerCount int) *Poll {
+func New(length int32, workerCount int32) *Poll {
 	if length < 1 || workerCount < 1 {
 		panic("length and workerCount must be greater than 1")
 	}
@@ -45,10 +45,10 @@ func New(length int, workerCount int) *Poll {
 	}
 	return mq
 }
-func (mq *Poll) Len() int {
+func (mq *Poll) Len() int32 {
 	mq.mu.Lock()
 	defer mq.mu.Unlock()
-	return len(mq.tasks)
+	return int32(len(mq.tasks))
 }
 func (mq *Poll) IsIdle() bool {
 	return mq.Len() == 0
