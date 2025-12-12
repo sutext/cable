@@ -21,7 +21,7 @@ func (b *broker) handleSendMessage(p *packet.Request, id *packet.Identity) (*pac
 	}
 	msg := &packet.Message{}
 	msg.ReadFrom(dec)
-	var total, success uint64
+	var total, success int32
 	switch flag {
 	case 0:
 		total, success = b.sendToAll(msg)
@@ -33,8 +33,8 @@ func (b *broker) handleSendMessage(p *packet.Request, id *packet.Identity) (*pac
 		return nil, xerr.InvalidPeerMessageFlag
 	}
 	enc := coder.NewEncoder()
-	enc.WriteVarint(total)
-	enc.WriteVarint(success)
+	enc.WriteVarint(uint64(total))
+	enc.WriteVarint(uint64(success))
 	return packet.NewResponse(p.ID, enc.Bytes()), nil
 }
 func (b *broker) handleIsOnline(p *packet.Request, id *packet.Identity) (*packet.Response, error) {

@@ -128,7 +128,7 @@ func (b *broker) handleMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	msgPacket := packet.NewMessage([]byte(msg))
-	var total, success uint64
+	var total, success int32
 	var err error
 	if uid != "" {
 		total, success, err = b.SendToUser(r.Context(), uid, msgPacket)
@@ -141,7 +141,7 @@ func (b *broker) handleMessage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	resp := map[string]uint64{
+	resp := map[string]int32{
 		"total":   total,
 		"success": success,
 	}
@@ -192,7 +192,7 @@ func (b *broker) handleBrodcast(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	resp := map[string]uint64{
+	resp := map[string]int32{
 		"total":   total,
 		"success": success,
 	}

@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"sutext.github.io/cable/broker/protos"
+	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
 )
@@ -58,8 +59,21 @@ func (p *peer_client) UpdateIP(ip string) {
 	p.ip = ip
 	p.connect()
 }
-func (p *peer_client) sendMessage(ctx context.Context, m *packet.Message, target string, flag uint8) (total, success uint64, err error) {
-	return p.sendMessage(ctx, m, target, flag)
+func (p *peer_client) sendMessage(ctx context.Context, m *packet.Message, target string, flag uint8) (total, success int32, err error) {
+	data, err := coder.Marshal(m)
+	if err != nil {
+		return 0, 0, err
+	}
+	req := &protos.SendMessageReq{
+		Flag:    int32(flag),
+		Target:  target,
+		Message: data,
+	}
+	resp, err := p.cli.SendMessage(ctx, req)
+	if err != nil {
+		return 0, 0, err
+	}
+	return resp.Total, resp.Success, nil
 }
 
 func (p *peer_client) isOnline(ctx context.Context, uid string) (bool, error) {

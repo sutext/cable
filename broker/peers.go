@@ -52,7 +52,7 @@ func (p *peer) UpdateIP(ip string) {
 	p.client = p.createClient()
 	p.Connect()
 }
-func (p *peer) SendMessage(ctx context.Context, m *packet.Message, target string, flag uint8) (total, success uint64, err error) {
+func (p *peer) SendMessage(ctx context.Context, m *packet.Message, target string, flag uint8) (total, success int32, err error) {
 	return p.sendMessage(ctx, m, target, flag)
 }
 func (p *peer) IsOnline(ctx context.Context, uid string) (bool, error) {
@@ -76,7 +76,7 @@ func (h *peer) OnMessage(p *packet.Message) error {
 func (h *peer) OnRequest(p *packet.Request) (*packet.Response, error) {
 	return nil, fmt.Errorf("no implemention")
 }
-func (p *peer) sendMessage(ctx context.Context, m *packet.Message, target string, flag uint8) (total, success uint64, err error) {
+func (p *peer) sendMessage(ctx context.Context, m *packet.Message, target string, flag uint8) (total, success int32, err error) {
 	if p.client.Status() != client.StatusOpened {
 		return 0, 0, xerr.BrokerPeerNotReady
 	}
@@ -92,13 +92,15 @@ func (p *peer) sendMessage(ctx context.Context, m *packet.Message, target string
 		return 0, 0, err
 	}
 	decoder := coder.NewDecoder(res.Content)
-	if total, err = decoder.ReadVarint(); err != nil {
+	t, err := decoder.ReadVarint()
+	if err != nil {
 		return 0, 0, err
 	}
-	if success, err = decoder.ReadVarint(); err != nil {
+	s, err := decoder.ReadVarint()
+	if err != nil {
 		return 0, 0, err
 	}
-	return
+	return int32(t), int32(s), nil
 }
 func (p *peer) createClient() client.Client {
 	retrier := client.NewRetrier(5, backoff.Constant(time.Second))

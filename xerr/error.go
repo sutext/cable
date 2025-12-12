@@ -14,6 +14,7 @@ const (
 	BrokerPeerNotReady
 	InvalidUserID
 	InvalidChannel
+	InvalidPeerMessage
 	InvalidPeerMessageFlag
 )
 
@@ -29,6 +30,7 @@ var errorMap = map[Error]string{
 	BrokerPeerNotReady:     "broker peer not ready",
 	InvalidUserID:          "invalid user id",
 	InvalidChannel:         "invalid channel",
+	InvalidPeerMessage:     "invalid peer message",
 	InvalidPeerMessageFlag: "invalid peer message flag",
 }
 

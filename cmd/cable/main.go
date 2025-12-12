@@ -43,7 +43,7 @@ func (h *Handler) OnMessage(m *packet.Message, id *packet.Identity) error {
 		if err != nil {
 			xlog.Error("Failed to send message to ", xlog.Str("toId", toUserID), xlog.Err(err))
 		} else {
-			xlog.Info("Success to send message to ", xlog.Str("toId", toUserID), xlog.U64("total", totla), xlog.U64("success", success))
+			xlog.Info("Success to send message to ", xlog.Str("toId", toUserID), xlog.I32("total", totla), xlog.I32("success", success))
 		}
 	case MessageKindGroup:
 		channel, ok := m.Get(packet.PropertyChannel)
@@ -54,7 +54,7 @@ func (h *Handler) OnMessage(m *packet.Message, id *packet.Identity) error {
 		if err != nil {
 			xlog.Error("Failed to send message to ", xlog.Channel(channel), xlog.Err(err))
 		} else {
-			xlog.Info("Success to send message to ", xlog.Channel(channel), xlog.U64("total", totla), xlog.U64("success", success))
+			xlog.Info("Success to send message to ", xlog.Channel(channel), xlog.I32("total", totla), xlog.I32("success", success))
 		}
 	}
 	return nil

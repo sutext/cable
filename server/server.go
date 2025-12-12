@@ -19,7 +19,7 @@ type Server interface {
 	IsActive(cid string) bool
 	KickConn(cid string) bool
 	Shutdown(ctx context.Context) error
-	Brodcast(p *packet.Message) (total, success uint64, err error)
+	Brodcast(p *packet.Message) (total, success int32, err error)
 	SendMessage(cid string, p *packet.Message) error
 	SendRequest(ctx context.Context, cid string, p *packet.Request) (*packet.Response, error)
 }
@@ -131,11 +131,11 @@ func (s *server) Shutdown(ctx context.Context) error {
 func (s *server) Network() Network {
 	return s.network
 }
-func (s *server) Brodcast(p *packet.Message) (uint64, uint64, error) {
+func (s *server) Brodcast(p *packet.Message) (int32, int32, error) {
 	if s.closed.Load() {
 		return 0, 0, xerr.ServerIsClosed
 	}
-	var total, success uint64
+	var total, success int32
 	s.conns.Range(func(cid string, conn *listener.Conn) bool {
 		total++
 		if err := conn.SendMessage(p); err == nil {

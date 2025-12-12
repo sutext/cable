@@ -24,9 +24,9 @@ type Broker interface {
 	IsOnline(ctx context.Context, uid string) (ok bool)
 	KickConn(ctx context.Context, cid string)
 	KickUser(ctx context.Context, uid string)
-	SendToAll(ctx context.Context, m *packet.Message) (total, success uint64, err error)
-	SendToUser(ctx context.Context, uid string, m *packet.Message) (total, success uint64, err error)
-	SendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success uint64, err error)
+	SendToAll(ctx context.Context, m *packet.Message) (total, success int32, err error)
+	SendToUser(ctx context.Context, uid string, m *packet.Message) (total, success int32, err error)
+	SendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success int32, err error)
 	JoinChannel(ctx context.Context, uid string, channels ...string) (count int32, err error)
 	LeaveChannel(ctx context.Context, uid string, channels ...string) (count int32, err error)
 	HandleRequest(method string, handler server.RequestHandler)
@@ -242,7 +242,7 @@ func (b *broker) KickUser(ctx context.Context, uid string) {
 		return true
 	})
 }
-func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (total, success uint64, err error) {
+func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (total, success int32, err error) {
 	total, success = b.sendToAll(m)
 	b.peers.Range(func(id string, peer *peer_client) bool {
 		if t, s, err := peer.sendMessage(ctx, m, "", 0); err == nil {
@@ -255,7 +255,7 @@ func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (total, succe
 	})
 	return total, success, nil
 }
-func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) (total, success uint64, err error) {
+func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) (total, success int32, err error) {
 	if uid == "" {
 		return 0, 0, xerr.InvalidUserID
 	}
@@ -272,7 +272,7 @@ func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 	})
 	return total, success, nil
 }
-func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success uint64, err error) {
+func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success int32, err error) {
 	if channel == "" {
 		return 0, 0, xerr.InvalidChannel
 	}
@@ -391,7 +391,7 @@ func (b *broker) kickUser(uid string) {
 		return true
 	})
 }
-func (b *broker) sendToAll(m *packet.Message) (total, success uint64) {
+func (b *broker) sendToAll(m *packet.Message) (total, success int32) {
 	for _, l := range b.listeners {
 		t, s, err := l.Brodcast(m)
 		total += t
@@ -402,7 +402,7 @@ func (b *broker) sendToAll(m *packet.Message) (total, success uint64) {
 	}
 	return total, success
 }
-func (b *broker) sendToUser(uid string, m *packet.Message) (total, success uint64) {
+func (b *broker) sendToUser(uid string, m *packet.Message) (total, success int32) {
 	b.userClients.RangeKey(uid, func(cid string, net server.Network) bool {
 		total++
 		l, ok := b.listeners[net]
@@ -418,7 +418,7 @@ func (b *broker) sendToUser(uid string, m *packet.Message) (total, success uint6
 	})
 	return total, success
 }
-func (b *broker) sendToChannel(channel string, m *packet.Message) (total, success uint64) {
+func (b *broker) sendToChannel(channel string, m *packet.Message) (total, success int32) {
 	b.channelClients.RangeKey(channel, func(cid string, net server.Network) bool {
 		total++
 		l, ok := b.listeners[net]

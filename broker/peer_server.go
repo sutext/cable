@@ -6,6 +6,7 @@ import (
 
 	"google.golang.org/grpc"
 	"sutext.github.io/cable/broker/protos"
+	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xerr"
 )
@@ -62,8 +63,11 @@ func (s *PeerServer) LeaveChannel(ctx context.Context, req *protos.ChannelReq) (
 	return &protos.ChannelResp{Count: count}, nil
 }
 func (s *PeerServer) SendMessage(ctx context.Context, req *protos.SendMessageReq) (*protos.SendMessageResp, error) {
-	msg := packet.NewMessage(req.Message)
-	var total, success uint64
+	msg := &packet.Message{}
+	if err := coder.Unmarshal(req.Message, msg); err != nil {
+		return nil, xerr.InvalidPeerMessage
+	}
+	var total, success int32
 	switch req.Flag {
 	case 0:
 		total, success = s.broker.sendToAll(msg)
@@ -75,8 +79,8 @@ func (s *PeerServer) SendMessage(ctx context.Context, req *protos.SendMessageReq
 		return nil, xerr.InvalidPeerMessageFlag
 	}
 	return &protos.SendMessageResp{
-		Total:   int32(total),
-		Success: int32(success),
+		Total:   total,
+		Success: success,
 	}, nil
 
 }
