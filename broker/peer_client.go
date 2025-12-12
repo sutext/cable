@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"sutext.github.io/cable/broker/protos"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
@@ -33,7 +34,7 @@ func newPeerClient(id, ip string, broker *broker) *peer_client {
 }
 func (p *peer_client) connect() {
 	// Set up a connection to the server.
-	conn, err := grpc.NewClient(fmt.Sprintf("%s%s", p.ip, p.broker.peerPort))
+	conn, err := grpc.NewClient(fmt.Sprintf("%s%s", p.ip, p.broker.peerPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
