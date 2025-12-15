@@ -62,12 +62,15 @@ func (s *server) Serve() error {
 		s.listener = listener.NewTCP(s.queueCapacity, s.pollCapacity, s.pollWorkerCount, s.logger)
 	case NetworkUDP:
 		s.listener = listener.NewUDP()
+	case NetworkGRPC:
+		s.listener = listener.NewGRPC(s.logger)
 	default:
 		return xerr.NetworkNotSupported
 	}
 	s.listener.OnClose(s.onClose)
 	s.listener.OnAccept(s.onConnect)
 	s.listener.OnPacket(s.onPacket)
+	s.logger.Info("server listening", xlog.Str("address", s.address), xlog.Str("network", s.network.String()))
 	return s.listener.Listen(s.address)
 }
 func (s *server) Top() map[string]int32 {
