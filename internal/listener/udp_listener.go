@@ -92,14 +92,21 @@ func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.
 	}
 	connPacket := p.(*packet.Connect)
 	connID := md5Hash(connPacket.Identity.ClientID)
-	c := newUDPConn(connPacket.Identity, conn, addr, connID)
+	uc := newUDPConn(connPacket.Identity, conn, addr, connID)
+	c := newConn(uc)
+	uc.closeHandler = func() {
+		l.connMap.Delete(connID)
+		if l.closeHandler != nil {
+			l.closeHandler(c)
+		}
+	}
 	code := l.acceptHandler(connPacket, c)
 	if code != packet.ConnectAccepted {
 		c.ClosePacket(packet.NewConnack(code))
 		return
 	}
 	c.SendPacket(packet.NewConnack(packet.ConnectAccepted))
-	l.connMap.Set(addr.String(), c)
+	l.connMap.Set(connID, c)
 }
 func md5Hash(s string) string {
 	h := md5.New()
@@ -108,20 +115,29 @@ func md5Hash(s string) string {
 }
 
 type udpConn struct {
-	id     *packet.Identity
-	raw    *net.UDPConn
-	addr   atomic.Pointer[net.UDPAddr]
-	connID string
+	id           *packet.Identity
+	raw          *net.UDPConn
+	addr         atomic.Pointer[net.UDPAddr]
+	connID       string
+	closed       atomic.Bool
+	closeHandler func()
 }
 
 func (c *udpConn) ID() *packet.Identity {
 	return c.id
 }
 func (c *udpConn) close() error {
+	if c.closed.CompareAndSwap(false, true) {
+		err := c.raw.Close()
+		if c.closeHandler != nil {
+			c.closeHandler()
+		}
+		return err
+	}
 	return nil
 }
 func (c *udpConn) isClosed() bool {
-	return false
+	return c.closed.Load()
 }
 func (c *udpConn) writePacket(p packet.Packet, jump bool) error {
 	p.Set(packet.PropertyConnID, c.connID)
@@ -135,12 +151,12 @@ func (c *udpConn) writePacket(p packet.Packet, jump bool) error {
 func (c *udpConn) sendQueueLength() int32 {
 	return 0
 }
-func newUDPConn(id *packet.Identity, raw *net.UDPConn, addr *net.UDPAddr, connID string) *Conn {
+func newUDPConn(id *packet.Identity, raw *net.UDPConn, addr *net.UDPAddr, connID string) *udpConn {
 	c := &udpConn{
 		id:     id,
 		raw:    raw,
 		connID: connID,
 	}
 	c.addr.Store(addr)
-	return newConn(c)
+	return c
 }

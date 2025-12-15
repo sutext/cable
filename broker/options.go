@@ -50,8 +50,9 @@ func newOptions(opts ...Option) *options {
 		peerPort: ":4567",
 		brokerID: getBrokerID(),
 		listeners: map[server.Network]string{
-			server.NetworkTCP: ":1883",
-			server.NetworkUDP: ":1884",
+			server.NetworkTCP:  ":1883",
+			server.NetworkUDP:  ":1884",
+			server.NetworkGRPC: ":1885",
 		},
 	}
 	for _, opt := range opts {

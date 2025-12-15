@@ -11,8 +11,9 @@ import (
 type Network string
 
 const (
-	NewworkTCP Network = "tcp"
-	NetworkUDP Network = "udp"
+	NewworkTCP  Network = "tcp"
+	NetworkUDP  Network = "udp"
+	NetworkGRPC Network = "grpc"
 )
 
 type Handler interface {

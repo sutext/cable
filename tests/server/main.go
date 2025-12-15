@@ -21,7 +21,7 @@ func main() {
 		// 	MaxBidiRemoteStreams: 1,
 		// 	MaxUniRemoteStreams:  1,
 		// }),
-		server.WithUDP(),
+		server.WithNetwork(server.NetworkUDP),
 	)
 	xlog.Info("cable server start")
 	ctx, cancel := context.WithCancelCause(ctx)

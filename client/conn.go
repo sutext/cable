@@ -20,6 +20,8 @@ func NewConn(network Network, addr string) Conn {
 		return newTCPConn(addr)
 	case NetworkUDP:
 		return newUDPConn(addr)
+	case NetworkGRPC:
+		return newGRPCConn(addr)
 	default:
 		panic("unknown network")
 	}

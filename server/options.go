@@ -19,6 +19,7 @@ const (
 	NetworkTCP Network = iota
 	NetworkUDP
 	NetworkQUIC
+	NetworkGRPC
 	NetworkWebSocket
 )
 
@@ -30,6 +31,8 @@ func (n Network) String() string {
 		return "UDP"
 	case NetworkQUIC:
 		return "QUIC"
+	case NetworkGRPC:
+		return "GRPC"
 	case NetworkWebSocket:
 		return "WebSocket"
 	default:
@@ -77,11 +80,8 @@ func NewOptions(opts ...Option) *options {
 	}
 	return options
 }
-func WithTCP() Option {
-	return Option{f: func(o *options) { o.network = NetworkTCP }}
-}
-func WithUDP() Option {
-	return Option{f: func(o *options) { o.network = NetworkUDP }}
+func WithNetwork(network Network) Option {
+	return Option{f: func(o *options) { o.network = network }}
 }
 
 //	func WithQUIC(config *quic.Config) Option {
@@ -90,6 +90,7 @@ func WithUDP() Option {
 //			o.QuicConfig = config
 //		}}
 //	}
+
 func WithLogger(logger *xlog.Logger) Option {
 	return Option{f: func(o *options) { o.logger = logger }}
 }

@@ -69,8 +69,9 @@ func NewBroker(opts ...Option) Broker {
 	b.listeners = make(map[server.Network]server.Server, len(options.listeners))
 	for net, addr := range options.listeners {
 		b.listeners[net] = server.New(addr,
-			server.WithLogger(b.logger),
 			server.WithClose(b.onUserClosed),
+			server.WithLogger(b.logger),
+			server.WithNetwork(net),
 			server.WithMessage(b.onUserMessage),
 			server.WithRequest(b.onUserRequest),
 			server.WithConnect(func(p *packet.Connect) packet.ConnectCode {
