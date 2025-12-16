@@ -61,17 +61,20 @@ func (l *tcpListener) Listen(address string) error {
 func (l *tcpListener) handleConn(conn *net.TCPConn) {
 	timer := time.AfterFunc(time.Second*10, func() {
 		l.logger.Warn("waite conn packet timeout")
+		packet.WriteTo(conn, packet.NewClose(packet.CloseAuthenticationTimeout))
 		conn.Close()
 	})
 	p, err := packet.ReadFrom(conn)
 	timer.Stop()
 	if err != nil {
 		l.logger.Error("failed to read packet", xlog.Err(err))
+		packet.WriteTo(conn, packet.NewClose(packet.AsCloseCode(err)))
 		conn.Close()
 		return
 	}
 	if p.Type() != packet.CONNECT {
 		l.logger.Error("first packet is not connect packet", xlog.Str("packetType", p.Type().String()))
+		packet.WriteTo(conn, packet.NewClose(packet.AsCloseCode(err)))
 		conn.Close()
 		return
 	}
@@ -160,8 +163,8 @@ func newTCPConn(id *packet.Identity, raw *net.TCPConn, sendQueueCapacity int32) 
 		id:           id,
 		raw:          raw,
 		wirteTimeout: time.Second * 3,
-		writeMeter:   metrics.GetOrRegisterMeter("tcp.write", metrics.DefaultRegistry),
-		sendMeter:    metrics.GetOrRegisterMeter("tcp.send", metrics.DefaultRegistry),
+		writeMeter:   metrics.GetMeter("tcp.write"),
+		sendMeter:    metrics.GetMeter("tcp.send"),
 		sendQueue:    queue.New(sendQueueCapacity),
 	}
 }

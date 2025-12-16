@@ -196,10 +196,10 @@ func (c *client) SendQueueLength() int32 {
 	return c.sendQueue.Len()
 }
 func (c *client) SendRate() float64 {
-	return c.sendMeter.Rate1()
+	return c.sendMeter.Rate()
 }
 func (c *client) WriteRate() float64 {
-	return c.writeMeter.Rate1()
+	return c.writeMeter.Rate()
 }
 func (c *client) SendMessage(ctx context.Context, p *packet.Message) error {
 	if !c.IsReady() {

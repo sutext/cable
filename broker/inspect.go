@@ -61,15 +61,15 @@ func (b *broker) inspect() *protos.InspectResp {
 		return true
 	})
 	l := b.listeners[server.NetworkTCP]
-	writeRate := metrics.GetOrRegisterMeter("tcp.write", metrics.DefaultRegistry)
-	sendRate := metrics.GetOrRegisterMeter("tcp.send", metrics.DefaultRegistry)
+	writeRate := metrics.GetMeter("tcp.write")
+	sendRate := metrics.GetMeter("tcp.send")
 	return &protos.InspectResp{
 		Id: b.id,
 		// Peers: peersInpsects,
 		// TopPeers:    b.peerServer.Top(),
 		TopConns:    l.Top(),
-		SendRate:    sendRate.Rate1(),
-		WriteRate:   writeRate.Rate1(),
+		SendRate:    sendRate.Rate(),
+		WriteRate:   writeRate.Rate(),
 		UserCount:   int32(users),
 		ClientCount: int32(clients),
 		ClusterSize: b.clusterSize(),
