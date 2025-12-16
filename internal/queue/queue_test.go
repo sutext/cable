@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -14,7 +15,7 @@ func TestQueue(t *testing.T) {
 	})
 	go func() {
 		for i := range 1000 {
-			err := mq.Push(func() {
+			err := mq.Push(context.Background(), func() {
 				time.Sleep(time.Duration(100 * time.Millisecond))
 				fmt.Println("Task", i, "done")
 			})
@@ -72,8 +73,10 @@ func TestChannelClose(t *testing.T) {
 // 性能测试
 func BenchmarkAddTask(b *testing.B) {
 	mq := New(100)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
 	for b.Loop() {
-		mq.Push(func() {
+		mq.Push(ctx, func() {
 			// do something
 		})
 	}
@@ -81,9 +84,11 @@ func BenchmarkAddTask(b *testing.B) {
 
 func BenchmarkAddTaskParallel(b *testing.B) {
 	mq := New(1000)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			mq.Push(func() {
+			mq.Push(ctx, func() {
 				// do something
 			})
 		}

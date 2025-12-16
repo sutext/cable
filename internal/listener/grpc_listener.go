@@ -20,7 +20,7 @@ type grpcListener struct {
 	listener      *net.TCPListener
 	closeHandler  func(c *Conn)
 	packetHandler func(p packet.Packet, c *Conn)
-	acceptHandler func(*packet.Connect, *Conn) packet.ConnectCode
+	acceptHandler func(p *packet.Connect, c *Conn) packet.ConnectCode
 }
 
 func NewGRPC(logger *xlog.Logger) Listener {
@@ -96,11 +96,9 @@ func (l *grpcListener) Connect(bidi grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]
 		code := l.acceptHandler(connPacket, c)
 		if code != packet.ConnectAccepted {
 			c.ClosePacket(packet.NewConnack(code))
-			return code
+			continue
 		}
-		if err := c.SendPacket(packet.NewConnack(packet.ConnectAccepted)); err != nil {
-			return err
-		}
+		c.SendPacket(packet.NewConnack(packet.ConnectAccepted))
 		l.conns.Set(connID, c)
 	}
 }
@@ -133,7 +131,11 @@ func (c *grpcConn) writePacket(p packet.Packet, jump bool) error {
 	if err != nil {
 		return err
 	}
-	return c.raw.Send(&pb.Bytes{Data: data})
+	err = c.raw.Send(&pb.Bytes{Data: data})
+	if err != nil {
+		c.close()
+	}
+	return err
 }
 func (c *grpcConn) sendQueueLength() int32 {
 	return 0

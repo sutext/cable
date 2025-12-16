@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"net"
 	"sync/atomic"
+	"time"
 
 	"sutext.github.io/cable/internal/poll"
 	"sutext.github.io/cable/internal/safe"
@@ -145,6 +146,7 @@ func (c *udpConn) writePacket(p packet.Packet, jump bool) error {
 	if err != nil {
 		return err
 	}
+	c.raw.SetWriteDeadline(time.Now().Add(time.Second * 5))
 	_, err = c.raw.WriteToUDP(data, c.addr.Load())
 	return err
 }

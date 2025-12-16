@@ -1,6 +1,7 @@
 package queue
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 )
@@ -94,7 +95,7 @@ func (mq *Queue) Close() {
 }
 
 // Push a task to the queue. If the queue is full, it will return ErrQueueIsFull.
-func (mq *Queue) Push(task func()) error {
+func (mq *Queue) Push(ctx context.Context, task func()) error {
 	mq.mu.Lock()
 	defer mq.mu.Unlock()
 	if mq.closed.Load() {
@@ -103,8 +104,8 @@ func (mq *Queue) Push(task func()) error {
 	select {
 	case mq.tasks <- task:
 		return nil
-	default:
-		return ErrQueueIsFull
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

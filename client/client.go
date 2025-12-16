@@ -9,7 +9,6 @@ import (
 	"sutext.github.io/cable/internal/inflight"
 	"sutext.github.io/cable/internal/keepalive"
 	"sutext.github.io/cable/internal/metrics"
-	"sutext.github.io/cable/internal/poll"
 	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
@@ -46,7 +45,6 @@ type client struct {
 	retrier        *Retrier
 	handler        Handler
 	retrying       bool
-	recvPoll       *poll.Poll
 	sendQueue      *queue.Queue
 	keepalive      *keepalive.KeepAlive
 	inflights      *inflight.Inflight
@@ -57,6 +55,7 @@ type client struct {
 	pingInterval   time.Duration
 	packetConnID   string
 	requestTasks   sync.Map
+	writeTimeout   time.Duration
 	requestTimeout time.Duration
 }
 
@@ -70,7 +69,6 @@ func New(address string, options ...Option) Client {
 		handler:        opts.handler,
 		sendMeter:      metrics.NewMeter(),
 		writeMeter:     metrics.NewMeter(),
-		recvPoll:       poll.New(opts.recvPollCapacity, opts.recvPollWorkerCount),
 		sendQueue:      queue.New(opts.sendQueueCapacity),
 		pingTimeout:    opts.pingTimeout,
 		pingInterval:   opts.pingInterval,
@@ -98,7 +96,6 @@ func (c *client) ID() *packet.Identity {
 func (c *client) Close() {
 	if c.closed.CompareAndSwap(false, true) {
 		c.keepalive.Close()
-		c.recvPoll.Close()
 		c.sendQueue.Close()
 		c.inflights.Close()
 		c.conn.Close()
@@ -235,8 +232,10 @@ func (c *client) sendPacket(p packet.Packet) error {
 	if !c.IsReady() {
 		return ErrConntionFailed
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), c.writeTimeout)
+	defer cancel()
 	c.sendMeter.Mark(1)
-	return c.sendQueue.Push(func() {
+	return c.sendQueue.Push(ctx, func() {
 		if !c.IsReady() {
 			return
 		}
@@ -293,14 +292,12 @@ func (c *client) recv() {
 				return
 			}
 		}
-		c.recvPoll.Push(func() {
-			c.handlePacket(p)
-			c.keepalive.UpdateTime()
-		})
+		go c.handlePacket(p)
 	}
 }
 
 func (c *client) handlePacket(p packet.Packet) {
+	c.keepalive.UpdateTime()
 	switch p.Type() {
 	case packet.MESSAGE:
 		msg := p.(*packet.Message)

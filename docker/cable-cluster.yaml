@@ -52,6 +52,10 @@ spec:
       port: 1884
       targetPort: 1884
     - protocol: TCP
+      name: endpoint-grpc
+      port: 1885
+      targetPort: 1885
+    - protocol: TCP
       name: pprof
       port: 6060
       targetPort: 6060

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"sutext.github.io/cable/internal/metrics"
-	"sutext.github.io/cable/internal/poll"
 	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
@@ -16,17 +15,15 @@ import (
 type tcpListener struct {
 	logger        *xlog.Logger
 	listener      *net.TCPListener
-	recvPoll      *poll.Poll
 	closeHandler  func(c *Conn)
 	packetHandler func(p packet.Packet, c *Conn)
 	acceptHandler func(*packet.Connect, *Conn) packet.ConnectCode
 	queueCapacity int32
 }
 
-func NewTCP(queueCapacity, pollCapacity, workerCount int32, logger *xlog.Logger) Listener {
+func NewTCP(queueCapacity, pollCapacity int32, logger *xlog.Logger) Listener {
 	return &tcpListener{
 		logger:        logger,
-		recvPoll:      poll.New(pollCapacity, workerCount),
 		queueCapacity: queueCapacity,
 	}
 }
@@ -40,7 +37,6 @@ func (l *tcpListener) OnPacket(handler func(p packet.Packet, c *Conn)) {
 	l.packetHandler = handler
 }
 func (l *tcpListener) Close(ctx context.Context) error {
-	l.recvPoll.Close()
 	return l.listener.Close()
 }
 func (l *tcpListener) Listen(address string) error {
@@ -97,13 +93,7 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 			c.ClosePacket(packet.NewClose(packet.AsCloseCode(err)))
 			return
 		}
-		err = l.recvPoll.Push(func() {
-			l.packetHandler(p, c)
-		})
-		if err != nil {
-			l.logger.Error("recv poll overflow", xlog.Err(err))
-			return
-		}
+		go l.packetHandler(p, c)
 	}
 }
 
@@ -114,6 +104,7 @@ type tcpConn struct {
 	sendMeter    metrics.Meter
 	writeMeter   metrics.Meter
 	sendQueue    *queue.Queue
+	wirteTimeout time.Duration
 	closeHandler func()
 }
 
@@ -142,6 +133,7 @@ func (c *tcpConn) writePacket(p packet.Packet, jump bool) error {
 	}
 	if jump {
 		return c.sendQueue.Jump(func() {
+			c.raw.SetWriteDeadline(time.Now().Add(c.wirteTimeout))
 			_, err := c.raw.Write(data)
 			c.writeMeter.Mark(1)
 			if err != nil {
@@ -149,7 +141,10 @@ func (c *tcpConn) writePacket(p packet.Packet, jump bool) error {
 			}
 		})
 	}
-	return c.sendQueue.Push(func() {
+	ctx, cancel := context.WithTimeout(context.Background(), c.wirteTimeout)
+	defer cancel()
+	return c.sendQueue.Push(ctx, func() {
+		c.raw.SetWriteDeadline(time.Now().Add(c.wirteTimeout))
 		_, err := c.raw.Write(data)
 		c.writeMeter.Mark(1)
 		if err != nil {
@@ -162,10 +157,11 @@ func (c *tcpConn) sendQueueLength() int32 {
 }
 func newTCPConn(id *packet.Identity, raw *net.TCPConn, sendQueueCapacity int32) *tcpConn {
 	return &tcpConn{
-		id:         id,
-		raw:        raw,
-		writeMeter: metrics.GetOrRegisterMeter("tcp.write", metrics.DefaultRegistry),
-		sendMeter:  metrics.GetOrRegisterMeter("tcp.send", metrics.DefaultRegistry),
-		sendQueue:  queue.New(sendQueueCapacity),
+		id:           id,
+		raw:          raw,
+		wirteTimeout: time.Second * 2,
+		writeMeter:   metrics.GetOrRegisterMeter("tcp.write", metrics.DefaultRegistry),
+		sendMeter:    metrics.GetOrRegisterMeter("tcp.send", metrics.DefaultRegistry),
+		sendQueue:    queue.New(sendQueueCapacity),
 	}
 }

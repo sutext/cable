@@ -2,7 +2,6 @@ package server
 
 import (
 	"fmt"
-	"runtime"
 
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
@@ -44,24 +43,20 @@ type Option struct {
 	f func(*options)
 }
 type options struct {
-	logger          *xlog.Logger
-	network         Network
-	queueCapacity   int32
-	pollCapacity    int32
-	pollWorkerCount int32
-	closeHandler    ClosedHandler
-	connectHandler  ConnectHandler
-	messageHandler  MessageHandler
-	requestHandler  RequestHandler
+	logger         *xlog.Logger
+	network        Network
+	queueCapacity  int32
+	closeHandler   ClosedHandler
+	connectHandler ConnectHandler
+	messageHandler MessageHandler
+	requestHandler RequestHandler
 }
 
 func NewOptions(opts ...Option) *options {
 	var options = &options{
-		logger:          xlog.With("GROUP", "SERVER"),
-		network:         NetworkTCP,
-		queueCapacity:   1024,
-		pollCapacity:    1024,
-		pollWorkerCount: int32(runtime.NumCPU()) * 2,
+		logger:        xlog.With("GROUP", "SERVER"),
+		network:       NetworkTCP,
+		queueCapacity: 1024,
 		closeHandler: func(p *packet.Identity) {
 
 		},
@@ -105,9 +100,6 @@ func WithMessage(handler MessageHandler) Option {
 }
 func WithRequest(handler RequestHandler) Option {
 	return Option{f: func(o *options) { o.requestHandler = handler }}
-}
-func WithRecvPool(cap, worker int32) Option {
-	return Option{f: func(o *options) { o.pollCapacity = cap; o.pollWorkerCount = worker }}
 }
 func WithSendQueue(cap int32) Option {
 	return Option{f: func(o *options) { o.queueCapacity = cap }}

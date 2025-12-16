@@ -33,16 +33,15 @@ func (h *emptyHandler) OnRequest(p *packet.Request) (*packet.Response, error) {
 }
 
 type Options struct {
-	logger              *xlog.Logger
-	network             Network
-	handler             Handler
-	retrier             *Retrier
-	pingTimeout         time.Duration
-	pingInterval        time.Duration
-	requestTimeout      time.Duration
-	sendQueueCapacity   int32
-	recvPollCapacity    int32
-	recvPollWorkerCount int32
+	logger            *xlog.Logger
+	network           Network
+	handler           Handler
+	retrier           *Retrier
+	pingTimeout       time.Duration
+	pingInterval      time.Duration
+	writeTimeout      time.Duration
+	requestTimeout    time.Duration
+	sendQueueCapacity int32
 }
 
 type Option struct {
@@ -51,16 +50,15 @@ type Option struct {
 
 func newOptions(options ...Option) *Options {
 	opts := &Options{
-		logger:              xlog.With("GROUP", "CLIENT"),
-		handler:             &emptyHandler{},
-		retrier:             NewRetrier(10, backoff.Exponential(time.Second, 1.5)),
-		network:             NewworkTCP,
-		pingTimeout:         time.Second * 5,
-		pingInterval:        time.Second * 60,
-		requestTimeout:      time.Second * 5,
-		sendQueueCapacity:   1024,
-		recvPollCapacity:    1024,
-		recvPollWorkerCount: 1,
+		logger:            xlog.With("GROUP", "CLIENT"),
+		handler:           &emptyHandler{},
+		retrier:           NewRetrier(10, backoff.Exponential(time.Second, 1.5)),
+		network:           NewworkTCP,
+		pingTimeout:       time.Second * 5,
+		pingInterval:      time.Second * 60,
+		writeTimeout:      time.Second * 5,
+		requestTimeout:    time.Second * 5,
+		sendQueueCapacity: 1024,
 	}
 	for _, o := range options {
 		o.f(opts)
@@ -99,6 +97,11 @@ func WithHandler(handler Handler) Option {
 		o.handler = handler
 	}}
 }
+func WithWriteTimeout(timeout time.Duration) Option {
+	return Option{f: func(o *Options) {
+		o.writeTimeout = timeout
+	}}
+}
 func WithRequest(timeout time.Duration) Option {
 	return Option{f: func(o *Options) {
 		o.requestTimeout = timeout
@@ -107,11 +110,5 @@ func WithRequest(timeout time.Duration) Option {
 func WithSendQueue(capacity int32) Option {
 	return Option{f: func(o *Options) {
 		o.sendQueueCapacity = capacity
-	}}
-}
-func WithRecvPoll(capacity, workerCount int32) Option {
-	return Option{f: func(o *Options) {
-		o.recvPollCapacity = capacity
-		o.recvPollWorkerCount = workerCount
 	}}
 }
