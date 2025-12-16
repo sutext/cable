@@ -159,7 +159,7 @@ func newTCPConn(id *packet.Identity, raw *net.TCPConn, sendQueueCapacity int32) 
 	return &tcpConn{
 		id:           id,
 		raw:          raw,
-		wirteTimeout: time.Second * 2,
+		wirteTimeout: time.Second * 3,
 		writeMeter:   metrics.GetOrRegisterMeter("tcp.write", metrics.DefaultRegistry),
 		sendMeter:    metrics.GetOrRegisterMeter("tcp.send", metrics.DefaultRegistry),
 		sendQueue:    queue.New(sendQueueCapacity),

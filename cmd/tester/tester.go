@@ -123,7 +123,7 @@ func (t *Tester) addClient() *Client {
 	)
 	result.id = &packet.Identity{UserID: randomUserID(), ClientID: randomClientID()}
 	t.clients.Set(result.id.ClientID, result)
-	result.cli.Connect(result.id)
+	go result.cli.Connect(result.id)
 	return result
 }
 func (t *Tester) handlePause(w http.ResponseWriter, r *http.Request) {

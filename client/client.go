@@ -72,6 +72,7 @@ func New(address string, options ...Option) Client {
 		sendQueue:      queue.New(opts.sendQueueCapacity),
 		pingTimeout:    opts.pingTimeout,
 		pingInterval:   opts.pingInterval,
+		writeTimeout:   opts.writeTimeout,
 		requestTimeout: opts.requestTimeout,
 	}
 	c.keepalive = keepalive.New(c.pingInterval, c.pingTimeout)
