@@ -3,6 +3,7 @@ package broker
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -63,6 +64,7 @@ func (b *broker) inspect() *protos.InspectResp {
 	l := b.listeners[server.NetworkTCP]
 	writeRate := metrics.GetMeter("tcp.write")
 	sendRate := metrics.GetMeter("tcp.send")
+	xlog.Debug(fmt.Sprintf("%12f", writeRate.Rate()))
 	return &protos.InspectResp{
 		Id: b.id,
 		// Peers: peersInpsects,
