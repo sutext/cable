@@ -8,7 +8,6 @@ import (
 
 	"sutext.github.io/cable/internal/inflight"
 	"sutext.github.io/cable/internal/keepalive"
-	"sutext.github.io/cable/internal/metrics"
 	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
@@ -30,8 +29,6 @@ type Client interface {
 	Status() Status
 	Connect(identity *packet.Identity)
 	IsReady() bool
-	SendRate() float64
-	WriteRate() float64
 	SendQueueLength() int32
 	SendMessage(ctx context.Context, p *packet.Message) error
 	SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error)
@@ -48,8 +45,6 @@ type client struct {
 	sendQueue      *queue.Queue
 	keepalive      *keepalive.KeepAlive
 	inflights      *inflight.Inflight
-	sendMeter      metrics.Meter
-	writeMeter     metrics.Meter
 	statusLock     sync.RWMutex
 	pingTimeout    time.Duration
 	pingInterval   time.Duration
@@ -67,8 +62,6 @@ func New(address string, options ...Option) Client {
 		logger:         opts.logger,
 		retrier:        opts.retrier,
 		handler:        opts.handler,
-		sendMeter:      metrics.NewMeter(),
-		writeMeter:     metrics.NewMeter(),
 		sendQueue:      queue.New(opts.sendQueueCapacity),
 		pingTimeout:    opts.pingTimeout,
 		pingInterval:   opts.pingInterval,
@@ -195,12 +188,7 @@ func (c *client) SendPong() error {
 func (c *client) SendQueueLength() int32 {
 	return c.sendQueue.Len()
 }
-func (c *client) SendRate() float64 {
-	return c.sendMeter.Rate()
-}
-func (c *client) WriteRate() float64 {
-	return c.writeMeter.Rate()
-}
+
 func (c *client) SendMessage(ctx context.Context, p *packet.Message) error {
 	if !c.IsReady() {
 		return ErrConntionFailed
@@ -235,7 +223,6 @@ func (c *client) sendPacket(p packet.Packet) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), c.writeTimeout)
 	defer cancel()
-	c.sendMeter.Mark(1)
 	return c.sendQueue.Push(ctx, func() {
 		if !c.IsReady() {
 			return
@@ -248,7 +235,6 @@ func (c *client) sendPacket(p packet.Packet) error {
 			c.tryClose(err)
 			return
 		}
-		c.writeMeter.Mark(1)
 		c.keepalive.UpdateTime()
 	})
 }

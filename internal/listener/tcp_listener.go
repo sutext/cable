@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"sutext.github.io/cable/internal/metrics"
 	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
@@ -104,8 +103,6 @@ type tcpConn struct {
 	id           *packet.Identity
 	raw          *net.TCPConn
 	closed       atomic.Bool
-	sendMeter    metrics.Meter
-	writeMeter   metrics.Meter
 	sendQueue    *queue.Queue
 	wirteTimeout time.Duration
 	closeHandler func()
@@ -129,7 +126,7 @@ func (c *tcpConn) isClosed() bool {
 	return c.closed.Load()
 }
 func (c *tcpConn) writePacket(p packet.Packet, jump bool) error {
-	c.sendMeter.Mark(1)
+	// c.sendMeter.Mark(1)
 	data, err := packet.Marshal(p)
 	if err != nil {
 		return err
@@ -138,7 +135,7 @@ func (c *tcpConn) writePacket(p packet.Packet, jump bool) error {
 		return c.sendQueue.Jump(func() {
 			c.raw.SetWriteDeadline(time.Now().Add(c.wirteTimeout))
 			_, err := c.raw.Write(data)
-			c.writeMeter.Mark(1)
+			// c.writeMeter.Mark(1)
 			if err != nil {
 				c.close()
 			}
@@ -149,7 +146,7 @@ func (c *tcpConn) writePacket(p packet.Packet, jump bool) error {
 	return c.sendQueue.Push(ctx, func() {
 		c.raw.SetWriteDeadline(time.Now().Add(c.wirteTimeout))
 		_, err := c.raw.Write(data)
-		c.writeMeter.Mark(1)
+		// c.writeMeter.Mark(1)
 		if err != nil {
 			c.close()
 		}
@@ -163,8 +160,6 @@ func newTCPConn(id *packet.Identity, raw *net.TCPConn, sendQueueCapacity int32) 
 		id:           id,
 		raw:          raw,
 		wirteTimeout: time.Second * 3,
-		writeMeter:   metrics.GetMeter("tcp.write"),
-		sendMeter:    metrics.GetMeter("tcp.send"),
 		sendQueue:    queue.New(sendQueueCapacity),
 	}
 }

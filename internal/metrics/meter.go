@@ -65,10 +65,10 @@ type NilMeter struct{}
 
 // StandardMeter is the standard implementation of a Meter.
 type StandardMeter struct {
-	snapshot  *MeterSnapshot
 	ewma      EWMA
-	startTime time.Time
 	stopped   uint32
+	startTime time.Time
+	snapshot  *MeterSnapshot
 }
 
 func newStandardMeter() *StandardMeter {
@@ -98,7 +98,6 @@ func (m *StandardMeter) Mark(n int64) {
 	if atomic.LoadUint32(&m.stopped) == 1 {
 		return
 	}
-
 	atomic.AddInt64(&m.snapshot.count, n)
 	m.ewma.Update(n)
 	m.updateSnapshot()

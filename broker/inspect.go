@@ -3,12 +3,10 @@ package broker
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 
 	"sutext.github.io/cable/broker/protos"
-	"sutext.github.io/cable/internal/metrics"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
@@ -27,8 +25,6 @@ type Inspect struct {
 	TopConns    map[string]int          `json:"top_conns"`
 	TopPeers    map[string]int          `json:"top_peers"`
 	UserCount   int                     `json:"user_count"`
-	SendRate    float64                 `json:"send_rate"`
-	WriteRate   float64                 `json:"write_rate"`
 	ClientCount int                     `json:"client_count"`
 	ClusterSize int32                   `json:"cluster_size"`
 }
@@ -62,16 +58,11 @@ func (b *broker) inspect() *protos.InspectResp {
 		return true
 	})
 	l := b.listeners[server.NetworkTCP]
-	writeRate := metrics.GetMeter("tcp.write")
-	sendRate := metrics.GetMeter("tcp.send")
-	xlog.Debug(fmt.Sprintf("%12f", writeRate.Rate()))
 	return &protos.InspectResp{
 		Id: b.id,
 		// Peers: peersInpsects,
 		// TopPeers:    b.peerServer.Top(),
 		TopConns:    l.Top(),
-		SendRate:    sendRate.Rate(),
-		WriteRate:   writeRate.Rate(),
 		UserCount:   int32(users),
 		ClientCount: int32(clients),
 		ClusterSize: b.clusterSize(),
