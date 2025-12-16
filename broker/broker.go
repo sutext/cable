@@ -5,7 +5,6 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"sutext.github.io/cable/broker/protos"
@@ -34,7 +33,6 @@ type Broker interface {
 }
 type broker struct {
 	id             string
-	wg             sync.WaitGroup
 	peers          safe.XMap[string, *peer_client]
 	logger         *xlog.Logger
 	handler        Handler
@@ -135,36 +133,27 @@ func (b *broker) addPeer(id, ip string) {
 }
 func (b *broker) Start() error {
 	for _, l := range b.listeners {
-		b.wg.Go(func() {
+		go func() {
 			if err := l.Serve(); err != nil {
 				panic(err)
 			}
-		})
+		}()
 	}
 	go func() {
-		b.wg.Go(func() {
-			if err := b.muticast.Serve(); err != nil {
-				panic(err)
-			}
-		})
-
+		if err := b.muticast.Serve(); err != nil {
+			panic(err)
+		}
 	}()
 	go func() {
-		b.wg.Go(func() {
-			if err := b.peerServer.Serve(); err != nil {
-				panic(err)
-			}
-		})
-
+		if err := b.peerServer.Serve(); err != nil {
+			panic(err)
+		}
 	}()
 	go func() {
-		b.wg.Go(func() {
-			if err := b.httpServer.ListenAndServe(); err != nil {
-				panic(err)
-			}
-		})
+		if err := b.httpServer.ListenAndServe(); err != nil {
+			panic(err)
+		}
 	}()
-	b.wg.Wait()
 	time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.syncBroker)
 	return nil
 }

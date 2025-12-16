@@ -30,8 +30,7 @@ func (s *PeerServer) Serve() error {
 	s.listener = lis
 	gs := grpc.NewServer()
 	protos.RegisterPeerServiceServer(gs, s)
-	gs.Serve(lis)
-	return nil
+	return gs.Serve(lis)
 }
 func (s *PeerServer) Shutdown(ctx context.Context) error {
 	if s.listener == nil {
