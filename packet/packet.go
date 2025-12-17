@@ -117,9 +117,6 @@ func (p *packet) ReadFrom(c coder.Decoder) error {
 	p.props = m
 	return nil
 }
-func (p *packet) String() string {
-	return fmt.Sprintf("%v", p.props)
-}
 func (p *packet) Get(key Property) (string, bool) {
 	v, ok := p.props[uint8(key)]
 	return v, ok
@@ -168,7 +165,7 @@ func (p *pong) Equal(other Packet) bool {
 	return other.Type() == PONG && maps.Equal(p.props, other.(*pong).props)
 }
 func (p *pong) String() string {
-	return fmt.Sprintf("PONG(%v)", p.props)
+	return fmt.Sprintf("PONG(Props=%v)", p.props)
 }
 
 // Marshal encodes the given Packet object to bytes.
@@ -301,9 +298,17 @@ func unpack(header, data []byte) (Packet, error) {
 		}
 		return res, nil
 	case PING:
-		return NewPing(), nil
+		res := &ping{}
+		if err := coder.Unmarshal(data, res); err != nil {
+			return nil, err
+		}
+		return res, nil
 	case PONG:
-		return NewPong(), nil
+		res := &pong{}
+		if err := coder.Unmarshal(data, res); err != nil {
+			return nil, err
+		}
+		return res, nil
 	case CLOSE:
 		close := &Close{}
 		if err := coder.Unmarshal(data, close); err != nil {

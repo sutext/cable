@@ -12,8 +12,12 @@ func TestPacket(t *testing.T) {
 	testp(t, NewConnack(0))
 	testp(t, SmallMessage())
 	testp(t, BigMessage())
-	testp(t, NewPing())
-	testp(t, NewPong())
+	ping := NewPing()
+	ping.Set(PropertyConnID, "pingping")
+	pong := NewPong()
+	pong.Set(PropertyConnID, "pongpong")
+	testp(t, ping)
+	testp(t, pong)
 	testp(t, NewClose(0))
 	testp(t, NewRequest("test"))
 	testp(t, NewResponse(1))
@@ -37,6 +41,7 @@ func testp(t *testing.T, p Packet) {
 		t.Error(err)
 	}
 	fmt.Printf("packet: %v\n", p)
+	fmt.Printf("data: %v\n", rw.data)
 	newp, err := ReadFrom(rw)
 	if err != nil {
 		t.Error(err)

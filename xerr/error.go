@@ -4,6 +4,7 @@ type Error uint16
 
 const (
 	RequestTimeout Error = iota
+	MessageTimeout
 	ServerIsClosed
 	ServerAlreadyClosed
 	ConnectionIsClosed
@@ -20,6 +21,7 @@ const (
 
 var errorMap = map[Error]string{
 	RequestTimeout:         "request timeout",
+	MessageTimeout:         "message timeout",
 	ServerIsClosed:         "server is closed",
 	ServerAlreadyClosed:    "server already closed",
 	ConnectionIsClosed:     "connection is closed",

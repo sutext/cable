@@ -69,11 +69,11 @@ func (s *PeerServer) SendMessage(ctx context.Context, req *protos.SendMessageReq
 	var total, success int32
 	switch req.Flag {
 	case 0:
-		total, success = s.broker.sendToAll(msg)
+		total, success = s.broker.sendToAll(ctx, msg)
 	case 1:
-		total, success = s.broker.sendToUser(req.Target, msg)
+		total, success = s.broker.sendToUser(ctx, req.Target, msg)
 	case 2:
-		total, success = s.broker.sendToChannel(req.Target, msg)
+		total, success = s.broker.sendToChannel(ctx, req.Target, msg)
 	default:
 		return nil, xerr.InvalidPeerMessageFlag
 	}

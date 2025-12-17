@@ -19,8 +19,8 @@ type Server interface {
 	IsActive(cid string) bool
 	KickConn(cid string) bool
 	Shutdown(ctx context.Context) error
-	Brodcast(p *packet.Message) (total, success int32, err error)
-	SendMessage(cid string, p *packet.Message) error
+	Brodcast(ctx context.Context, p *packet.Message) (total, success int32, err error)
+	SendMessage(ctx context.Context, cid string, p *packet.Message) error
 	SendRequest(ctx context.Context, cid string, p *packet.Request) (*packet.Response, error)
 }
 type server struct {
@@ -131,26 +131,26 @@ func (s *server) Shutdown(ctx context.Context) error {
 func (s *server) Network() Network {
 	return s.network
 }
-func (s *server) Brodcast(p *packet.Message) (int32, int32, error) {
+func (s *server) Brodcast(ctx context.Context, p *packet.Message) (int32, int32, error) {
 	if s.closed.Load() {
 		return 0, 0, xerr.ServerIsClosed
 	}
 	var total, success int32
 	s.conns.Range(func(cid string, conn *listener.Conn) bool {
 		total++
-		if err := conn.SendMessage(p); err == nil {
+		if err := conn.SendMessage(ctx, p); err == nil {
 			success++
 		}
 		return true
 	})
 	return total, success, nil
 }
-func (s *server) SendMessage(cid string, p *packet.Message) error {
+func (s *server) SendMessage(ctx context.Context, cid string, p *packet.Message) error {
 	if s.closed.Load() {
 		return xerr.ServerIsClosed
 	}
 	if c, ok := s.conns.Get(cid); ok {
-		return c.SendMessage(p)
+		return c.SendMessage(ctx, p)
 	}
 	return xerr.ConnectionNotFound
 }
@@ -205,7 +205,7 @@ func (s *server) onMessage(c *listener.Conn, p *packet.Message) {
 		return
 	}
 	if p.Qos == packet.MessageQos1 {
-		if err := c.SendPacket(packet.NewMessack(p.ID)); err != nil {
+		if err := c.SendPacket(context.Background(), packet.NewMessack(p.ID)); err != nil {
 			s.logger.Error("failed to send messack", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 		}
 	}
@@ -216,7 +216,7 @@ func (s *server) onRequest(c *listener.Conn, p *packet.Request) {
 		s.logger.Error("failed to handle request", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 		return
 	}
-	if err := c.SendPacket(res); err != nil {
+	if err := c.SendPacket(context.Background(), res); err != nil {
 		s.logger.Error("failed to send response", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 	}
 }

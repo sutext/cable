@@ -98,7 +98,7 @@ func (l *grpcListener) Connect(bidi grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]
 			c.ClosePacket(packet.NewConnack(code))
 			continue
 		}
-		c.SendPacket(packet.NewConnack(packet.ConnectAccepted))
+		c.SendPacket(context.Background(), packet.NewConnack(packet.ConnectAccepted))
 		l.conns.Set(connID, c)
 	}
 }
@@ -125,7 +125,7 @@ func (c *grpcConn) close() error {
 func (c *grpcConn) isClosed() bool {
 	return c.closed.Load()
 }
-func (c *grpcConn) writePacket(p packet.Packet, jump bool) error {
+func (c *grpcConn) writePacket(ctx context.Context, p packet.Packet, jump bool) error {
 	p.Set(packet.PropertyConnID, c.connID)
 	data, err := packet.Marshal(p)
 	if err != nil {

@@ -41,6 +41,7 @@ type Options struct {
 	pingInterval      time.Duration
 	writeTimeout      time.Duration
 	requestTimeout    time.Duration
+	messageTimeout    time.Duration
 	sendQueueCapacity int32
 }
 
@@ -58,6 +59,7 @@ func newOptions(options ...Option) *Options {
 		pingInterval:      time.Second * 60,
 		writeTimeout:      time.Second * 5,
 		requestTimeout:    time.Second * 5,
+		messageTimeout:    time.Second * 5,
 		sendQueueCapacity: 1024,
 	}
 	for _, o := range options {
@@ -102,9 +104,14 @@ func WithWriteTimeout(timeout time.Duration) Option {
 		o.writeTimeout = timeout
 	}}
 }
-func WithRequest(timeout time.Duration) Option {
+func WithRequestTimeout(timeout time.Duration) Option {
 	return Option{f: func(o *Options) {
 		o.requestTimeout = timeout
+	}}
+}
+func WithMessageTimeout(timeout time.Duration) Option {
+	return Option{f: func(o *Options) {
+		o.messageTimeout = timeout
 	}}
 }
 func WithSendQueue(capacity int32) Option {

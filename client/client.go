@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"sutext.github.io/cable/internal/inflight"
 	"sutext.github.io/cable/internal/keepalive"
 	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
@@ -16,12 +15,28 @@ import (
 type Error uint8
 
 const (
-	ErrRequestTimeout Error = 1
-	ErrConntionFailed Error = 2
+	ErrRequestTimeout     Error = 1
+	ErrConnectionFailed   Error = 2
+	ErrConnectionClosed   Error = 3
+	ErrConnectionNotReady Error = 4
+	ErrInvalidPacket      Error = 5
 )
 
 func (e Error) Error() string {
-	return [...]string{"ErrRequestTimeout", "ErrConntionFailed"}[e]
+	switch e {
+	case ErrRequestTimeout:
+		return "request timeout"
+	case ErrConnectionFailed:
+		return "connection failed"
+	case ErrConnectionClosed:
+		return "connection closed"
+	case ErrConnectionNotReady:
+		return "connection not ready"
+	case ErrInvalidPacket:
+		return "invalid packet"
+	default:
+		return "unknown error"
+	}
 }
 
 type Client interface {
@@ -44,14 +59,15 @@ type client struct {
 	retrying       bool
 	sendQueue      *queue.Queue
 	keepalive      *keepalive.KeepAlive
-	inflights      *inflight.Inflight
 	statusLock     sync.RWMutex
 	pingTimeout    time.Duration
 	pingInterval   time.Duration
 	packetConnID   string
 	requestTasks   sync.Map
+	messageTasks   sync.Map
 	writeTimeout   time.Duration
 	requestTimeout time.Duration
+	messageTimeout time.Duration
 }
 
 func New(address string, options ...Option) Client {
@@ -67,10 +83,11 @@ func New(address string, options ...Option) Client {
 		pingInterval:   opts.pingInterval,
 		writeTimeout:   opts.writeTimeout,
 		requestTimeout: opts.requestTimeout,
+		messageTimeout: opts.messageTimeout,
 	}
 	c.keepalive = keepalive.New(c.pingInterval, c.pingTimeout)
 	c.keepalive.PingFunc(func() error {
-		if err := c.sendPacket(packet.NewPing()); err != nil {
+		if err := c.SendPing(); err != nil {
 			c.logger.Error("send ping error", xlog.Err(err))
 			return err
 		}
@@ -78,9 +95,6 @@ func New(address string, options ...Option) Client {
 	})
 	c.keepalive.TimeoutFunc(func() {
 		c.tryClose(CloseReasonPingTimeout)
-	})
-	c.inflights = inflight.New(func(m *packet.Message) {
-		c.sendPacket(m)
 	})
 	return c
 }
@@ -91,7 +105,6 @@ func (c *client) Close() {
 	if c.closed.CompareAndSwap(false, true) {
 		c.keepalive.Close()
 		c.sendQueue.Close()
-		c.inflights.Close()
 		c.conn.Close()
 	}
 }
@@ -167,7 +180,7 @@ func (c *client) reconnect() error {
 		return err
 	}
 	if p.Type() != packet.CONNACK {
-		return ErrConntionFailed
+		return ErrConnectionFailed
 	}
 	ack := p.(*packet.Connack)
 	if ack.Code != packet.ConnectAccepted {
@@ -180,10 +193,10 @@ func (c *client) reconnect() error {
 	return nil
 }
 func (c *client) SendPing() error {
-	return c.sendPacket(packet.NewPing())
+	return c.sendPacket(context.Background(), true, packet.NewPing())
 }
 func (c *client) SendPong() error {
-	return c.sendPacket(packet.NewPong())
+	return c.sendPacket(context.Background(), true, packet.NewPong())
 }
 func (c *client) SendQueueLength() int32 {
 	return c.sendQueue.Len()
@@ -191,20 +204,57 @@ func (c *client) SendQueueLength() int32 {
 
 func (c *client) SendMessage(ctx context.Context, p *packet.Message) error {
 	if !c.IsReady() {
-		return ErrConntionFailed
+		return ErrConnectionNotReady
 	}
-	if p.Qos == packet.MessageQos1 {
-		c.inflights.Add(p)
+	if p.Qos == packet.MessageQos0 {
+		return c.sendPacket(ctx, false, p)
 	}
-	return c.sendPacket(p)
+	return c.retryInflightMessage(ctx, p, 0)
 }
-
+func (c *client) retryInflightMessage(ctx context.Context, p *packet.Message, attempts int) error {
+	if attempts > 5 {
+		return ErrRequestTimeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
+	defer cancel()
+	_, err := c.sendInflightMessage(ctx, p)
+	if err != nil {
+		if t, ok := err.(interface{ Timeout() bool }); ok && t.Timeout() {
+			return c.retryInflightMessage(context.Background(), p, attempts+1)
+		}
+		return err
+	}
+	return nil
+}
+func (c *client) sendInflightMessage(ctx context.Context, p *packet.Message) (*packet.Messack, error) {
+	if !c.IsReady() {
+		return nil, ErrConnectionNotReady
+	}
+	ackCh := make(chan *packet.Messack)
+	defer close(ackCh)
+	c.messageTasks.Store(p.ID, ackCh)
+	defer c.messageTasks.Delete(p.ID)
+	if err := c.sendPacket(ctx, false, p); err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(ctx, c.messageTimeout)
+	defer cancel()
+	select {
+	case res := <-ackCh:
+		return res, nil
+	case <-ctx.Done():
+		return nil, context.Cause(ctx)
+	}
+}
 func (c *client) SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {
+	if !c.IsReady() {
+		return nil, ErrConnectionNotReady
+	}
 	resp := make(chan *packet.Response)
 	defer close(resp)
 	c.requestTasks.Store(p.ID, resp)
 	defer c.requestTasks.Delete(p.ID)
-	if err := c.sendPacket(p); err != nil {
+	if err := c.sendPacket(ctx, false, p); err != nil {
 		return nil, err
 	}
 	ctx, cancel := context.WithTimeout(ctx, c.requestTimeout)
@@ -217,13 +267,11 @@ func (c *client) SendRequest(ctx context.Context, p *packet.Request) (*packet.Re
 	}
 }
 
-func (c *client) sendPacket(p packet.Packet) error {
+func (c *client) sendPacket(ctx context.Context, jump bool, p packet.Packet) error {
 	if !c.IsReady() {
-		return ErrConntionFailed
+		return ErrConnectionNotReady
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), c.writeTimeout)
-	defer cancel()
-	return c.sendQueue.Push(ctx, func() {
+	return c.sendQueue.Push(ctx, jump, func() {
 		if !c.IsReady() {
 			return
 		}
@@ -275,7 +323,7 @@ func (c *client) recv() {
 		if connID, ok := p.Get(packet.PropertyConnID); ok {
 			if connID != c.packetConnID {
 				c.logger.Error("packet conn id not match", xlog.Str("connID", connID), xlog.Str("expect", c.packetConnID))
-				c.tryClose(ErrConntionFailed)
+				c.tryClose(ErrConnectionFailed)
 				return
 			}
 		}
@@ -294,13 +342,17 @@ func (c *client) handlePacket(p packet.Packet) {
 			return
 		}
 		if msg.Qos == packet.MessageQos1 {
-			if err := c.sendPacket(packet.NewMessack(msg.ID)); err != nil {
+			if err := c.sendPacket(context.Background(), true, packet.NewMessack(msg.ID)); err != nil {
 				c.logger.Error("send messack packet error", xlog.Err(err))
 			}
 		}
 	case packet.MESSACK:
-		ack := p.(*packet.Messack)
-		c.inflights.Remove(ack.ID)
+		p := p.(*packet.Messack)
+		if t, ok := c.messageTasks.Load(p.ID); ok {
+			t.(chan *packet.Messack) <- p
+		} else {
+			c.logger.Error("response task not found", xlog.I64("id", p.ID))
+		}
 	case packet.REQUEST:
 		res, err := c.handler.OnRequest(p.(*packet.Request))
 		if err != nil {
@@ -308,7 +360,7 @@ func (c *client) handlePacket(p packet.Packet) {
 			return
 		}
 		if res != nil {
-			if err := c.sendPacket(res); err != nil {
+			if err := c.sendPacket(context.Background(), false, res); err != nil {
 				c.logger.Error("send response packet error", xlog.Err(err))
 			}
 		}

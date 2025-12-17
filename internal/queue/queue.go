@@ -2,7 +2,6 @@ package queue
 
 import (
 	"context"
-	"sync"
 	"sync/atomic"
 )
 
@@ -10,13 +9,13 @@ type Error uint8
 
 var (
 	ErrQueueIsFull   Error = 0
-	ErrQueueIsStoped Error = 1
+	ErrQueueIsClosed Error = 1
 )
 
 func (e Error) Error() string {
 	switch e {
-	case ErrQueueIsStoped:
-		return "queue is stopped"
+	case ErrQueueIsClosed:
+		return "queue is closed"
 	case ErrQueueIsFull:
 		return "queue is full"
 	default:
@@ -25,7 +24,6 @@ func (e Error) Error() string {
 }
 
 type Queue struct {
-	mu     sync.Mutex
 	jumps  chan func()
 	tasks  chan func()
 	closed atomic.Bool
@@ -69,16 +67,12 @@ func (mq *Queue) run() {
 	}
 }
 func (mq *Queue) Len() int32 {
-	mq.mu.Lock()
-	defer mq.mu.Unlock()
 	return int32(len(mq.tasks) + len(mq.jumps))
 }
 func (mq *Queue) IsIdle() bool {
 	return mq.Len() == 0
 }
 func (mq *Queue) IsFull() bool {
-	mq.mu.Lock()
-	defer mq.mu.Unlock()
 	return len(mq.tasks) == cap(mq.tasks)
 }
 func (mq *Queue) IsClosed() bool {
@@ -95,11 +89,20 @@ func (mq *Queue) Close() {
 }
 
 // Push a task to the queue. If the queue is full, it will return ErrQueueIsFull.
-func (mq *Queue) Push(ctx context.Context, task func()) error {
-	mq.mu.Lock()
-	defer mq.mu.Unlock()
+// If the queue is closed, it will return ErrQueueIsStoped.
+// If the context is canceled, it will return the context error.
+// If the task is a jump task, it will be executed in jump queue.
+func (mq *Queue) Push(ctx context.Context, jump bool, task func()) error {
 	if mq.closed.Load() {
-		return ErrQueueIsStoped
+		return ErrQueueIsClosed
+	}
+	if jump {
+		select {
+		case mq.jumps <- task:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 	select {
 	case mq.tasks <- task:
@@ -107,16 +110,4 @@ func (mq *Queue) Push(ctx context.Context, task func()) error {
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-}
-
-// Jump the queue to the front . If the queue is stop or empty, it will return ErrQueueIsStoped.
-// Warning: Only one task is supported to jump the queue at the same time.
-func (mq *Queue) Jump(task func()) error {
-	mq.mu.Lock()
-	defer mq.mu.Unlock()
-	if mq.closed.Load() {
-		return ErrQueueIsStoped
-	}
-	mq.jumps <- task
-	return nil
 }

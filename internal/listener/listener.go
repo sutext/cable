@@ -18,6 +18,6 @@ type conn interface {
 	ID() *packet.Identity
 	close() error
 	isClosed() bool
-	writePacket(p packet.Packet, jump bool) error
+	writePacket(ctx context.Context, p packet.Packet, jump bool) error
 	sendQueueLength() int32
 }

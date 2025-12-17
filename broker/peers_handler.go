@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"context"
 	"encoding/json"
 	"runtime/debug"
 
@@ -22,13 +23,14 @@ func (b *broker) handleSendMessage(p *packet.Request, id *packet.Identity) (*pac
 	msg := &packet.Message{}
 	msg.ReadFrom(dec)
 	var total, success int32
+	ctx := context.Background()
 	switch flag {
 	case 0:
-		total, success = b.sendToAll(msg)
+		total, success = b.sendToAll(ctx, msg)
 	case 1:
-		total, success = b.sendToUser(target, msg)
+		total, success = b.sendToUser(ctx, target, msg)
 	case 2:
-		total, success = b.sendToChannel(target, msg)
+		total, success = b.sendToChannel(ctx, target, msg)
 	default:
 		return nil, xerr.InvalidPeerMessageFlag
 	}

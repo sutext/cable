@@ -106,7 +106,7 @@ func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.
 		c.ClosePacket(packet.NewConnack(code))
 		return
 	}
-	c.SendPacket(packet.NewConnack(packet.ConnectAccepted))
+	c.SendPacket(context.Background(), packet.NewConnack(packet.ConnectAccepted))
 	l.connMap.Set(connID, c)
 }
 func md5Hash(s string) string {
@@ -140,7 +140,7 @@ func (c *udpConn) close() error {
 func (c *udpConn) isClosed() bool {
 	return c.closed.Load()
 }
-func (c *udpConn) writePacket(p packet.Packet, jump bool) error {
+func (c *udpConn) writePacket(ctx context.Context, p packet.Packet, jump bool) error {
 	p.Set(packet.PropertyConnID, c.connID)
 	data, err := packet.Marshal(p)
 	if err != nil {

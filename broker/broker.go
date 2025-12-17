@@ -244,7 +244,7 @@ func (b *broker) KickUser(ctx context.Context, uid string) {
 	})
 }
 func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (total, success int32, err error) {
-	total, success = b.sendToAll(m)
+	total, success = b.sendToAll(ctx, m)
 	b.peers.Range(func(id string, peer *peer_client) bool {
 		if t, s, err := peer.sendMessage(ctx, m, "", 0); err == nil {
 			total += t
@@ -260,7 +260,7 @@ func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 	if uid == "" {
 		return 0, 0, xerr.InvalidUserID
 	}
-	total, success = b.sendToUser(uid, m)
+	total, success = b.sendToUser(ctx, uid, m)
 	b.peers.Range(func(id string, peer *peer_client) bool {
 		t, s, err := peer.sendMessage(ctx, m, uid, 1)
 		if err != nil {
@@ -277,7 +277,7 @@ func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Me
 	if channel == "" {
 		return 0, 0, xerr.InvalidChannel
 	}
-	total, success = b.sendToChannel(channel, m)
+	total, success = b.sendToChannel(ctx, channel, m)
 	b.peers.Range(func(id string, peer *peer_client) bool {
 		if t, s, err := peer.sendMessage(ctx, m, channel, 2); err == nil {
 			total += t
@@ -392,9 +392,9 @@ func (b *broker) kickUser(uid string) {
 		return true
 	})
 }
-func (b *broker) sendToAll(m *packet.Message) (total, success int32) {
+func (b *broker) sendToAll(ctx context.Context, m *packet.Message) (total, success int32) {
 	for _, l := range b.listeners {
-		t, s, err := l.Brodcast(m)
+		t, s, err := l.Brodcast(ctx, m)
 		total += t
 		success += s
 		if err != nil {
@@ -403,14 +403,14 @@ func (b *broker) sendToAll(m *packet.Message) (total, success int32) {
 	}
 	return total, success
 }
-func (b *broker) sendToUser(uid string, m *packet.Message) (total, success int32) {
+func (b *broker) sendToUser(ctx context.Context, uid string, m *packet.Message) (total, success int32) {
 	b.userClients.RangeKey(uid, func(cid string, net server.Network) bool {
 		total++
 		l, ok := b.listeners[net]
 		if !ok {
 			return true
 		}
-		if err := l.SendMessage(cid, m); err != nil {
+		if err := l.SendMessage(ctx, cid, m); err != nil {
 			b.logger.Error("send message to user failed", xlog.Uid(uid), xlog.Err(err))
 		} else {
 			success++
@@ -419,14 +419,14 @@ func (b *broker) sendToUser(uid string, m *packet.Message) (total, success int32
 	})
 	return total, success
 }
-func (b *broker) sendToChannel(channel string, m *packet.Message) (total, success int32) {
+func (b *broker) sendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success int32) {
 	b.channelClients.RangeKey(channel, func(cid string, net server.Network) bool {
 		total++
 		l, ok := b.listeners[net]
 		if !ok {
 			return true
 		}
-		if err := l.SendMessage(cid, m); err != nil {
+		if err := l.SendMessage(ctx, cid, m); err != nil {
 			b.logger.Error("send message to channel failed", xlog.Channel(channel), xlog.Err(err))
 		} else {
 			success++

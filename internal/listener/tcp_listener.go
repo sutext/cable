@@ -88,7 +88,7 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 		c.ClosePacket(packet.NewConnack(code))
 		return
 	}
-	c.SendPacket(packet.NewConnack(packet.ConnectAccepted))
+	c.SendPacket(context.Background(), packet.NewConnack(packet.ConnectAccepted))
 	for {
 		p, err := packet.ReadFrom(conn)
 		if err != nil {
@@ -125,26 +125,13 @@ func (c *tcpConn) close() error {
 func (c *tcpConn) isClosed() bool {
 	return c.closed.Load()
 }
-func (c *tcpConn) writePacket(p packet.Packet, jump bool) error {
+func (c *tcpConn) writePacket(ctx context.Context, p packet.Packet, jump bool) error {
 	// c.sendMeter.Mark(1)
 	data, err := packet.Marshal(p)
 	if err != nil {
 		return err
 	}
-	if jump {
-		return c.sendQueue.Jump(func() {
-			c.raw.SetWriteDeadline(time.Now().Add(c.wirteTimeout))
-			_, err := c.raw.Write(data)
-			// c.writeMeter.Mark(1)
-			if err != nil {
-				c.close()
-			}
-		})
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), c.wirteTimeout)
-	defer cancel()
-	return c.sendQueue.Push(ctx, func() {
-		c.raw.SetWriteDeadline(time.Now().Add(c.wirteTimeout))
+	return c.sendQueue.Push(ctx, jump, func() {
 		_, err := c.raw.Write(data)
 		// c.writeMeter.Mark(1)
 		if err != nil {

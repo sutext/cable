@@ -109,7 +109,7 @@ func (p *peer) createClient() client.Client {
 		client.WithRetrier(retrier),
 		client.WithHandler(p),
 		client.WithKeepAlive(time.Second*3, time.Second*60),
-		client.WithRequest(time.Second*3),
+		client.WithRequestTimeout(time.Second*3),
 		client.WithSendQueue(10240),
 	)
 }

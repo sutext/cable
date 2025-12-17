@@ -15,7 +15,7 @@ func TestQueue(t *testing.T) {
 	})
 	go func() {
 		for i := range 1000 {
-			err := mq.Push(context.Background(), func() {
+			err := mq.Push(context.Background(), false, func() {
 				time.Sleep(time.Duration(100 * time.Millisecond))
 				fmt.Println("Task", i, "done")
 			})
@@ -27,7 +27,7 @@ func TestQueue(t *testing.T) {
 	go func() {
 		for i := range 100 {
 			time.Sleep(time.Duration(1000 * time.Millisecond))
-			err := mq.Jump(func() {
+			err := mq.Push(context.Background(), true, func() {
 				fmt.Println("First Task", i, "done")
 			})
 			if err != nil {
@@ -76,7 +76,7 @@ func BenchmarkAddTask(b *testing.B) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 	for b.Loop() {
-		mq.Push(ctx, func() {
+		mq.Push(ctx, false, func() {
 			// do something
 		})
 	}
@@ -88,7 +88,7 @@ func BenchmarkAddTaskParallel(b *testing.B) {
 	defer cancel()
 	b.RunParallel(func(pb *testing.PB) {
 		for pb.Next() {
-			mq.Push(ctx, func() {
+			mq.Push(ctx, false, func() {
 				// do something
 			})
 		}
