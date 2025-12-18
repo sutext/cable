@@ -13,8 +13,8 @@ import (
 )
 
 type Server interface {
-	Top() map[string]int32
 	Serve() error
+	ConnLen() int32
 	Network() Network
 	IsActive(cid string) bool
 	KickConn(cid string) bool
@@ -38,7 +38,7 @@ type server struct {
 	pollCapacity   int32
 }
 
-func New(address string, opts ...Option) *server {
+func New(address string, opts ...Option) Server {
 	options := NewOptions(opts...)
 	s := &server{
 		logger:         options.logger,
@@ -70,24 +70,14 @@ func (s *server) Serve() error {
 	s.logger.Info("server listening", xlog.Str("address", s.address), xlog.Str("network", s.network.String()))
 	return s.listener.Listen(s.address)
 }
-func (s *server) Top() map[string]int32 {
-	top := make(map[string]int32)
-	count := 7
-	s.conns.Range(func(key string, conn *listener.Conn) bool {
-		top[key] = conn.SendQueueLength()
-		count--
-		if count == 0 {
-			return false
-		}
-		return true
-	})
-	return top
-}
 func (s *server) IsActive(cid string) bool {
 	if c, ok := s.conns.Get(cid); ok {
 		return !c.IsClosed()
 	}
 	return false
+}
+func (s *server) ConnLen() int32 {
+	return s.conns.Len()
 }
 func (s *server) KickConn(cid string) bool {
 	if c, ok := s.conns.Get(cid); ok {

@@ -14,7 +14,7 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
-type peer_client struct {
+type peerClient struct {
 	id     string
 	ip     string
 	ipmu   sync.Mutex
@@ -24,16 +24,15 @@ type peer_client struct {
 	conn   *grpc.ClientConn
 }
 
-func newPeerClient(id, ip string, broker *broker) *peer_client {
-	p := &peer_client{
+func newPeerClient(id, ip string, broker *broker) *peerClient {
+	p := &peerClient{
 		id:     id,
 		ip:     ip,
 		broker: broker,
-		logger: xlog.With("GROUP", "PEER", "peerid", id),
 	}
 	return p
 }
-func (p *peer_client) connect() {
+func (p *peerClient) connect() {
 	// Set up a connection to the server.
 	conn, err := grpc.NewClient(fmt.Sprintf("%s%s", p.ip, p.broker.peerPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -45,21 +44,21 @@ func (p *peer_client) connect() {
 	p.conn = conn
 	p.cli = protos.NewPeerServiceClient(conn)
 }
-func (p *peer_client) IsReady() bool {
+func (p *peerClient) IsReady() bool {
 	return true
 }
-func (p *peer_client) UpdateIP(ip string) {
+func (p *peerClient) UpdateIP(ip string) {
 	p.ipmu.Lock()
 	defer p.ipmu.Unlock()
 	if p.ip == ip {
 		p.connect()
 		return
 	}
-	p.logger.Warn("peer ip updated", xlog.Str("ip", ip))
+	p.broker.logger.Warn("peer ip updated", xlog.Str("ip", ip))
 	p.ip = ip
 	p.connect()
 }
-func (p *peer_client) sendMessage(ctx context.Context, m *packet.Message, target string, flag uint8) (total, success int32, err error) {
+func (p *peerClient) sendMessage(ctx context.Context, m *packet.Message, target string, flag uint8) (total, success int32, err error) {
 	data, err := coder.Marshal(m)
 	if err != nil {
 		return 0, 0, err
@@ -76,26 +75,26 @@ func (p *peer_client) sendMessage(ctx context.Context, m *packet.Message, target
 	return resp.Total, resp.Success, nil
 }
 
-func (p *peer_client) isOnline(ctx context.Context, uid string) (bool, error) {
+func (p *peerClient) isOnline(ctx context.Context, uid string) (bool, error) {
 	resp, err := p.cli.IsOnline(ctx, &protos.IsOnlineReq{Uid: uid})
 	if err != nil {
 		return false, err
 	}
 	return resp.Online, nil
 }
-func (p *peer_client) kickConn(ctx context.Context, cid string) error {
+func (p *peerClient) kickConn(ctx context.Context, cid string) error {
 	_, err := p.cli.KickConn(ctx, &protos.KickConnReq{Cid: cid})
 	return err
 }
-func (p *peer_client) kickUser(ctx context.Context, uid string) error {
+func (p *peerClient) kickUser(ctx context.Context, uid string) error {
 	_, err := p.cli.KickUser(ctx, &protos.KickUserReq{Uid: uid})
 	return err
 }
-func (p *peer_client) inspect(ctx context.Context) (*protos.InspectResp, error) {
-	return p.cli.Inspect(ctx, &protos.InspectReq{})
+func (p *peerClient) inspect(ctx context.Context) (*protos.Inspects, error) {
+	return p.cli.Inspect(ctx, &protos.Empty{})
 }
 
-func (p *peer_client) joinChannel(ctx context.Context, uid string, channels []string) (count int32, err error) {
+func (p *peerClient) joinChannel(ctx context.Context, uid string, channels []string) (count int32, err error) {
 	resp, err := p.cli.JoinChannel(ctx, &protos.ChannelReq{Uid: uid, Channels: channels})
 	if err != nil {
 		return 0, err
@@ -103,7 +102,7 @@ func (p *peer_client) joinChannel(ctx context.Context, uid string, channels []st
 	return resp.Count, nil
 }
 
-func (p *peer_client) leaveChannel(ctx context.Context, uid string, channels []string) (count int32, err error) {
+func (p *peerClient) leaveChannel(ctx context.Context, uid string, channels []string) (count int32, err error) {
 	resp, err := p.cli.LeaveChannel(ctx, &protos.ChannelReq{Uid: uid, Channels: channels})
 	if err != nil {
 		return 0, err

@@ -21,6 +21,42 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type Empty struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Empty) Reset() {
+	*x = Empty{}
+	mi := &file_broker_protos_peer_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Empty) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Empty) ProtoMessage() {}
+
+func (x *Empty) ProtoReflect() protoreflect.Message {
+	mi := &file_broker_protos_peer_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Empty.ProtoReflect.Descriptor instead.
+func (*Empty) Descriptor() ([]byte, []int) {
+	return file_broker_protos_peer_proto_rawDescGZIP(), []int{0}
+}
+
 type IsOnlineReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Uid           string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`
@@ -30,7 +66,7 @@ type IsOnlineReq struct {
 
 func (x *IsOnlineReq) Reset() {
 	*x = IsOnlineReq{}
-	mi := &file_broker_protos_peer_proto_msgTypes[0]
+	mi := &file_broker_protos_peer_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -42,7 +78,7 @@ func (x *IsOnlineReq) String() string {
 func (*IsOnlineReq) ProtoMessage() {}
 
 func (x *IsOnlineReq) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[0]
+	mi := &file_broker_protos_peer_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -55,7 +91,7 @@ func (x *IsOnlineReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IsOnlineReq.ProtoReflect.Descriptor instead.
 func (*IsOnlineReq) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{0}
+	return file_broker_protos_peer_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *IsOnlineReq) GetUid() string {
@@ -74,7 +110,7 @@ type IsOnlineResp struct {
 
 func (x *IsOnlineResp) Reset() {
 	*x = IsOnlineResp{}
-	mi := &file_broker_protos_peer_proto_msgTypes[1]
+	mi := &file_broker_protos_peer_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -86,7 +122,7 @@ func (x *IsOnlineResp) String() string {
 func (*IsOnlineResp) ProtoMessage() {}
 
 func (x *IsOnlineResp) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[1]
+	mi := &file_broker_protos_peer_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -99,7 +135,7 @@ func (x *IsOnlineResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IsOnlineResp.ProtoReflect.Descriptor instead.
 func (*IsOnlineResp) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{1}
+	return file_broker_protos_peer_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *IsOnlineResp) GetOnline() bool {
@@ -120,7 +156,7 @@ type SendMessageReq struct {
 
 func (x *SendMessageReq) Reset() {
 	*x = SendMessageReq{}
-	mi := &file_broker_protos_peer_proto_msgTypes[2]
+	mi := &file_broker_protos_peer_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -132,7 +168,7 @@ func (x *SendMessageReq) String() string {
 func (*SendMessageReq) ProtoMessage() {}
 
 func (x *SendMessageReq) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[2]
+	mi := &file_broker_protos_peer_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -145,7 +181,7 @@ func (x *SendMessageReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendMessageReq.ProtoReflect.Descriptor instead.
 func (*SendMessageReq) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{2}
+	return file_broker_protos_peer_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *SendMessageReq) GetFlag() int32 {
@@ -179,7 +215,7 @@ type SendMessageResp struct {
 
 func (x *SendMessageResp) Reset() {
 	*x = SendMessageResp{}
-	mi := &file_broker_protos_peer_proto_msgTypes[3]
+	mi := &file_broker_protos_peer_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -191,7 +227,7 @@ func (x *SendMessageResp) String() string {
 func (*SendMessageResp) ProtoMessage() {}
 
 func (x *SendMessageResp) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[3]
+	mi := &file_broker_protos_peer_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -204,7 +240,7 @@ func (x *SendMessageResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SendMessageResp.ProtoReflect.Descriptor instead.
 func (*SendMessageResp) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{3}
+	return file_broker_protos_peer_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *SendMessageResp) GetTotal() int32 {
@@ -230,7 +266,7 @@ type KickUserReq struct {
 
 func (x *KickUserReq) Reset() {
 	*x = KickUserReq{}
-	mi := &file_broker_protos_peer_proto_msgTypes[4]
+	mi := &file_broker_protos_peer_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -242,7 +278,7 @@ func (x *KickUserReq) String() string {
 func (*KickUserReq) ProtoMessage() {}
 
 func (x *KickUserReq) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[4]
+	mi := &file_broker_protos_peer_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -255,7 +291,7 @@ func (x *KickUserReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KickUserReq.ProtoReflect.Descriptor instead.
 func (*KickUserReq) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{4}
+	return file_broker_protos_peer_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *KickUserReq) GetUid() string {
@@ -274,7 +310,7 @@ type KickConnReq struct {
 
 func (x *KickConnReq) Reset() {
 	*x = KickConnReq{}
-	mi := &file_broker_protos_peer_proto_msgTypes[5]
+	mi := &file_broker_protos_peer_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -286,7 +322,7 @@ func (x *KickConnReq) String() string {
 func (*KickConnReq) ProtoMessage() {}
 
 func (x *KickConnReq) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[5]
+	mi := &file_broker_protos_peer_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -299,7 +335,7 @@ func (x *KickConnReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KickConnReq.ProtoReflect.Descriptor instead.
 func (*KickConnReq) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{5}
+	return file_broker_protos_peer_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *KickConnReq) GetCid() string {
@@ -309,66 +345,31 @@ func (x *KickConnReq) GetCid() string {
 	return ""
 }
 
-type InspectReq struct {
+type Inspects struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	UserCount     int32                  `protobuf:"varint,2,opt,name=user_count,json=userCount,proto3" json:"user_count,omitempty"`
+	ClientCount   int32                  `protobuf:"varint,3,opt,name=client_count,json=clientCount,proto3" json:"client_count,omitempty"`
+	ClusterSize   int32                  `protobuf:"varint,4,opt,name=cluster_size,json=clusterSize,proto3" json:"cluster_size,omitempty"`
+	ChannelCount  int32                  `protobuf:"varint,5,opt,name=channel_count,json=channelCount,proto3" json:"channel_count,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *InspectReq) Reset() {
-	*x = InspectReq{}
-	mi := &file_broker_protos_peer_proto_msgTypes[6]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *InspectReq) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*InspectReq) ProtoMessage() {}
-
-func (x *InspectReq) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[6]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use InspectReq.ProtoReflect.Descriptor instead.
-func (*InspectReq) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{6}
-}
-
-type PeerInspect struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
-	QueueLength   int32                  `protobuf:"varint,2,opt,name=queue_length,json=queueLength,proto3" json:"queue_length,omitempty"`
-	SendRate      float64                `protobuf:"fixed64,3,opt,name=send_rate,json=sendRate,proto3" json:"send_rate,omitempty"`
-	WriteRate     float64                `protobuf:"fixed64,4,opt,name=write_rate,json=writeRate,proto3" json:"write_rate,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PeerInspect) Reset() {
-	*x = PeerInspect{}
+func (x *Inspects) Reset() {
+	*x = Inspects{}
 	mi := &file_broker_protos_peer_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *PeerInspect) String() string {
+func (x *Inspects) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PeerInspect) ProtoMessage() {}
+func (*Inspects) ProtoMessage() {}
 
-func (x *PeerInspect) ProtoReflect() protoreflect.Message {
+func (x *Inspects) ProtoReflect() protoreflect.Message {
 	mi := &file_broker_protos_peer_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -380,143 +381,42 @@ func (x *PeerInspect) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PeerInspect.ProtoReflect.Descriptor instead.
-func (*PeerInspect) Descriptor() ([]byte, []int) {
+// Deprecated: Use Inspects.ProtoReflect.Descriptor instead.
+func (*Inspects) Descriptor() ([]byte, []int) {
 	return file_broker_protos_peer_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *PeerInspect) GetStatus() string {
-	if x != nil {
-		return x.Status
-	}
-	return ""
-}
-
-func (x *PeerInspect) GetQueueLength() int32 {
-	if x != nil {
-		return x.QueueLength
-	}
-	return 0
-}
-
-func (x *PeerInspect) GetSendRate() float64 {
-	if x != nil {
-		return x.SendRate
-	}
-	return 0
-}
-
-func (x *PeerInspect) GetWriteRate() float64 {
-	if x != nil {
-		return x.WriteRate
-	}
-	return 0
-}
-
-type InspectResp struct {
-	state         protoimpl.MessageState  `protogen:"open.v1"`
-	Id            string                  `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Peers         map[string]*PeerInspect `protobuf:"bytes,2,rep,name=peers,proto3" json:"peers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	TopConns      map[string]int32        `protobuf:"bytes,3,rep,name=topConns,proto3" json:"topConns,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	TopPeers      map[string]int32        `protobuf:"bytes,4,rep,name=topPeers,proto3" json:"topPeers,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	UserCount     int32                   `protobuf:"varint,5,opt,name=user_count,json=userCount,proto3" json:"user_count,omitempty"`
-	SendRate      float64                 `protobuf:"fixed64,6,opt,name=send_rate,json=sendRate,proto3" json:"send_rate,omitempty"`
-	WriteRate     float64                 `protobuf:"fixed64,7,opt,name=write_rate,json=writeRate,proto3" json:"write_rate,omitempty"`
-	ClientCount   int32                   `protobuf:"varint,8,opt,name=client_count,json=clientCount,proto3" json:"client_count,omitempty"`
-	ClusterSize   int32                   `protobuf:"varint,9,opt,name=cluster_size,json=clusterSize,proto3" json:"cluster_size,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *InspectResp) Reset() {
-	*x = InspectResp{}
-	mi := &file_broker_protos_peer_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *InspectResp) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*InspectResp) ProtoMessage() {}
-
-func (x *InspectResp) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[8]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use InspectResp.ProtoReflect.Descriptor instead.
-func (*InspectResp) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *InspectResp) GetId() string {
+func (x *Inspects) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-func (x *InspectResp) GetPeers() map[string]*PeerInspect {
-	if x != nil {
-		return x.Peers
-	}
-	return nil
-}
-
-func (x *InspectResp) GetTopConns() map[string]int32 {
-	if x != nil {
-		return x.TopConns
-	}
-	return nil
-}
-
-func (x *InspectResp) GetTopPeers() map[string]int32 {
-	if x != nil {
-		return x.TopPeers
-	}
-	return nil
-}
-
-func (x *InspectResp) GetUserCount() int32 {
+func (x *Inspects) GetUserCount() int32 {
 	if x != nil {
 		return x.UserCount
 	}
 	return 0
 }
 
-func (x *InspectResp) GetSendRate() float64 {
-	if x != nil {
-		return x.SendRate
-	}
-	return 0
-}
-
-func (x *InspectResp) GetWriteRate() float64 {
-	if x != nil {
-		return x.WriteRate
-	}
-	return 0
-}
-
-func (x *InspectResp) GetClientCount() int32 {
+func (x *Inspects) GetClientCount() int32 {
 	if x != nil {
 		return x.ClientCount
 	}
 	return 0
 }
 
-func (x *InspectResp) GetClusterSize() int32 {
+func (x *Inspects) GetClusterSize() int32 {
 	if x != nil {
 		return x.ClusterSize
+	}
+	return 0
+}
+
+func (x *Inspects) GetChannelCount() int32 {
+	if x != nil {
+		return x.ChannelCount
 	}
 	return 0
 }
@@ -531,7 +431,7 @@ type ChannelReq struct {
 
 func (x *ChannelReq) Reset() {
 	*x = ChannelReq{}
-	mi := &file_broker_protos_peer_proto_msgTypes[9]
+	mi := &file_broker_protos_peer_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -543,7 +443,7 @@ func (x *ChannelReq) String() string {
 func (*ChannelReq) ProtoMessage() {}
 
 func (x *ChannelReq) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[9]
+	mi := &file_broker_protos_peer_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -556,7 +456,7 @@ func (x *ChannelReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChannelReq.ProtoReflect.Descriptor instead.
 func (*ChannelReq) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{9}
+	return file_broker_protos_peer_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ChannelReq) GetUid() string {
@@ -582,7 +482,7 @@ type ChannelResp struct {
 
 func (x *ChannelResp) Reset() {
 	*x = ChannelResp{}
-	mi := &file_broker_protos_peer_proto_msgTypes[10]
+	mi := &file_broker_protos_peer_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -594,7 +494,7 @@ func (x *ChannelResp) String() string {
 func (*ChannelResp) ProtoMessage() {}
 
 func (x *ChannelResp) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[10]
+	mi := &file_broker_protos_peer_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -607,7 +507,7 @@ func (x *ChannelResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChannelResp.ProtoReflect.Descriptor instead.
 func (*ChannelResp) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{10}
+	return file_broker_protos_peer_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ChannelResp) GetCount() int32 {
@@ -617,47 +517,12 @@ func (x *ChannelResp) GetCount() int32 {
 	return 0
 }
 
-type EmptyResp struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *EmptyResp) Reset() {
-	*x = EmptyResp{}
-	mi := &file_broker_protos_peer_proto_msgTypes[11]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *EmptyResp) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*EmptyResp) ProtoMessage() {}
-
-func (x *EmptyResp) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[11]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use EmptyResp.ProtoReflect.Descriptor instead.
-func (*EmptyResp) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{11}
-}
-
 var File_broker_protos_peer_proto protoreflect.FileDescriptor
 
 const file_broker_protos_peer_proto_rawDesc = "" +
 	"\n" +
-	"\x18broker/protos/peer.proto\x12\x06protos\"\x1f\n" +
+	"\x18broker/protos/peer.proto\x12\x06protos\"\a\n" +
+	"\x05Empty\"\x1f\n" +
 	"\vIsOnlineReq\x12\x10\n" +
 	"\x03uid\x18\x01 \x01(\tR\x03uid\"&\n" +
 	"\fIsOnlineResp\x12\x16\n" +
@@ -672,50 +537,26 @@ const file_broker_protos_peer_proto_rawDesc = "" +
 	"\vKickUserReq\x12\x10\n" +
 	"\x03uid\x18\x01 \x01(\tR\x03uid\"\x1f\n" +
 	"\vKickConnReq\x12\x10\n" +
-	"\x03cid\x18\x01 \x01(\tR\x03cid\"\f\n" +
+	"\x03cid\x18\x01 \x01(\tR\x03cid\"\xa4\x01\n" +
+	"\bInspects\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
-	"InspectReq\"\x84\x01\n" +
-	"\vPeerInspect\x12\x16\n" +
-	"\x06status\x18\x01 \x01(\tR\x06status\x12!\n" +
-	"\fqueue_length\x18\x02 \x01(\x05R\vqueueLength\x12\x1b\n" +
-	"\tsend_rate\x18\x03 \x01(\x01R\bsendRate\x12\x1d\n" +
-	"\n" +
-	"write_rate\x18\x04 \x01(\x01R\twriteRate\"\xbb\x04\n" +
-	"\vInspectResp\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x124\n" +
-	"\x05peers\x18\x02 \x03(\v2\x1e.protos.InspectResp.PeersEntryR\x05peers\x12=\n" +
-	"\btopConns\x18\x03 \x03(\v2!.protos.InspectResp.TopConnsEntryR\btopConns\x12=\n" +
-	"\btopPeers\x18\x04 \x03(\v2!.protos.InspectResp.TopPeersEntryR\btopPeers\x12\x1d\n" +
-	"\n" +
-	"user_count\x18\x05 \x01(\x05R\tuserCount\x12\x1b\n" +
-	"\tsend_rate\x18\x06 \x01(\x01R\bsendRate\x12\x1d\n" +
-	"\n" +
-	"write_rate\x18\a \x01(\x01R\twriteRate\x12!\n" +
-	"\fclient_count\x18\b \x01(\x05R\vclientCount\x12!\n" +
-	"\fcluster_size\x18\t \x01(\x05R\vclusterSize\x1aM\n" +
-	"\n" +
-	"PeersEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12)\n" +
-	"\x05value\x18\x02 \x01(\v2\x13.protos.PeerInspectR\x05value:\x028\x01\x1a;\n" +
-	"\rTopConnsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a;\n" +
-	"\rTopPeersEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\":\n" +
+	"user_count\x18\x02 \x01(\x05R\tuserCount\x12!\n" +
+	"\fclient_count\x18\x03 \x01(\x05R\vclientCount\x12!\n" +
+	"\fcluster_size\x18\x04 \x01(\x05R\vclusterSize\x12#\n" +
+	"\rchannel_count\x18\x05 \x01(\x05R\fchannelCount\":\n" +
 	"\n" +
 	"ChannelReq\x12\x10\n" +
 	"\x03uid\x18\x01 \x01(\tR\x03uid\x12\x1a\n" +
 	"\bchannels\x18\x02 \x03(\tR\bchannels\"#\n" +
 	"\vChannelResp\x12\x14\n" +
-	"\x05count\x18\x01 \x01(\x05R\x05count\"\v\n" +
-	"\tEmptyResp2\x9f\x03\n" +
-	"\vPeerService\x127\n" +
-	"\bIsOnline\x12\x13.protos.IsOnlineReq\x1a\x14.protos.IsOnlineResp\"\x00\x12@\n" +
-	"\vSendMessage\x12\x16.protos.SendMessageReq\x1a\x17.protos.SendMessageResp\"\x00\x124\n" +
-	"\bKickUser\x12\x13.protos.KickUserReq\x1a\x11.protos.EmptyResp\"\x00\x124\n" +
-	"\bKickConn\x12\x13.protos.KickConnReq\x1a\x11.protos.EmptyResp\"\x00\x124\n" +
-	"\aInspect\x12\x12.protos.InspectReq\x1a\x13.protos.InspectResp\"\x00\x128\n" +
+	"\x05count\x18\x01 \x01(\x05R\x05count2\x8f\x03\n" +
+	"\vPeerService\x12,\n" +
+	"\aInspect\x12\r.protos.Empty\x1a\x10.protos.Inspects\"\x00\x127\n" +
+	"\bIsOnline\x12\x13.protos.IsOnlineReq\x1a\x14.protos.IsOnlineResp\"\x00\x120\n" +
+	"\bKickUser\x12\x13.protos.KickUserReq\x1a\r.protos.Empty\"\x00\x120\n" +
+	"\bKickConn\x12\x13.protos.KickConnReq\x1a\r.protos.Empty\"\x00\x12@\n" +
+	"\vSendMessage\x12\x16.protos.SendMessageReq\x1a\x17.protos.SendMessageResp\"\x00\x128\n" +
 	"\vJoinChannel\x12\x12.protos.ChannelReq\x1a\x13.protos.ChannelResp\"\x00\x129\n" +
 	"\fLeaveChannel\x12\x12.protos.ChannelReq\x1a\x13.protos.ChannelResp\"\x00B\n" +
 	"Z\b./protosb\x06proto3"
@@ -732,48 +573,39 @@ func file_broker_protos_peer_proto_rawDescGZIP() []byte {
 	return file_broker_protos_peer_proto_rawDescData
 }
 
-var file_broker_protos_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_broker_protos_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_broker_protos_peer_proto_goTypes = []any{
-	(*IsOnlineReq)(nil),     // 0: protos.IsOnlineReq
-	(*IsOnlineResp)(nil),    // 1: protos.IsOnlineResp
-	(*SendMessageReq)(nil),  // 2: protos.SendMessageReq
-	(*SendMessageResp)(nil), // 3: protos.SendMessageResp
-	(*KickUserReq)(nil),     // 4: protos.KickUserReq
-	(*KickConnReq)(nil),     // 5: protos.KickConnReq
-	(*InspectReq)(nil),      // 6: protos.InspectReq
-	(*PeerInspect)(nil),     // 7: protos.PeerInspect
-	(*InspectResp)(nil),     // 8: protos.InspectResp
-	(*ChannelReq)(nil),      // 9: protos.ChannelReq
-	(*ChannelResp)(nil),     // 10: protos.ChannelResp
-	(*EmptyResp)(nil),       // 11: protos.EmptyResp
-	nil,                     // 12: protos.InspectResp.PeersEntry
-	nil,                     // 13: protos.InspectResp.TopConnsEntry
-	nil,                     // 14: protos.InspectResp.TopPeersEntry
+	(*Empty)(nil),           // 0: protos.Empty
+	(*IsOnlineReq)(nil),     // 1: protos.IsOnlineReq
+	(*IsOnlineResp)(nil),    // 2: protos.IsOnlineResp
+	(*SendMessageReq)(nil),  // 3: protos.SendMessageReq
+	(*SendMessageResp)(nil), // 4: protos.SendMessageResp
+	(*KickUserReq)(nil),     // 5: protos.KickUserReq
+	(*KickConnReq)(nil),     // 6: protos.KickConnReq
+	(*Inspects)(nil),        // 7: protos.Inspects
+	(*ChannelReq)(nil),      // 8: protos.ChannelReq
+	(*ChannelResp)(nil),     // 9: protos.ChannelResp
 }
 var file_broker_protos_peer_proto_depIdxs = []int32{
-	12, // 0: protos.InspectResp.peers:type_name -> protos.InspectResp.PeersEntry
-	13, // 1: protos.InspectResp.topConns:type_name -> protos.InspectResp.TopConnsEntry
-	14, // 2: protos.InspectResp.topPeers:type_name -> protos.InspectResp.TopPeersEntry
-	7,  // 3: protos.InspectResp.PeersEntry.value:type_name -> protos.PeerInspect
-	0,  // 4: protos.PeerService.IsOnline:input_type -> protos.IsOnlineReq
-	2,  // 5: protos.PeerService.SendMessage:input_type -> protos.SendMessageReq
-	4,  // 6: protos.PeerService.KickUser:input_type -> protos.KickUserReq
-	5,  // 7: protos.PeerService.KickConn:input_type -> protos.KickConnReq
-	6,  // 8: protos.PeerService.Inspect:input_type -> protos.InspectReq
-	9,  // 9: protos.PeerService.JoinChannel:input_type -> protos.ChannelReq
-	9,  // 10: protos.PeerService.LeaveChannel:input_type -> protos.ChannelReq
-	1,  // 11: protos.PeerService.IsOnline:output_type -> protos.IsOnlineResp
-	3,  // 12: protos.PeerService.SendMessage:output_type -> protos.SendMessageResp
-	11, // 13: protos.PeerService.KickUser:output_type -> protos.EmptyResp
-	11, // 14: protos.PeerService.KickConn:output_type -> protos.EmptyResp
-	8,  // 15: protos.PeerService.Inspect:output_type -> protos.InspectResp
-	10, // 16: protos.PeerService.JoinChannel:output_type -> protos.ChannelResp
-	10, // 17: protos.PeerService.LeaveChannel:output_type -> protos.ChannelResp
-	11, // [11:18] is the sub-list for method output_type
-	4,  // [4:11] is the sub-list for method input_type
-	4,  // [4:4] is the sub-list for extension type_name
-	4,  // [4:4] is the sub-list for extension extendee
-	0,  // [0:4] is the sub-list for field type_name
+	0, // 0: protos.PeerService.Inspect:input_type -> protos.Empty
+	1, // 1: protos.PeerService.IsOnline:input_type -> protos.IsOnlineReq
+	5, // 2: protos.PeerService.KickUser:input_type -> protos.KickUserReq
+	6, // 3: protos.PeerService.KickConn:input_type -> protos.KickConnReq
+	3, // 4: protos.PeerService.SendMessage:input_type -> protos.SendMessageReq
+	8, // 5: protos.PeerService.JoinChannel:input_type -> protos.ChannelReq
+	8, // 6: protos.PeerService.LeaveChannel:input_type -> protos.ChannelReq
+	7, // 7: protos.PeerService.Inspect:output_type -> protos.Inspects
+	2, // 8: protos.PeerService.IsOnline:output_type -> protos.IsOnlineResp
+	0, // 9: protos.PeerService.KickUser:output_type -> protos.Empty
+	0, // 10: protos.PeerService.KickConn:output_type -> protos.Empty
+	4, // 11: protos.PeerService.SendMessage:output_type -> protos.SendMessageResp
+	9, // 12: protos.PeerService.JoinChannel:output_type -> protos.ChannelResp
+	9, // 13: protos.PeerService.LeaveChannel:output_type -> protos.ChannelResp
+	7, // [7:14] is the sub-list for method output_type
+	0, // [0:7] is the sub-list for method input_type
+	0, // [0:0] is the sub-list for extension type_name
+	0, // [0:0] is the sub-list for extension extendee
+	0, // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_broker_protos_peer_proto_init() }
@@ -787,7 +619,7 @@ func file_broker_protos_peer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_broker_protos_peer_proto_rawDesc), len(file_broker_protos_peer_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

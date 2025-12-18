@@ -19,5 +19,4 @@ type conn interface {
 	close() error
 	isClosed() bool
 	writePacket(ctx context.Context, p packet.Packet, jump bool) error
-	sendQueueLength() int32
 }

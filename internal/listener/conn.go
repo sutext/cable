@@ -36,9 +36,6 @@ func (c *Conn) IsIdle() bool {
 func (c *Conn) IsClosed() bool {
 	return c.raw.isClosed()
 }
-func (c *Conn) SendQueueLength() int32 {
-	return c.raw.sendQueueLength()
-}
 func (c *Conn) SendMessage(ctx context.Context, p *packet.Message) error {
 	if p.Qos == packet.MessageQos0 {
 		return c.SendPacket(ctx, p)

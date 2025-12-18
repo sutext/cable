@@ -84,9 +84,9 @@ func (t PacketType) String() string {
 type Property uint8
 
 const (
-	PropertyConnID  Property = 0
-	PropertyUserID  Property = 1
-	PropertyChannel Property = 2
+	PropertyConnID  Property = 1
+	PropertyUserID  Property = 2
+	PropertyChannel Property = 3
 )
 
 type Properties interface {

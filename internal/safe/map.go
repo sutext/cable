@@ -2,15 +2,22 @@ package safe
 
 import (
 	"sync"
+	"sync/atomic"
 )
 
 // Map is a thread-safe map.
 type Map[K comparable, V any] struct {
 	m sync.Map
+	l atomic.Int32
 }
 
+func (m *Map[K, V]) Len() int32 {
+	return m.l.Load()
+}
 func (m *Map[K, V]) Set(key K, value V) {
-	m.m.Swap(key, value)
+	if _, loaded := m.m.Swap(key, value); !loaded {
+		m.l.Add(1)
+	}
 }
 func (m *Map[K, V]) Get(key K) (actual V, loaded bool) {
 	if value, ok := m.m.Load(key); ok {
@@ -18,10 +25,14 @@ func (m *Map[K, V]) Get(key K) (actual V, loaded bool) {
 	}
 	return actual, false
 }
+
+// Swap swaps the value for a key and returns the previous value if any.
+// The loaded result reports whether the key was present.
 func (m *Map[K, V]) Swap(key K, value V) (actual V, loaded bool) {
 	if actual, loaded := m.m.Swap(key, value); loaded {
 		return actual.(V), true
 	}
+	m.l.Add(1)
 	return actual, loaded
 }
 func (m *Map[K, V]) Range(f func(key K, value V) bool) {
@@ -30,7 +41,9 @@ func (m *Map[K, V]) Range(f func(key K, value V) bool) {
 	})
 }
 func (m *Map[K, V]) Delete(key K) {
-	m.m.LoadAndDelete(key)
+	if _, loaded := m.m.LoadAndDelete(key); loaded {
+		m.l.Add(-1)
+	}
 }
 
 // GetOrSet returns the existing value for the key if present.
@@ -40,5 +53,6 @@ func (m *Map[K, V]) GetOrSet(key K, value V) (actual V, loaded bool) {
 	if actual, loaded := m.m.LoadOrStore(key, value); loaded {
 		return actual.(V), true
 	}
+	m.l.Add(1)
 	return value, false
 }

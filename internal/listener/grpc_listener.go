@@ -137,9 +137,6 @@ func (c *grpcConn) writePacket(ctx context.Context, p packet.Packet, jump bool) 
 	}
 	return err
 }
-func (c *grpcConn) sendQueueLength() int32 {
-	return 0
-}
 func newGRPCConn(id *packet.Identity, raw grpc.BidiStreamingServer[pb.Bytes, pb.Bytes], connID string) *grpcConn {
 	return &grpcConn{
 		id:     id,

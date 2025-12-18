@@ -16,30 +16,7 @@ func TestMap(t *testing.T) {
 		t.Error("Expected nil, got", foo)
 	}
 }
-func TestXMap(t *testing.T) {
-	m := XMap[string, string]{}
-	m.Set("foo", "bar")
-	if bar, ok := m.Get("foo"); ok && bar != "bar" {
-		t.Error("Expected 'bar', got", bar)
-	}
-	if m.Len() != 1 {
-		t.Error("Expected 1, got", m.Len())
-	}
-	m.Delete("foo")
-	if m.Len() != 0 {
-		t.Error("Expected 0, got", m.Len())
-	}
-	if foo, ok := m.Get("foo"); ok {
-		t.Error("Expected nil, got", foo)
-	}
-}
 func BenchmarkMap(b *testing.B) {
-	b.Run("safe.XMap", func(b *testing.B) {
-		m := XMap[string, string]{}
-		for b.Loop() {
-			m.Set("foo", "bar")
-		}
-	})
 	b.Run("safe.Map", func(b *testing.B) {
 		m := Map[string, string]{}
 		for b.Loop() {
@@ -63,15 +40,6 @@ func BenchmarkKeyMap(b *testing.B) {
 			m.DeleteKey("foo", "bar")
 		}
 
-	})
-	b.Run("sync.XKeyMap", func(b *testing.B) {
-		m := XKeyMap[string]{}
-		for b.Loop() {
-			m.SetKey("foo", "bar", "baz")
-			m.SetKey("foo", "bar1", "baz1")
-			m.GetKey("foo", "bar")
-			m.DeleteKey("foo", "bar")
-		}
 	})
 }
 func BenchmarkAtomic(b *testing.B) {

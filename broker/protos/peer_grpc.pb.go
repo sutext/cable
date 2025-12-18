@@ -19,11 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
+	PeerService_Inspect_FullMethodName      = "/protos.PeerService/Inspect"
 	PeerService_IsOnline_FullMethodName     = "/protos.PeerService/IsOnline"
-	PeerService_SendMessage_FullMethodName  = "/protos.PeerService/SendMessage"
 	PeerService_KickUser_FullMethodName     = "/protos.PeerService/KickUser"
 	PeerService_KickConn_FullMethodName     = "/protos.PeerService/KickConn"
-	PeerService_Inspect_FullMethodName      = "/protos.PeerService/Inspect"
+	PeerService_SendMessage_FullMethodName  = "/protos.PeerService/SendMessage"
 	PeerService_JoinChannel_FullMethodName  = "/protos.PeerService/JoinChannel"
 	PeerService_LeaveChannel_FullMethodName = "/protos.PeerService/LeaveChannel"
 )
@@ -34,11 +34,11 @@ const (
 //
 // The greeting service definition.
 type PeerServiceClient interface {
+	Inspect(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Inspects, error)
 	IsOnline(ctx context.Context, in *IsOnlineReq, opts ...grpc.CallOption) (*IsOnlineResp, error)
+	KickUser(ctx context.Context, in *KickUserReq, opts ...grpc.CallOption) (*Empty, error)
+	KickConn(ctx context.Context, in *KickConnReq, opts ...grpc.CallOption) (*Empty, error)
 	SendMessage(ctx context.Context, in *SendMessageReq, opts ...grpc.CallOption) (*SendMessageResp, error)
-	KickUser(ctx context.Context, in *KickUserReq, opts ...grpc.CallOption) (*EmptyResp, error)
-	KickConn(ctx context.Context, in *KickConnReq, opts ...grpc.CallOption) (*EmptyResp, error)
-	Inspect(ctx context.Context, in *InspectReq, opts ...grpc.CallOption) (*InspectResp, error)
 	JoinChannel(ctx context.Context, in *ChannelReq, opts ...grpc.CallOption) (*ChannelResp, error)
 	LeaveChannel(ctx context.Context, in *ChannelReq, opts ...grpc.CallOption) (*ChannelResp, error)
 }
@@ -51,6 +51,16 @@ func NewPeerServiceClient(cc grpc.ClientConnInterface) PeerServiceClient {
 	return &peerServiceClient{cc}
 }
 
+func (c *peerServiceClient) Inspect(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Inspects, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Inspects)
+	err := c.cc.Invoke(ctx, PeerService_Inspect_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *peerServiceClient) IsOnline(ctx context.Context, in *IsOnlineReq, opts ...grpc.CallOption) (*IsOnlineResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(IsOnlineResp)
@@ -61,19 +71,9 @@ func (c *peerServiceClient) IsOnline(ctx context.Context, in *IsOnlineReq, opts 
 	return out, nil
 }
 
-func (c *peerServiceClient) SendMessage(ctx context.Context, in *SendMessageReq, opts ...grpc.CallOption) (*SendMessageResp, error) {
+func (c *peerServiceClient) KickUser(ctx context.Context, in *KickUserReq, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SendMessageResp)
-	err := c.cc.Invoke(ctx, PeerService_SendMessage_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *peerServiceClient) KickUser(ctx context.Context, in *KickUserReq, opts ...grpc.CallOption) (*EmptyResp, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(EmptyResp)
+	out := new(Empty)
 	err := c.cc.Invoke(ctx, PeerService_KickUser_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -81,9 +81,9 @@ func (c *peerServiceClient) KickUser(ctx context.Context, in *KickUserReq, opts 
 	return out, nil
 }
 
-func (c *peerServiceClient) KickConn(ctx context.Context, in *KickConnReq, opts ...grpc.CallOption) (*EmptyResp, error) {
+func (c *peerServiceClient) KickConn(ctx context.Context, in *KickConnReq, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(EmptyResp)
+	out := new(Empty)
 	err := c.cc.Invoke(ctx, PeerService_KickConn_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -91,10 +91,10 @@ func (c *peerServiceClient) KickConn(ctx context.Context, in *KickConnReq, opts 
 	return out, nil
 }
 
-func (c *peerServiceClient) Inspect(ctx context.Context, in *InspectReq, opts ...grpc.CallOption) (*InspectResp, error) {
+func (c *peerServiceClient) SendMessage(ctx context.Context, in *SendMessageReq, opts ...grpc.CallOption) (*SendMessageResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(InspectResp)
-	err := c.cc.Invoke(ctx, PeerService_Inspect_FullMethodName, in, out, cOpts...)
+	out := new(SendMessageResp)
+	err := c.cc.Invoke(ctx, PeerService_SendMessage_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -127,11 +127,11 @@ func (c *peerServiceClient) LeaveChannel(ctx context.Context, in *ChannelReq, op
 //
 // The greeting service definition.
 type PeerServiceServer interface {
+	Inspect(context.Context, *Empty) (*Inspects, error)
 	IsOnline(context.Context, *IsOnlineReq) (*IsOnlineResp, error)
+	KickUser(context.Context, *KickUserReq) (*Empty, error)
+	KickConn(context.Context, *KickConnReq) (*Empty, error)
 	SendMessage(context.Context, *SendMessageReq) (*SendMessageResp, error)
-	KickUser(context.Context, *KickUserReq) (*EmptyResp, error)
-	KickConn(context.Context, *KickConnReq) (*EmptyResp, error)
-	Inspect(context.Context, *InspectReq) (*InspectResp, error)
 	JoinChannel(context.Context, *ChannelReq) (*ChannelResp, error)
 	LeaveChannel(context.Context, *ChannelReq) (*ChannelResp, error)
 	mustEmbedUnimplementedPeerServiceServer()
@@ -144,20 +144,20 @@ type PeerServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedPeerServiceServer struct{}
 
+func (UnimplementedPeerServiceServer) Inspect(context.Context, *Empty) (*Inspects, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Inspect not implemented")
+}
 func (UnimplementedPeerServiceServer) IsOnline(context.Context, *IsOnlineReq) (*IsOnlineResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method IsOnline not implemented")
 }
-func (UnimplementedPeerServiceServer) SendMessage(context.Context, *SendMessageReq) (*SendMessageResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SendMessage not implemented")
-}
-func (UnimplementedPeerServiceServer) KickUser(context.Context, *KickUserReq) (*EmptyResp, error) {
+func (UnimplementedPeerServiceServer) KickUser(context.Context, *KickUserReq) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method KickUser not implemented")
 }
-func (UnimplementedPeerServiceServer) KickConn(context.Context, *KickConnReq) (*EmptyResp, error) {
+func (UnimplementedPeerServiceServer) KickConn(context.Context, *KickConnReq) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method KickConn not implemented")
 }
-func (UnimplementedPeerServiceServer) Inspect(context.Context, *InspectReq) (*InspectResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Inspect not implemented")
+func (UnimplementedPeerServiceServer) SendMessage(context.Context, *SendMessageReq) (*SendMessageResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendMessage not implemented")
 }
 func (UnimplementedPeerServiceServer) JoinChannel(context.Context, *ChannelReq) (*ChannelResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method JoinChannel not implemented")
@@ -186,6 +186,24 @@ func RegisterPeerServiceServer(s grpc.ServiceRegistrar, srv PeerServiceServer) {
 	s.RegisterService(&PeerService_ServiceDesc, srv)
 }
 
+func _PeerService_Inspect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PeerServiceServer).Inspect(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PeerService_Inspect_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PeerServiceServer).Inspect(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PeerService_IsOnline_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(IsOnlineReq)
 	if err := dec(in); err != nil {
@@ -200,24 +218,6 @@ func _PeerService_IsOnline_Handler(srv interface{}, ctx context.Context, dec fun
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PeerServiceServer).IsOnline(ctx, req.(*IsOnlineReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _PeerService_SendMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SendMessageReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PeerServiceServer).SendMessage(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: PeerService_SendMessage_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PeerServiceServer).SendMessage(ctx, req.(*SendMessageReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -258,20 +258,20 @@ func _PeerService_KickConn_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PeerService_Inspect_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(InspectReq)
+func _PeerService_SendMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SendMessageReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PeerServiceServer).Inspect(ctx, in)
+		return srv.(PeerServiceServer).SendMessage(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PeerService_Inspect_FullMethodName,
+		FullMethod: PeerService_SendMessage_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PeerServiceServer).Inspect(ctx, req.(*InspectReq))
+		return srv.(PeerServiceServer).SendMessage(ctx, req.(*SendMessageReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -320,12 +320,12 @@ var PeerService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*PeerServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "IsOnline",
-			Handler:    _PeerService_IsOnline_Handler,
+			MethodName: "Inspect",
+			Handler:    _PeerService_Inspect_Handler,
 		},
 		{
-			MethodName: "SendMessage",
-			Handler:    _PeerService_SendMessage_Handler,
+			MethodName: "IsOnline",
+			Handler:    _PeerService_IsOnline_Handler,
 		},
 		{
 			MethodName: "KickUser",
@@ -336,8 +336,8 @@ var PeerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PeerService_KickConn_Handler,
 		},
 		{
-			MethodName: "Inspect",
-			Handler:    _PeerService_Inspect_Handler,
+			MethodName: "SendMessage",
+			Handler:    _PeerService_SendMessage_Handler,
 		},
 		{
 			MethodName: "JoinChannel",

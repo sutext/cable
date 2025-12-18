@@ -20,7 +20,7 @@ type BrokerID string
 type Broker interface {
 	Start() error
 	Shutdown(ctx context.Context) error
-	Inspects() ([]*protos.InspectResp, error)
+	Inspects() ([]*protos.Inspects, error)
 	IsOnline(ctx context.Context, uid string) (ok bool)
 	KickConn(ctx context.Context, cid string)
 	KickUser(ctx context.Context, uid string)
@@ -33,19 +33,18 @@ type Broker interface {
 }
 type broker struct {
 	id             string
-	peers          safe.XMap[string, *peer_client]
+	peers          safe.Map[string, *peerClient]
 	logger         *xlog.Logger
 	handler        Handler
 	muticast       muticast.Muticast
 	listeners      map[server.Network]server.Server
 	peerPort       string
-	peerServer     *PeerServer
+	peerServer     *peerServer
 	httpServer     *http.Server
-	peerHandlers   safe.Map[string, server.RequestHandler]
-	userHandlers   safe.Map[string, server.RequestHandler]
-	userClients    safe.XKeyMap[server.Network] //map[uid]map[cid]net
-	channelClients safe.XKeyMap[server.Network] //map[channel]map[cid]net
-	clientChannels safe.XKeyMap[server.Network] //map[cid]map[channel]net
+	userClients    safe.KeyMap[server.Network] //map[uid]map[cid]net
+	channelClients safe.KeyMap[server.Network] //map[channel]map[cid]net
+	clientChannels safe.KeyMap[server.Network] //map[cid]map[channel]net
+	requstHandlers safe.Map[string, server.RequestHandler]
 }
 
 func NewBroker(opts ...Option) Broker {
@@ -80,21 +79,7 @@ func NewBroker(opts ...Option) Broker {
 		)
 	}
 	b.peerPort = options.peerPort
-	b.peerServer = NewPeerServer(b, b.peerPort)
-	// b.peerServer = server.New(options.peerPort,
-	// 	server.WithLogger(xlog.With("GROUP", "PEER")),
-	// 	server.WithRequest(b.onPeerRequest),
-	// 	server.WithRecvPool(10240, 512),
-	// 	server.WithSendQueue(10240),
-	// )
-	b.handlePeer("Inspect", b.handlePeerInspect)
-	b.handlePeer("KickUser", b.handleKickUser)
-	b.handlePeer("IsOnline", b.handleIsOnline)
-	b.handlePeer("KickConn", b.handleKickConn)
-	b.handlePeer("FreeMemory", b.handlePeerFreeMemory)
-	b.handlePeer("SendMessage", b.handleSendMessage)
-	b.handlePeer("JoinChannel", b.handleJoinChannel)
-	b.handlePeer("LeaveChannel", b.handleLeaveChannel)
+	b.peerServer = newPeerServer(b, b.peerPort)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/join", b.handleJoin)
 	mux.HandleFunc("/inspect", b.handleInspect)
@@ -128,7 +113,6 @@ func (b *broker) addPeer(id, ip string) {
 	}
 	b.logger.Debug("add peer", xlog.Peer(id))
 	b.peers.Set(id, peer)
-	// go peer.connect()
 	peer.connect()
 }
 func (b *broker) Start() error {
@@ -179,7 +163,7 @@ func (b *broker) syncBroker() {
 		strs := strings.Split(idip, ":")
 		b.addPeer(strs[0], strs[1])
 	}
-	b.peers.Range(func(id string, peer *peer_client) bool {
+	b.peers.Range(func(id string, peer *peerClient) bool {
 		if _, ok := m[id+":"+peer.ip]; !ok {
 			b.delPeer(id)
 		}
@@ -211,7 +195,7 @@ func (b *broker) IsOnline(ctx context.Context, uid string) (online bool) {
 	if online = b.isOnline(uid); online {
 		return true
 	}
-	b.peers.Range(func(id string, peer *peer_client) bool {
+	b.peers.Range(func(id string, peer *peerClient) bool {
 		online, err := peer.isOnline(ctx, uid)
 		if err != nil {
 			b.logger.Error("check online from peer failed", xlog.Str("peer", id), xlog.Uid(uid), xlog.Err(err))
@@ -227,7 +211,7 @@ func (b *broker) IsOnline(ctx context.Context, uid string) (online bool) {
 }
 func (b *broker) KickConn(ctx context.Context, cid string) {
 	b.kickConn(cid)
-	b.peers.Range(func(id string, peer *peer_client) bool {
+	b.peers.Range(func(id string, peer *peerClient) bool {
 		if err := peer.kickConn(ctx, cid); err != nil {
 			b.logger.Error("kick conn from peer failed", xlog.Peer(id), xlog.Cid(cid), xlog.Err(err))
 		}
@@ -236,7 +220,7 @@ func (b *broker) KickConn(ctx context.Context, cid string) {
 }
 func (b *broker) KickUser(ctx context.Context, uid string) {
 	b.kickUser(uid)
-	b.peers.Range(func(id string, peer *peer_client) bool {
+	b.peers.Range(func(id string, peer *peerClient) bool {
 		if err := peer.kickUser(ctx, uid); err != nil {
 			b.logger.Error("kick user from peer failed", xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
 		}
@@ -245,7 +229,7 @@ func (b *broker) KickUser(ctx context.Context, uid string) {
 }
 func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (total, success int32, err error) {
 	total, success = b.sendToAll(ctx, m)
-	b.peers.Range(func(id string, peer *peer_client) bool {
+	b.peers.Range(func(id string, peer *peerClient) bool {
 		if t, s, err := peer.sendMessage(ctx, m, "", 0); err == nil {
 			total += t
 			success += s
@@ -261,7 +245,7 @@ func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 		return 0, 0, xerr.InvalidUserID
 	}
 	total, success = b.sendToUser(ctx, uid, m)
-	b.peers.Range(func(id string, peer *peer_client) bool {
+	b.peers.Range(func(id string, peer *peerClient) bool {
 		t, s, err := peer.sendMessage(ctx, m, uid, 1)
 		if err != nil {
 			b.logger.Error("send to user from peer failed", xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
@@ -278,7 +262,7 @@ func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Me
 		return 0, 0, xerr.InvalidChannel
 	}
 	total, success = b.sendToChannel(ctx, channel, m)
-	b.peers.Range(func(id string, peer *peer_client) bool {
+	b.peers.Range(func(id string, peer *peerClient) bool {
 		if t, s, err := peer.sendMessage(ctx, m, channel, 2); err == nil {
 			total += t
 			success += s
@@ -291,7 +275,7 @@ func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Me
 }
 func (b *broker) JoinChannel(ctx context.Context, uid string, channels ...string) (count int32, err error) {
 	count = b.joinChannel(uid, channels)
-	b.peers.Range(func(id string, peer *peer_client) bool {
+	b.peers.Range(func(id string, peer *peerClient) bool {
 		if c, err := peer.joinChannel(ctx, uid, channels); err == nil {
 			count += c
 		} else {
@@ -303,7 +287,7 @@ func (b *broker) JoinChannel(ctx context.Context, uid string, channels ...string
 }
 func (b *broker) LeaveChannel(ctx context.Context, uid string, channels ...string) (count int32, err error) {
 	count = b.leaveChannel(uid, channels)
-	b.peers.Range(func(id string, peer *peer_client) bool {
+	b.peers.Range(func(id string, peer *peerClient) bool {
 		if c, err := peer.leaveChannel(ctx, uid, channels); err == nil {
 			count += c
 		} else {
@@ -314,7 +298,7 @@ func (b *broker) LeaveChannel(ctx context.Context, uid string, channels ...strin
 	return count, nil
 }
 func (b *broker) HandleRequest(method string, handler server.RequestHandler) {
-	b.userHandlers.Set(method, handler)
+	b.requstHandlers.Set(method, handler)
 }
 func (b *broker) onUserClosed(id *packet.Identity) {
 	b.userClients.DeleteKey(id.UserID, id.ClientID)
@@ -330,7 +314,7 @@ func (b *broker) onUserConnect(p *packet.Connect, net server.Network) packet.Con
 	if code != packet.ConnectAccepted {
 		return code
 	}
-	b.peers.Range(func(id string, peer *peer_client) bool {
+	b.peers.Range(func(id string, peer *peerClient) bool {
 		peer.kickConn(context.Background(), p.Identity.ClientID)
 		return true
 	})
@@ -347,17 +331,7 @@ func (b *broker) onUserMessage(p *packet.Message, id *packet.Identity) error {
 	return b.handler.OnMessage(p, id)
 }
 func (b *broker) onUserRequest(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
-	handler, ok := b.userHandlers.Get(p.Method)
-	if !ok {
-		return nil, xerr.RequestHandlerNotFound
-	}
-	return handler(p, id)
-}
-func (b *broker) handlePeer(method string, handler server.RequestHandler) {
-	b.peerHandlers.Set(method, handler)
-}
-func (b *broker) onPeerRequest(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
-	handler, ok := b.peerHandlers.Get(p.Method)
+	handler, ok := b.requstHandlers.Get(p.Method)
 	if !ok {
 		return nil, xerr.RequestHandlerNotFound
 	}

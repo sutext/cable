@@ -126,21 +126,16 @@ func (c *tcpConn) isClosed() bool {
 	return c.closed.Load()
 }
 func (c *tcpConn) writePacket(ctx context.Context, p packet.Packet, jump bool) error {
-	// c.sendMeter.Mark(1)
 	data, err := packet.Marshal(p)
 	if err != nil {
 		return err
 	}
 	return c.sendQueue.Push(ctx, jump, func() {
 		_, err := c.raw.Write(data)
-		// c.writeMeter.Mark(1)
 		if err != nil {
 			c.close()
 		}
 	})
-}
-func (c *tcpConn) sendQueueLength() int32 {
-	return c.sendQueue.Len()
 }
 func newTCPConn(id *packet.Identity, raw *net.TCPConn, sendQueueCapacity int32) *tcpConn {
 	return &tcpConn{

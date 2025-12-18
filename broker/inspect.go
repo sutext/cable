@@ -7,40 +7,30 @@ import (
 	"strings"
 
 	"sutext.github.io/cable/broker/protos"
-	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
-	"sutext.github.io/cable/server"
 	"sutext.github.io/cable/xlog"
 )
 
-type InspectPeer struct {
-	Status      string  `json:"status"`
-	QueueLength int     `json:"queue_length"`
-	SendRate    float64 `json:"send_rate"`
-	WriteRate   float64 `json:"write_rate"`
-}
 type Inspect struct {
-	ID          string                  `json:"id"`
-	Peers       map[string]*InspectPeer `json:"peers"`
-	TopConns    map[string]int          `json:"top_conns"`
-	TopPeers    map[string]int          `json:"top_peers"`
-	UserCount   int                     `json:"user_count"`
-	ClientCount int                     `json:"client_count"`
-	ClusterSize int32                   `json:"cluster_size"`
+	ID           string `json:"id"`
+	UserCount    int32  `json:"user_count"`
+	ClientCount  int32  `json:"client_count"`
+	ClusterSize  int32  `json:"cluster_size"`
+	ChannelCount int32  `json:"channel_count"`
 }
 
-func NewInspect() *protos.InspectResp {
-	return &protos.InspectResp{}
+func NewInspect() *protos.Inspects {
+	return &protos.Inspects{}
 }
 
-func merge(i, o *protos.InspectResp) {
+func merge(i, o *protos.Inspects) {
 	i.Id = "all"
 	i.UserCount += o.UserCount
 	i.ClientCount += o.ClientCount
 	i.ClusterSize = max(i.ClusterSize, o.ClusterSize)
 }
 
-func (b *broker) inspect() *protos.InspectResp {
+func (b *broker) inspect() *protos.Inspects {
 	// peersInpsects := make(map[string]*protos.PeerInspect)
 	// b.peers.Range(func(k string, v *peer_client) bool {
 	// 	peersInpsects[k] = &protos.PeerInspect{
@@ -51,31 +41,25 @@ func (b *broker) inspect() *protos.InspectResp {
 	// 	}
 	// 	return true
 	// })
-	users := b.userClients.Len()
-	clients := 0
-	b.userClients.Range(func(uid string, cs *safe.XMap[string, server.Network]) bool {
-		clients += int(cs.Len())
-		return true
-	})
-	l := b.listeners[server.NetworkTCP]
-	return &protos.InspectResp{
-		Id: b.id,
-		// Peers: peersInpsects,
-		// TopPeers:    b.peerServer.Top(),
-		TopConns:    l.Top(),
-		UserCount:   int32(users),
-		ClientCount: int32(clients),
+	var connLen int32
+	for _, l := range b.listeners {
+		connLen += l.ConnLen()
+	}
+	return &protos.Inspects{
+		Id:          b.id,
+		UserCount:   b.userClients.Len(),
+		ClientCount: connLen,
 		ClusterSize: b.clusterSize(),
 	}
 }
 
-func (b *broker) Inspects() ([]*protos.InspectResp, error) {
+func (b *broker) Inspects() ([]*protos.Inspects, error) {
 	ctx := context.Background()
-	inspects := make([]*protos.InspectResp, 2)
-	inspects[0] = &protos.InspectResp{}
+	inspects := make([]*protos.Inspects, 2)
+	inspects[0] = &protos.Inspects{}
 	inspects[1] = b.inspect()
 	merge(inspects[0], inspects[1])
-	b.peers.Range(func(k string, v *peer_client) bool {
+	b.peers.Range(func(k string, v *peerClient) bool {
 		isp, err := v.inspect(ctx)
 		if err != nil {
 			b.logger.Error("inspect failed", xlog.Peer(k), xlog.Err(err))
