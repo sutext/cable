@@ -12,7 +12,7 @@ import (
 
 type Listener struct {
 	Address string
-	Network server.Network
+	Network server.Transport
 }
 type Handler interface {
 	OnClosed(id *packet.Identity)
@@ -40,7 +40,7 @@ type options struct {
 	brokerID  string
 	httpPort  string
 	peerPort  string
-	listeners map[server.Network]string
+	listeners map[server.Transport]string
 }
 
 func newOptions(opts ...Option) *options {
@@ -49,10 +49,10 @@ func newOptions(opts ...Option) *options {
 		httpPort: ":8888",
 		peerPort: ":4567",
 		brokerID: getBrokerID(),
-		listeners: map[server.Network]string{
-			server.NetworkTCP:  ":1883",
-			server.NetworkUDP:  ":1884",
-			server.NetworkGRPC: ":1885",
+		listeners: map[server.Transport]string{
+			server.TransportTCP:  ":1883",
+			server.TransportUDP:  ":1884",
+			server.TransportGRPC: ":1885",
 		},
 	}
 	for _, opt := range opts {
@@ -91,7 +91,7 @@ func WithPeerPort(port string) Option {
 }
 
 // WithListener sets the listener for the broker.
-func WithListener(net server.Network, addr string) Option {
+func WithListener(net server.Transport, addr string) Option {
 	return Option{func(o *options) {
 		o.listeners[net] = addr
 	}}

@@ -15,7 +15,7 @@ import (
 type Server interface {
 	Serve() error
 	ConnLen() int32
-	Network() Network
+	Network() Transport
 	IsActive(cid string) bool
 	KickConn(cid string) bool
 	Shutdown(ctx context.Context) error
@@ -28,14 +28,13 @@ type server struct {
 	logger         *xlog.Logger
 	closed         atomic.Bool
 	address        string
-	network        Network
 	listener       listener.Listener
+	transport      Transport
 	closeHandler   ClosedHandler
 	connectHander  ConnectHandler
 	messageHandler MessageHandler
 	requestHandler RequestHandler
 	queueCapacity  int32
-	pollCapacity   int32
 }
 
 func New(address string, opts ...Option) Server {
@@ -43,7 +42,7 @@ func New(address string, opts ...Option) Server {
 	s := &server{
 		logger:         options.logger,
 		address:        address,
-		network:        options.network,
+		transport:      options.transport,
 		queueCapacity:  options.queueCapacity,
 		closeHandler:   options.closeHandler,
 		connectHander:  options.connectHandler,
@@ -54,12 +53,12 @@ func New(address string, opts ...Option) Server {
 }
 
 func (s *server) Serve() error {
-	switch s.network {
-	case NetworkTCP:
-		s.listener = listener.NewTCP(s.queueCapacity, s.pollCapacity, s.logger)
-	case NetworkUDP:
+	switch s.transport {
+	case TransportTCP:
+		s.listener = listener.NewTCP(s.queueCapacity, s.logger)
+	case TransportUDP:
 		s.listener = listener.NewUDP()
-	case NetworkGRPC:
+	case TransportGRPC:
 		s.listener = listener.NewGRPC(s.logger)
 	default:
 		return xerr.NetworkNotSupported
@@ -67,7 +66,7 @@ func (s *server) Serve() error {
 	s.listener.OnClose(s.onClose)
 	s.listener.OnAccept(s.onConnect)
 	s.listener.OnPacket(s.onPacket)
-	s.logger.Info("server listening", xlog.Str("address", s.address), xlog.Str("network", s.network.String()))
+	s.logger.Info("server listening", xlog.Str("address", s.address), xlog.Str("network", s.transport.String()))
 	return s.listener.Listen(s.address)
 }
 func (s *server) IsActive(cid string) bool {
@@ -118,8 +117,8 @@ func (s *server) Shutdown(ctx context.Context) error {
 		}
 	}
 }
-func (s *server) Network() Network {
-	return s.network
+func (s *server) Network() Transport {
+	return s.transport
 }
 func (s *server) Brodcast(ctx context.Context, p *packet.Message) (int32, int32, error) {
 	if s.closed.Load() {

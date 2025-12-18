@@ -109,7 +109,7 @@ func (t *Tester) Run() {
 func (t *Tester) addClient() *Client {
 	endpoint := os.Getenv("ENDPOINT")
 	if endpoint == "" {
-		endpoint = "tcp://190.92.211.227:1883"
+		endpoint = "tcp://localhost:1883"
 	}
 	strs := strings.Split(endpoint, "://")
 	if len(strs) != 2 {
@@ -117,7 +117,7 @@ func (t *Tester) addClient() *Client {
 	}
 	result := &Client{}
 	result.cli = client.New(strs[1],
-		client.WithNetwork(client.Network(strs[0])),
+		client.WithTransport(client.Transport(strs[0])),
 		client.WithKeepAlive(time.Second*5, time.Second*60),
 		client.WithHandler(result),
 	)

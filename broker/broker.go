@@ -37,13 +37,13 @@ type broker struct {
 	logger         *xlog.Logger
 	handler        Handler
 	muticast       muticast.Muticast
-	listeners      map[server.Network]server.Server
+	listeners      map[server.Transport]server.Server
 	peerPort       string
 	peerServer     *peerServer
 	httpServer     *http.Server
-	userClients    safe.KeyMap[server.Network] //map[uid]map[cid]net
-	channelClients safe.KeyMap[server.Network] //map[channel]map[cid]net
-	clientChannels safe.KeyMap[server.Network] //map[cid]map[channel]net
+	userClients    safe.KeyMap[server.Transport] //map[uid]map[cid]net
+	channelClients safe.KeyMap[server.Transport] //map[channel]map[cid]net
+	clientChannels safe.KeyMap[server.Transport] //map[cid]map[channel]net
 	requstHandlers safe.Map[string, server.RequestHandler]
 }
 
@@ -65,12 +65,12 @@ func NewBroker(opts ...Option) Broker {
 		}
 		b.addPeer(strs[0], strs[1])
 	}
-	b.listeners = make(map[server.Network]server.Server, len(options.listeners))
+	b.listeners = make(map[server.Transport]server.Server, len(options.listeners))
 	for net, addr := range options.listeners {
 		b.listeners[net] = server.New(addr,
 			server.WithClose(b.onUserClosed),
 			server.WithLogger(b.logger),
-			server.WithNetwork(net),
+			server.WithTransport(net),
 			server.WithMessage(b.onUserMessage),
 			server.WithRequest(b.onUserRequest),
 			server.WithConnect(func(p *packet.Connect) packet.ConnectCode {
@@ -302,14 +302,14 @@ func (b *broker) HandleRequest(method string, handler server.RequestHandler) {
 }
 func (b *broker) onUserClosed(id *packet.Identity) {
 	b.userClients.DeleteKey(id.UserID, id.ClientID)
-	b.clientChannels.RangeKey(id.ClientID, func(channel string, net server.Network) bool {
+	b.clientChannels.RangeKey(id.ClientID, func(channel string, net server.Transport) bool {
 		b.channelClients.DeleteKey(channel, id.ClientID)
 		return true
 	})
 	b.clientChannels.Delete(id.ClientID)
 	b.handler.OnClosed(id)
 }
-func (b *broker) onUserConnect(p *packet.Connect, net server.Network) packet.ConnectCode {
+func (b *broker) onUserConnect(p *packet.Connect, net server.Transport) packet.ConnectCode {
 	code := b.handler.OnConnect(p)
 	if code != packet.ConnectAccepted {
 		return code
@@ -338,7 +338,7 @@ func (b *broker) onUserRequest(p *packet.Request, id *packet.Identity) (*packet.
 	return handler(p, id)
 }
 func (b *broker) isOnline(uid string) (ok bool) {
-	b.userClients.RangeKey(uid, func(cid string, net server.Network) bool {
+	b.userClients.RangeKey(uid, func(cid string, net server.Transport) bool {
 		if b.isActive(cid, net) {
 			ok = true
 			return false
@@ -347,7 +347,7 @@ func (b *broker) isOnline(uid string) (ok bool) {
 	})
 	return ok
 }
-func (b *broker) isActive(cid string, net server.Network) (ok bool) {
+func (b *broker) isActive(cid string, net server.Transport) (ok bool) {
 	if l, ok := b.listeners[net]; ok {
 		return l.IsActive(cid)
 	}
@@ -359,7 +359,7 @@ func (b *broker) kickConn(cid string) {
 	}
 }
 func (b *broker) kickUser(uid string) {
-	b.userClients.RangeKey(uid, func(cid string, net server.Network) bool {
+	b.userClients.RangeKey(uid, func(cid string, net server.Transport) bool {
 		if l, ok := b.listeners[net]; ok {
 			l.KickConn(cid)
 		}
@@ -378,7 +378,7 @@ func (b *broker) sendToAll(ctx context.Context, m *packet.Message) (total, succe
 	return total, success
 }
 func (b *broker) sendToUser(ctx context.Context, uid string, m *packet.Message) (total, success int32) {
-	b.userClients.RangeKey(uid, func(cid string, net server.Network) bool {
+	b.userClients.RangeKey(uid, func(cid string, net server.Transport) bool {
 		total++
 		l, ok := b.listeners[net]
 		if !ok {
@@ -394,7 +394,7 @@ func (b *broker) sendToUser(ctx context.Context, uid string, m *packet.Message) 
 	return total, success
 }
 func (b *broker) sendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success int32) {
-	b.channelClients.RangeKey(channel, func(cid string, net server.Network) bool {
+	b.channelClients.RangeKey(channel, func(cid string, net server.Transport) bool {
 		total++
 		l, ok := b.listeners[net]
 		if !ok {
@@ -411,7 +411,7 @@ func (b *broker) sendToChannel(ctx context.Context, channel string, m *packet.Me
 }
 
 func (b *broker) joinChannel(uid string, channels []string) (count int32) {
-	b.userClients.RangeKey(uid, func(cid string, net server.Network) bool {
+	b.userClients.RangeKey(uid, func(cid string, net server.Transport) bool {
 		count++
 		for _, ch := range channels {
 			b.channelClients.SetKey(ch, cid, net)
@@ -422,7 +422,7 @@ func (b *broker) joinChannel(uid string, channels []string) (count int32) {
 	return count
 }
 func (b *broker) leaveChannel(uid string, channels []string) (count int32) {
-	b.userClients.RangeKey(uid, func(cid string, net server.Network) bool {
+	b.userClients.RangeKey(uid, func(cid string, net server.Transport) bool {
 		count++
 		for _, ch := range channels {
 			b.channelClients.DeleteKey(ch, cid)

@@ -12,10 +12,10 @@ import (
 )
 
 type peerServer struct {
+	protos.UnimplementedPeerServiceServer
 	broker   *broker
 	address  string
 	listener net.Listener
-	protos.UnimplementedPeerServiceServer
 }
 
 // NewServer creates a new server instance

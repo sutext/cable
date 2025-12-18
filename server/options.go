@@ -12,27 +12,27 @@ type ConnectHandler func(p *packet.Connect) packet.ConnectCode
 type MessageHandler func(p *packet.Message, id *packet.Identity) error
 type RequestHandler func(p *packet.Request, id *packet.Identity) (*packet.Response, error)
 
-type Network uint8
+type Transport uint8
 
 const (
-	NetworkTCP Network = iota
-	NetworkUDP
-	NetworkQUIC
-	NetworkGRPC
-	NetworkWebSocket
+	TransportTCP Transport = iota
+	TransportUDP
+	TransportQUIC
+	TransportGRPC
+	TransportWebSocket
 )
 
-func (n Network) String() string {
+func (n Transport) String() string {
 	switch n {
-	case NetworkTCP:
+	case TransportTCP:
 		return "TCP"
-	case NetworkUDP:
+	case TransportUDP:
 		return "UDP"
-	case NetworkQUIC:
+	case TransportQUIC:
 		return "QUIC"
-	case NetworkGRPC:
+	case TransportGRPC:
 		return "GRPC"
-	case NetworkWebSocket:
+	case TransportWebSocket:
 		return "WebSocket"
 	default:
 		return "Unknown"
@@ -44,7 +44,7 @@ type Option struct {
 }
 type options struct {
 	logger         *xlog.Logger
-	network        Network
+	transport      Transport
 	queueCapacity  int32
 	closeHandler   ClosedHandler
 	connectHandler ConnectHandler
@@ -55,7 +55,7 @@ type options struct {
 func NewOptions(opts ...Option) *options {
 	var options = &options{
 		logger:        xlog.With("GROUP", "SERVER"),
-		network:       NetworkTCP,
+		transport:     TransportTCP,
 		queueCapacity: 1024,
 		closeHandler: func(p *packet.Identity) {
 
@@ -75,8 +75,8 @@ func NewOptions(opts ...Option) *options {
 	}
 	return options
 }
-func WithNetwork(network Network) Option {
-	return Option{f: func(o *options) { o.network = network }}
+func WithTransport(transport Transport) Option {
+	return Option{f: func(o *options) { o.transport = transport }}
 }
 
 //	func WithQUIC(config *quic.Config) Option {

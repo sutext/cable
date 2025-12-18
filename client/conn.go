@@ -14,16 +14,16 @@ type Conn interface {
 	WritePacket(p packet.Packet) error
 }
 
-func NewConn(network Network, addr string) Conn {
-	switch network {
-	case NewworkTCP:
+func NewConn(transport Transport, addr string) Conn {
+	switch transport {
+	case TransportTCP:
 		return newTCPConn(addr)
-	case NetworkUDP:
+	case TransportUDP:
 		return newUDPConn(addr)
-	case NetworkGRPC:
+	case TransportGRPC:
 		return newGRPCConn(addr)
 	default:
-		panic("unknown network")
+		panic("unknown transport")
 	}
 }
 

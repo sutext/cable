@@ -10,6 +10,20 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
+type conn interface {
+	ID() *packet.Identity
+	close() error
+	isClosed() bool
+	writePacket(ctx context.Context, p packet.Packet, jump bool) error
+}
+type Listener interface {
+	Close(ctx context.Context) error
+	Listen(addr string) error
+	OnClose(handler func(c *Conn))
+	OnPacket(handler func(p packet.Packet, c *Conn))
+	OnAccept(handler func(p *packet.Connect, c *Conn) packet.ConnectCode)
+}
+
 type Conn struct {
 	raw          conn
 	logger       *xlog.Logger

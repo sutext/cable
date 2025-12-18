@@ -20,7 +20,7 @@ type tcpListener struct {
 	queueCapacity int32
 }
 
-func NewTCP(queueCapacity, pollCapacity int32, logger *xlog.Logger) Listener {
+func NewTCP(queueCapacity int32, logger *xlog.Logger) Listener {
 	return &tcpListener{
 		logger:        logger,
 		queueCapacity: queueCapacity,

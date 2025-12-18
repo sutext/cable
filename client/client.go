@@ -73,7 +73,7 @@ type client struct {
 func New(address string, options ...Option) Client {
 	opts := newOptions(options...)
 	c := &client{
-		conn:           NewConn(opts.network, address),
+		conn:           NewConn(opts.transport, address),
 		status:         StatusUnknown,
 		logger:         opts.logger,
 		retrier:        opts.retrier,

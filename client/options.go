@@ -8,12 +8,12 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
-type Network string
+type Transport string
 
 const (
-	NewworkTCP  Network = "tcp"
-	NetworkUDP  Network = "udp"
-	NetworkGRPC Network = "grpc"
+	TransportTCP  Transport = "tcp"
+	TransportUDP  Transport = "udp"
+	TransportGRPC Transport = "grpc"
 )
 
 type Handler interface {
@@ -34,9 +34,9 @@ func (h *emptyHandler) OnRequest(p *packet.Request) (*packet.Response, error) {
 
 type Options struct {
 	logger            *xlog.Logger
-	network           Network
 	handler           Handler
 	retrier           *Retrier
+	transport         Transport
 	pingTimeout       time.Duration
 	pingInterval      time.Duration
 	writeTimeout      time.Duration
@@ -54,7 +54,7 @@ func newOptions(options ...Option) *Options {
 		logger:            xlog.With("GROUP", "CLIENT"),
 		handler:           &emptyHandler{},
 		retrier:           NewRetrier(10, backoff.Exponential(time.Second, 1.5)),
-		network:           NewworkTCP,
+		transport:         TransportTCP,
 		pingTimeout:       time.Second * 5,
 		pingInterval:      time.Second * 60,
 		writeTimeout:      time.Second * 5,
@@ -78,9 +78,9 @@ func WithLogger(logger *xlog.Logger) Option {
 		o.logger = logger
 	}}
 }
-func WithNetwork(network Network) Option {
+func WithTransport(transport Transport) Option {
 	return Option{f: func(o *Options) {
-		o.network = network
+		o.transport = transport
 	}}
 }
 func WithRetrier(retrier *Retrier) Option {
