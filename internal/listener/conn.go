@@ -29,8 +29,10 @@ type Listener interface {
 type Conn struct {
 	raw          conn
 	logger       *xlog.Logger
-	requestTasks sync.Map
-	messageTasks sync.Map
+	requestLock  sync.Mutex
+	messageLock  sync.Mutex
+	requestTasks map[int64]chan *packet.Response
+	messageTasks map[int64]chan *packet.Messack
 }
 
 func newConn(raw conn) *Conn {
@@ -77,17 +79,21 @@ func (c *Conn) sendInflightMessage(ctx context.Context, p *packet.Message) (*pac
 	if c.IsClosed() {
 		return nil, xerr.ConnectionIsClosed
 	}
-	akcCh := make(chan *packet.Messack)
-	c.messageTasks.Store(p.ID, akcCh)
+	c.messageLock.Lock()
+	ackCh := make(chan *packet.Messack)
+	c.messageTasks[p.ID] = ackCh
+	c.messageLock.Unlock()
 	defer func() {
-		c.messageTasks.Delete(p.ID)
-		close(akcCh)
+		c.messageLock.Lock()
+		delete(c.messageTasks, p.ID)
+		close(ackCh)
+		c.messageLock.Unlock()
 	}()
 	if err := c.SendPacket(ctx, p); err != nil {
 		return nil, err
 	}
 	select {
-	case ack := <-akcCh:
+	case ack := <-ackCh:
 		return ack, nil
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -97,11 +103,15 @@ func (c *Conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Resp
 	if c.IsClosed() {
 		return nil, xerr.ConnectionIsClosed
 	}
+	c.requestLock.Lock()
 	resp := make(chan *packet.Response)
-	c.requestTasks.Store(p.ID, resp)
+	c.requestTasks[p.ID] = resp
+	c.requestLock.Unlock()
 	defer func() {
-		c.requestTasks.Delete(p.ID)
+		c.requestLock.Lock()
+		delete(c.requestTasks, p.ID)
 		close(resp)
+		c.requestLock.Unlock()
 	}()
 	if err := c.SendPacket(ctx, p); err != nil {
 		return nil, err
@@ -114,13 +124,25 @@ func (c *Conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Resp
 	}
 }
 func (c *Conn) RecvMessack(p *packet.Messack) {
-	if ackCh, ok := c.messageTasks.Load(p.ID); ok {
-		ackCh.(chan *packet.Messack) <- p
+	c.messageLock.Lock()
+	ch, ok := c.messageTasks[p.ID]
+	if ok {
+		ch <- p
+	}
+	c.messageLock.Unlock()
+	if !ok {
+		c.logger.Error("response task not found", xlog.I64("id", p.ID))
 	}
 }
 func (c *Conn) RecvResponse(p *packet.Response) {
-	if resp, ok := c.requestTasks.Load(p.ID); ok {
-		resp.(chan *packet.Response) <- p
+	c.requestLock.Lock()
+	ch, ok := c.requestTasks[p.ID]
+	if ok {
+		ch <- p
+	}
+	c.requestLock.Unlock()
+	if !ok {
+		c.logger.Error("response task not found", xlog.I64("id", p.ID))
 	}
 }
 func (c *Conn) Close() error {

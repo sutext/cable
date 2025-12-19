@@ -17,16 +17,30 @@ func TestMap(t *testing.T) {
 	}
 }
 func BenchmarkMap(b *testing.B) {
-	b.Run("safe.Map", func(b *testing.B) {
+	b.Run("safe.Map.Write", func(b *testing.B) {
 		m := Map[string, string]{}
 		for b.Loop() {
 			m.Set("foo", "bar")
 		}
 	})
-	b.Run("map", func(b *testing.B) {
-		m := map[string]string{}
+	b.Run("safe.XMap.Write", func(b *testing.B) {
+		m := NewMap[string, string]()
 		for b.Loop() {
-			m["foo"] = "bar"
+			m.Set("foo", "bar")
+		}
+	})
+	b.Run("safe.Map.Read", func(b *testing.B) {
+		m := Map[string, string]{}
+		m.Set("foo", "bar")
+		for b.Loop() {
+			m.Get("foo")
+		}
+	})
+	b.Run("safe.XMap.Read", func(b *testing.B) {
+		m := NewMap[string, string]()
+		m.Set("foo", "bar")
+		for b.Loop() {
+			m.Get("foo")
 		}
 	})
 }

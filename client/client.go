@@ -63,8 +63,10 @@ type client struct {
 	statusLock     sync.RWMutex
 	pingTimeout    time.Duration
 	pingInterval   time.Duration
-	requestTasks   sync.Map
-	messageTasks   sync.Map
+	requestLock    sync.Mutex
+	messageLock    sync.Mutex
+	requestTasks   map[int64]chan *packet.Response
+	messageTasks   map[int64]chan *packet.Messack
 	writeTimeout   time.Duration
 	requestTimeout time.Duration
 	messageTimeout time.Duration
@@ -82,6 +84,8 @@ func New(address string, options ...Option) Client {
 		pingTimeout:    opts.pingTimeout,
 		pingInterval:   opts.pingInterval,
 		writeTimeout:   opts.writeTimeout,
+		requestTasks:   make(map[int64]chan *packet.Response),
+		messageTasks:   make(map[int64]chan *packet.Messack),
 		requestTimeout: opts.requestTimeout,
 		messageTimeout: opts.messageTimeout,
 	}
@@ -230,11 +234,15 @@ func (c *client) sendInflightMessage(ctx context.Context, p *packet.Message) (*p
 	if !c.IsReady() {
 		return nil, ErrConnectionNotReady
 	}
+	c.messageLock.Lock()
 	ackCh := make(chan *packet.Messack)
-	c.messageTasks.Store(p.ID, ackCh)
+	c.messageTasks[p.ID] = ackCh
+	c.messageLock.Unlock()
 	defer func() {
-		c.messageTasks.Delete(p.ID)
+		c.messageLock.Lock()
+		delete(c.messageTasks, p.ID)
 		close(ackCh)
+		c.messageLock.Unlock()
 	}()
 	if err := c.sendPacket(ctx, false, p); err != nil {
 		return nil, err
@@ -252,11 +260,15 @@ func (c *client) SendRequest(ctx context.Context, p *packet.Request) (*packet.Re
 	if !c.IsReady() {
 		return nil, ErrConnectionNotReady
 	}
+	c.requestLock.Lock()
 	resp := make(chan *packet.Response)
-	c.requestTasks.Store(p.ID, resp)
+	c.requestTasks[p.ID] = resp
+	c.requestLock.Unlock()
 	defer func() {
-		c.requestTasks.Delete(p.ID)
+		c.requestLock.Lock()
+		delete(c.requestTasks, p.ID)
 		close(resp)
+		c.requestLock.Unlock()
 	}()
 	if err := c.sendPacket(ctx, false, p); err != nil {
 		return nil, err
@@ -345,9 +357,13 @@ func (c *client) handlePacket(p packet.Packet) {
 		}
 	case packet.MESSACK:
 		p := p.(*packet.Messack)
-		if t, ok := c.messageTasks.Load(p.ID); ok {
-			t.(chan *packet.Messack) <- p
-		} else {
+		c.messageLock.Lock()
+		ch, ok := c.messageTasks[p.ID]
+		if ok {
+			ch <- p
+		}
+		c.messageLock.Unlock()
+		if !ok {
 			c.logger.Error("response task not found", xlog.I64("id", p.ID))
 		}
 	case packet.REQUEST:
@@ -363,9 +379,13 @@ func (c *client) handlePacket(p packet.Packet) {
 		}
 	case packet.RESPONSE:
 		p := p.(*packet.Response)
-		if t, ok := c.requestTasks.Load(p.ID); ok {
-			t.(chan *packet.Response) <- p
-		} else {
+		c.requestLock.Lock()
+		ch, ok := c.requestTasks[p.ID]
+		if ok {
+			ch <- p
+		}
+		c.requestLock.Unlock()
+		if !ok {
 			c.logger.Error("response task not found", xlog.I64("id", p.ID))
 		}
 	case packet.PING:
