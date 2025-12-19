@@ -11,18 +11,6 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
-type Inspect struct {
-	ID           string `json:"id"`
-	UserCount    int32  `json:"user_count"`
-	ClientCount  int32  `json:"client_count"`
-	ClusterSize  int32  `json:"cluster_size"`
-	ChannelCount int32  `json:"channel_count"`
-}
-
-func NewInspect() *protos.Inspects {
-	return &protos.Inspects{}
-}
-
 func merge(i, o *protos.Inspects) {
 	i.Id = "all"
 	i.UserCount += o.UserCount

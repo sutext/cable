@@ -22,7 +22,7 @@ type peerClient struct {
 	mu     sync.Mutex
 	rpc    protos.PeerServiceClient
 	conn   *grpc.ClientConn
-	closed atomic.Bool
+	ready  atomic.Bool
 	broker *broker
 }
 
@@ -34,19 +34,11 @@ func newPeerClient(id, ip string, broker *broker) *peerClient {
 	}
 	return p
 }
-func (p *peerClient) Close() {
-	if p.closed.CompareAndSwap(false, true) {
-		if p.conn != nil {
-			p.conn.Close()
-			p.conn = nil
-		}
-		p.rpc = nil
-	}
-}
+
 func (p *peerClient) connect() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.closed.Load() {
+	if p.ready.Load() {
 		return
 	}
 	if err := p.reconnnect(); err != nil {
@@ -55,8 +47,8 @@ func (p *peerClient) connect() {
 			p.connect()
 		})
 	} else {
-		p.broker.logger.Info("peer connected", xlog.Peer(p.id))
-		p.closed.Store(true)
+		p.broker.logger.Info("connect to peer success", xlog.Peer(p.id))
+		p.ready.Store(true)
 	}
 }
 func (p *peerClient) reconnnect() error {
@@ -71,8 +63,8 @@ func (p *peerClient) reconnnect() error {
 	p.rpc = protos.NewPeerServiceClient(conn)
 	return nil
 }
-func (p *peerClient) isClosed() bool {
-	return p.closed.Load()
+func (p *peerClient) isReady() bool {
+	return p.ready.Load()
 }
 func (p *peerClient) updateIP(ip string) {
 	if p.ip == ip {
@@ -80,11 +72,11 @@ func (p *peerClient) updateIP(ip string) {
 	}
 	p.broker.logger.Warn("peer ip updated", xlog.Str("ip", ip))
 	p.ip = ip
-	p.closed.Store(false)
+	p.ready.Store(false)
 	p.connect()
 }
 func (p *peerClient) sendMessage(ctx context.Context, m *packet.Message, target string, flag uint8) (total, success int32, err error) {
-	if p.closed.Load() {
+	if !p.isReady() {
 		return 0, 0, xerr.PeerNotReady
 	}
 	data, err := coder.Marshal(m)
@@ -104,7 +96,7 @@ func (p *peerClient) sendMessage(ctx context.Context, m *packet.Message, target 
 }
 
 func (p *peerClient) isOnline(ctx context.Context, uid string) (bool, error) {
-	if p.closed.Load() {
+	if !p.isReady() {
 		return false, xerr.PeerNotReady
 	}
 	resp, err := p.rpc.IsOnline(ctx, &protos.IsOnlineReq{Uid: uid})
@@ -114,28 +106,28 @@ func (p *peerClient) isOnline(ctx context.Context, uid string) (bool, error) {
 	return resp.Online, nil
 }
 func (p *peerClient) kickConn(ctx context.Context, cid string) error {
-	if p.closed.Load() {
+	if !p.isReady() {
 		return xerr.PeerNotReady
 	}
 	_, err := p.rpc.KickConn(ctx, &protos.KickConnReq{Cid: cid})
 	return err
 }
 func (p *peerClient) kickUser(ctx context.Context, uid string) error {
-	if p.closed.Load() {
+	if !p.isReady() {
 		return xerr.PeerNotReady
 	}
 	_, err := p.rpc.KickUser(ctx, &protos.KickUserReq{Uid: uid})
 	return err
 }
 func (p *peerClient) inspect(ctx context.Context) (*protos.Inspects, error) {
-	if p.closed.Load() {
+	if !p.isReady() {
 		return nil, xerr.PeerNotReady
 	}
 	return p.rpc.Inspect(ctx, &protos.Empty{})
 }
 
 func (p *peerClient) joinChannel(ctx context.Context, uid string, channels []string) (count int32, err error) {
-	if p.closed.Load() {
+	if !p.isReady() {
 		return 0, xerr.PeerNotReady
 	}
 	resp, err := p.rpc.JoinChannel(ctx, &protos.ChannelReq{Uid: uid, Channels: channels})
@@ -146,7 +138,7 @@ func (p *peerClient) joinChannel(ctx context.Context, uid string, channels []str
 }
 
 func (p *peerClient) leaveChannel(ctx context.Context, uid string, channels []string) (count int32, err error) {
-	if !p.isClosed() {
+	if !p.isReady() {
 		return 0, xerr.PeerNotReady
 	}
 	resp, err := p.rpc.LeaveChannel(ctx, &protos.ChannelReq{Uid: uid, Channels: channels})
