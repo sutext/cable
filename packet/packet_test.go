@@ -36,6 +36,7 @@ func BigMessage() Packet {
 }
 func testp(t *testing.T, p Packet) {
 	rw := &ReadWriter{}
+	p.Set(PropertyConnID, "test")
 	err := WriteTo(rw, p)
 	if err != nil {
 		t.Error(err)

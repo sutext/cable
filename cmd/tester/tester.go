@@ -110,6 +110,9 @@ func (t *Tester) addClient() *Client {
 	endpoint := os.Getenv("ENDPOINT")
 	if endpoint == "" {
 		endpoint = "tcp://localhost:1883"
+		endpoint = "udp://localhost:1884"
+		// endpoint = "tcp://190.92.211.227:1883"
+		// endpoint = "udp://190.92.211.227:1884"
 	}
 	strs := strings.Split(endpoint, "://")
 	if len(strs) != 2 {

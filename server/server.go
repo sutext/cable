@@ -55,11 +55,11 @@ func New(address string, opts ...Option) Server {
 func (s *server) Serve() error {
 	switch s.transport {
 	case TransportTCP:
-		s.listener = listener.NewTCP(s.queueCapacity, s.logger)
+		s.listener = listener.NewTCP(s.logger, s.queueCapacity)
 	case TransportUDP:
-		s.listener = listener.NewUDP()
+		s.listener = listener.NewUDP(s.logger, s.queueCapacity)
 	case TransportGRPC:
-		s.listener = listener.NewGRPC(s.logger)
+		s.listener = listener.NewGRPC(s.logger, s.queueCapacity)
 	default:
 		return xerr.NetworkNotSupported
 	}
@@ -80,7 +80,7 @@ func (s *server) ConnLen() int32 {
 }
 func (s *server) KickConn(cid string) bool {
 	if c, ok := s.conns.Get(cid); ok {
-		c.ClosePacket(packet.NewClose(packet.CloseKickedOut))
+		c.CloseClode(packet.CloseKickedOut)
 		return true
 	}
 	return false
@@ -170,6 +170,7 @@ func (s *server) onPacket(p packet.Packet, c *listener.Conn) {
 	case packet.PING:
 		c.SendPong()
 	case packet.PONG:
+		c.RecvPong()
 		break
 	case packet.CLOSE:
 		c.Close()
@@ -182,7 +183,7 @@ func (s *server) onConnect(p *packet.Connect, c *listener.Conn) packet.ConnectCo
 	code := s.connectHander(p)
 	if code == packet.ConnectAccepted {
 		if old, loaded := s.conns.Swap(p.Identity.ClientID, c); loaded {
-			old.DuplicateClose()
+			old.CloseClode(packet.CloseDuplicateLogin)
 		}
 	}
 	return code

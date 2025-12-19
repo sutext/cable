@@ -44,7 +44,6 @@ type Client interface {
 	Status() Status
 	Connect(identity *packet.Identity)
 	IsReady() bool
-	SendQueueLength() int32
 	SendMessage(ctx context.Context, p *packet.Message) error
 	SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error)
 }
@@ -58,6 +57,8 @@ type client struct {
 	retrier        *Retrier
 	handler        Handler
 	retrying       bool
+	pingChan       chan struct{}
+	pingLock       sync.Mutex
 	sendQueue      *queue.Queue
 	keepalive      *keepalive.KeepAlive
 	statusLock     sync.RWMutex
@@ -89,17 +90,7 @@ func New(address string, options ...Option) Client {
 		requestTimeout: opts.requestTimeout,
 		messageTimeout: opts.messageTimeout,
 	}
-	c.keepalive = keepalive.New(c.pingInterval, c.pingTimeout)
-	c.keepalive.PingFunc(func() error {
-		if err := c.SendPing(); err != nil {
-			c.logger.Error("send ping error", xlog.Err(err))
-			return err
-		}
-		return nil
-	})
-	c.keepalive.TimeoutFunc(func() {
-		c.tryClose(CloseReasonPingTimeout)
-	})
+	c.keepalive = keepalive.New(c.pingInterval, c)
 	return c
 }
 func (c *client) ID() *packet.Identity {
@@ -107,7 +98,7 @@ func (c *client) ID() *packet.Identity {
 }
 func (c *client) Close() {
 	if c.closed.CompareAndSwap(false, true) {
-		c.keepalive.Close()
+		c.keepalive.Stop()
 		c.sendQueue.Close()
 		c.conn.Close()
 	}
@@ -196,16 +187,44 @@ func (c *client) reconnect() error {
 	c.setStatus(StatusOpened)
 	return nil
 }
-func (c *client) SendPing() error {
-	return c.sendPacket(context.Background(), true, packet.NewPing())
+
+func (c *client) SendPing() {
+	ctx, cancel := context.WithTimeout(context.Background(), c.pingTimeout)
+	defer cancel()
+	err := c.sendPing(ctx)
+	if err != nil {
+		c.logger.Error("send ping error", xlog.Err(err))
+		if t, ok := err.(interface{ Timeout() bool }); ok && t.Timeout() {
+			c.tryClose(CloseReasonPingTimeout)
+		}
+	}
 }
-func (c *client) SendPong() error {
+func (c *client) sendPing(ctx context.Context) error {
+	if !c.IsReady() {
+		return ErrConnectionNotReady
+	}
+	c.pingLock.Lock()
+	c.pingChan = make(chan struct{})
+	c.pingLock.Unlock()
+	defer func() {
+		c.pingLock.Lock()
+		close(c.pingChan)
+		c.pingChan = nil
+		c.pingLock.Unlock()
+	}()
+	if err := c.sendPacket(ctx, false, packet.NewPing()); err != nil {
+		return err
+	}
+	select {
+	case <-c.pingChan:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+func (c *client) sendPong() error {
 	return c.sendPacket(context.Background(), true, packet.NewPong())
 }
-func (c *client) SendQueueLength() int32 {
-	return c.sendQueue.Len()
-}
-
 func (c *client) SendMessage(ctx context.Context, p *packet.Message) error {
 	if !c.IsReady() {
 		return ErrConnectionNotReady
@@ -247,8 +266,6 @@ func (c *client) sendInflightMessage(ctx context.Context, p *packet.Message) (*p
 	if err := c.sendPacket(ctx, false, p); err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, c.messageTimeout)
-	defer cancel()
 	select {
 	case res := <-ackCh:
 		return res, nil
@@ -273,8 +290,6 @@ func (c *client) SendRequest(ctx context.Context, p *packet.Request) (*packet.Re
 	if err := c.sendPacket(ctx, false, p); err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(ctx, c.requestTimeout)
-	defer cancel()
 	select {
 	case res := <-resp:
 		return res, nil
@@ -321,9 +336,11 @@ func (c *client) _setStatus(status Status) {
 	switch status {
 	case StatusClosed:
 		c.conn.Close()
+		c.keepalive.Stop()
 	case StatusOpening, StatusClosing:
-		break
+		c.keepalive.Stop()
 	case StatusOpened:
+		c.keepalive.Start()
 		go c.recv()
 	}
 	go c.handler.OnStatus(status)
@@ -389,11 +406,15 @@ func (c *client) handlePacket(p packet.Packet) {
 			c.logger.Error("response task not found", xlog.I64("id", p.ID))
 		}
 	case packet.PING:
-		if err := c.SendPong(); err != nil {
+		if err := c.sendPong(); err != nil {
 			c.logger.Error("send pong error", xlog.Err(err))
 		}
 	case packet.PONG:
-		c.keepalive.HandlePong()
+		c.pingLock.Lock()
+		if c.pingChan != nil {
+			c.pingChan <- struct{}{}
+		}
+		c.pingLock.Unlock()
 	case packet.CLOSE:
 		c.tryClose(p.(*packet.Close).Code)
 	default:

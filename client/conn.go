@@ -2,7 +2,6 @@ package client
 
 import (
 	"net"
-	"sync"
 
 	"sutext.github.io/cable/packet"
 )
@@ -71,9 +70,9 @@ func (c *tcpConn) Close() error {
 }
 
 type udpConn struct {
-	addr    *net.UDPAddr
-	conn    *net.UDPConn
-	bufPool sync.Pool
+	addr *net.UDPAddr
+	conn *net.UDPConn
+	buf  []byte
 }
 
 func newUDPConn(addr string) Conn {
@@ -83,11 +82,8 @@ func newUDPConn(addr string) Conn {
 	}
 	return &udpConn{
 		addr: udpAddr,
-		bufPool: sync.Pool{
-			New: func() any {
-				return make([]byte, packet.MAX_UDP)
-			},
-		}}
+		buf:  make([]byte, packet.MAX_UDP),
+	}
 }
 
 func (c *udpConn) WritePacket(p packet.Packet) error {
@@ -103,13 +99,11 @@ func (c *udpConn) WritePacket(p packet.Packet) error {
 }
 
 func (c *udpConn) ReadPacket() (packet.Packet, error) {
-	buf := c.bufPool.Get().([]byte)
-	defer c.bufPool.Put(buf[:0])
-	n, _, err := c.conn.ReadFromUDP(buf)
+	n, _, err := c.conn.ReadFromUDP(c.buf)
 	if err != nil {
 		return nil, err
 	}
-	p, err := packet.Unmarshal(buf[:n])
+	p, err := packet.Unmarshal(c.buf[:n])
 	if err != nil {
 		return nil, err
 	}

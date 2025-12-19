@@ -18,13 +18,16 @@ type udpListener struct {
 	closeHandler  func(c *Conn)
 	packetHandler func(p packet.Packet, c *Conn)
 	acceptHandler func(p *packet.Connect, c *Conn) packet.ConnectCode
+	queueCapacity int32
 }
 
-func NewUDP() Listener {
+func NewUDP(looger *xlog.Logger, queueCapacity int32) Listener {
 	return &udpListener{
-		logger: xlog.With("GROUP", "SERVER"),
+		logger:        looger,
+		queueCapacity: queueCapacity,
 	}
 }
+
 func (l *udpListener) OnClose(handler func(*Conn)) {
 	l.closeHandler = handler
 }
@@ -79,9 +82,8 @@ func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.
 	}
 	connPacket := p.(*packet.Connect)
 	connId := genConnId(connPacket.Identity.ClientID)
-	uc := newUDPConn(connPacket.Identity, conn, addr)
-	c := newConn(uc)
-	uc.closeHandler = func() {
+	c := newUDPConn(connPacket.Identity, conn, addr, l.logger, l.queueCapacity)
+	c.closeHandler = func() {
 		l.conns.Delete(connId)
 		if l.closeHandler != nil {
 			l.closeHandler(c)
@@ -89,58 +91,43 @@ func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.
 	}
 	code := l.acceptHandler(connPacket, c)
 	if code != packet.ConnectAccepted {
-		c.ClosePacket(packet.NewConnack(code))
+		c.ConnackCode(code, "")
+		c.Close()
 		return
 	}
-	ack := packet.NewConnack(packet.ConnectAccepted)
-	ack.Set(packet.PropertyConnID, connId)
-	c.SendPacket(context.Background(), ack)
+	c.ConnackCode(packet.ConnectAccepted, connId)
 	if old, ok := l.conns.Swap(connId, c); ok {
-		old.ClosePacket(packet.NewClose(packet.CloseDuplicateLogin))
+		old.CloseClode(packet.CloseDuplicateLogin)
 		if old.ID().ClientID != connPacket.Identity.ClientID {
 			l.logger.Error("hash collision", xlog.Str("old", old.ID().ClientID), xlog.Str("new", connPacket.Identity.ClientID), xlog.Str("connID", connId))
 		}
 	}
+	per := newPinger(c, time.Second*25, time.Second*3)
+	per.Start()
 }
 
 type udpConn struct {
-	id           *packet.Identity
-	raw          *net.UDPConn
-	addr         atomic.Pointer[net.UDPAddr]
-	closed       atomic.Bool
-	closeHandler func()
+	identity *packet.Identity
+	raw      *net.UDPConn
+	addr     atomic.Pointer[net.UDPAddr]
 }
 
-func (c *udpConn) ID() *packet.Identity {
-	return c.id
+func (c *udpConn) id() *packet.Identity {
+	return c.identity
 }
 func (c *udpConn) close() error {
-	if c.closed.CompareAndSwap(false, true) {
-		err := c.raw.Close()
-		if c.closeHandler != nil {
-			c.closeHandler()
-		}
-		return err
-	}
 	return nil
 }
-func (c *udpConn) isClosed() bool {
-	return c.closed.Load()
-}
-func (c *udpConn) writePacket(ctx context.Context, p packet.Packet, jump bool) error {
-	data, err := packet.Marshal(p)
-	if err != nil {
-		return err
-	}
-	c.raw.SetWriteDeadline(time.Now().Add(time.Second * 5))
-	_, err = c.raw.WriteToUDP(data, c.addr.Load())
+
+func (c *udpConn) writeData(data []byte) error {
+	_, err := c.raw.WriteToUDP(data, c.addr.Load())
 	return err
 }
-func newUDPConn(id *packet.Identity, raw *net.UDPConn, addr *net.UDPAddr) *udpConn {
-	c := &udpConn{
-		id:  id,
-		raw: raw,
+func newUDPConn(id *packet.Identity, raw *net.UDPConn, addr *net.UDPAddr, logger *xlog.Logger, queueCapacity int32) *Conn {
+	u := &udpConn{
+		identity: id,
+		raw:      raw,
 	}
-	c.addr.Store(addr)
-	return c
+	u.addr.Store(addr)
+	return newConn(u, logger, queueCapacity)
 }

@@ -5,18 +5,20 @@ import (
 	"encoding/hex"
 	"hash/crc32"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"sutext.github.io/cable/internal/keepalive"
+	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xerr"
 	"sutext.github.io/cable/xlog"
 )
 
 type conn interface {
-	ID() *packet.Identity
+	id() *packet.Identity
 	close() error
-	isClosed() bool
-	writePacket(ctx context.Context, p packet.Packet, jump bool) error
+	writeData(data []byte) error
 }
 type Listener interface {
 	Close(ctx context.Context) error
@@ -29,30 +31,62 @@ type Listener interface {
 type Conn struct {
 	raw          conn
 	logger       *xlog.Logger
+	closed       atomic.Bool
+	sendQueue    *queue.Queue
+	pingLock     sync.Mutex
+	pingChan     chan struct{}
 	requestLock  sync.Mutex
 	messageLock  sync.Mutex
+	closeHandler func()
 	requestTasks map[int64]chan *packet.Response
 	messageTasks map[int64]chan *packet.Messack
 }
 
-func newConn(raw conn) *Conn {
+func newConn(raw conn, logger *xlog.Logger, queueCapacity int32) *Conn {
 	c := &Conn{
-		raw:    raw,
-		logger: xlog.With("GROUP", "SERVER"),
+		raw:       raw,
+		logger:    logger,
+		sendQueue: queue.New(int32(queueCapacity)),
 	}
 	return c
 }
 
 func (c *Conn) ID() *packet.Identity {
-	return c.raw.ID()
+	return c.raw.id()
 }
 
 func (c *Conn) IsIdle() bool {
-	return true
+	return c.sendQueue.IsIdle()
 }
 
 func (c *Conn) IsClosed() bool {
-	return c.raw.isClosed()
+	return c.closed.Load()
+}
+func (c *Conn) SendPong() error {
+	return c.jumpPacket(context.Background(), packet.NewPong())
+}
+func (c *Conn) SendPing(ctx context.Context) error {
+	if c.IsClosed() {
+		return xerr.ConnectionIsClosed
+	}
+	c.pingLock.Lock()
+	c.pingChan = make(chan struct{})
+	c.pingLock.Unlock()
+	defer func() {
+		c.pingLock.Lock()
+		close(c.pingChan)
+		c.pingChan = nil
+		c.pingLock.Unlock()
+	}()
+	if err := c.SendPacket(ctx, packet.NewPing()); err != nil {
+		return err
+	}
+	select {
+	case <-c.pingChan:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 func (c *Conn) SendMessage(ctx context.Context, p *packet.Message) error {
 	if p.Qos == packet.MessageQos0 {
@@ -123,6 +157,13 @@ func (c *Conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Resp
 		return nil, ctx.Err()
 	}
 }
+func (c *Conn) RecvPong() {
+	c.pingLock.Lock()
+	if c.pingChan != nil {
+		c.pingChan <- struct{}{}
+	}
+	c.pingLock.Unlock()
+}
 func (c *Conn) RecvMessack(p *packet.Messack) {
 	c.messageLock.Lock()
 	ch, ok := c.messageTasks[p.ID]
@@ -146,32 +187,90 @@ func (c *Conn) RecvResponse(p *packet.Response) {
 	}
 }
 func (c *Conn) Close() error {
-	return c.raw.close()
+	if c.closed.CompareAndSwap(false, true) {
+		c.sendQueue.Close()
+		err := c.raw.close()
+		if c.closeHandler != nil {
+			c.closeHandler()
+		}
+		return err
+	}
+	return nil
 }
-func (c *Conn) ClosePacket(p packet.Packet) error {
+func (c *Conn) CloseClode(code packet.CloseCode) error {
+	c.jumpPacket(context.Background(), packet.NewClose(code))
+	return c.Close()
+}
+func (c *Conn) ConnackCode(code packet.ConnectCode, connId string) error {
+	p := packet.NewConnack(code)
+	if connId != "" {
+		p.Set(packet.PropertyConnID, connId)
+	}
 	return c.jumpPacket(context.Background(), p)
-}
-func (c *Conn) DuplicateClose() error {
-	p := packet.NewClose(packet.CloseDuplicateLogin)
-	return c.jumpPacket(context.Background(), p)
-}
-func (c *Conn) SendPong() error {
-	return c.jumpPacket(context.Background(), packet.NewPong())
 }
 func (c *Conn) SendPacket(ctx context.Context, p packet.Packet) error {
 	if c.IsClosed() {
 		return xerr.ConnectionIsClosed
 	}
-	return c.raw.writePacket(ctx, p, false)
+	data, err := packet.Marshal(p)
+	if err != nil {
+		return err
+	}
+	return c.sendQueue.Push(ctx, false, func() {
+		err := c.raw.writeData(data)
+		if err != nil {
+			c.logger.Error("write data error", xlog.Err(err))
+		}
+	})
 }
 func (c *Conn) jumpPacket(ctx context.Context, p packet.Packet) error {
 	if c.IsClosed() {
 		return xerr.ConnectionIsClosed
 	}
-	return c.raw.writePacket(ctx, p, true)
+	data, err := packet.Marshal(p)
+	if err != nil {
+		return err
+	}
+	return c.sendQueue.Push(ctx, true, func() {
+		err := c.raw.writeData(data)
+		if err != nil {
+			c.logger.Error("write data error", xlog.Err(err))
+		}
+	})
 }
 func genConnId(s string) string {
 	h := crc32.NewIEEE()
 	h.Write([]byte(s))
 	return hex.EncodeToString(h.Sum(nil))
+}
+
+type pinger struct {
+	conn      *Conn
+	timeout   time.Duration
+	keepalive *keepalive.KeepAlive
+}
+
+func newPinger(conn *Conn, interval, timeout time.Duration) *pinger {
+	p := &pinger{
+		conn:    conn,
+		timeout: timeout,
+	}
+	p.keepalive = keepalive.New(interval, p)
+	return p
+}
+func (p *pinger) Start() {
+	p.keepalive.Start()
+}
+func (p *pinger) Stop() {
+	p.keepalive.Stop()
+}
+func (p *pinger) SendPing() {
+	ctx, cancel := context.WithTimeout(context.Background(), p.timeout)
+	defer cancel()
+	err := p.conn.SendPing(ctx)
+	if err != nil {
+		if t, ok := err.(interface{ Timeout() bool }); ok && t.Timeout() {
+			p.conn.CloseClode(packet.ClosePingTimeOut)
+		}
+	}
 }

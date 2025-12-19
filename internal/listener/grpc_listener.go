@@ -3,7 +3,6 @@ package listener
 import (
 	"context"
 	"net"
-	"sync/atomic"
 	"time"
 
 	"google.golang.org/grpc"
@@ -21,11 +20,13 @@ type grpcListener struct {
 	closeHandler  func(c *Conn)
 	packetHandler func(p packet.Packet, c *Conn)
 	acceptHandler func(p *packet.Connect, c *Conn) packet.ConnectCode
+	queueCapacity int32
 }
 
-func NewGRPC(logger *xlog.Logger) Listener {
+func NewGRPC(logger *xlog.Logger, queueCapacity int32) Listener {
 	return &grpcListener{
-		logger: logger,
+		logger:        logger,
+		queueCapacity: queueCapacity,
 	}
 }
 func (l *grpcListener) OnClose(handler func(c *Conn)) {
@@ -85,9 +86,8 @@ func (l *grpcListener) Connect(bidi grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]
 		}
 		connPacket := p.(*packet.Connect)
 		connId := genConnId(connPacket.Identity.ClientID)
-		gc := newGRPCConn(connPacket.Identity, bidi)
-		c := newConn(gc)
-		gc.closeHandler = func() {
+		c := newGRPCConn(connPacket.Identity, bidi, l.logger, l.queueCapacity)
+		c.closeHandler = func() {
 			l.conns.Delete(connId)
 			if l.closeHandler != nil {
 				l.closeHandler(c)
@@ -95,56 +95,40 @@ func (l *grpcListener) Connect(bidi grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]
 		}
 		code := l.acceptHandler(connPacket, c)
 		if code != packet.ConnectAccepted {
-			c.ClosePacket(packet.NewConnack(code))
+			c.ConnackCode(code, "")
+			c.Close()
 			continue
 		}
-		ack := packet.NewConnack(packet.ConnectAccepted)
-		ack.Set(packet.PropertyConnID, connId)
-		c.SendPacket(context.Background(), ack)
+		c.ConnackCode(packet.ConnectAccepted, connId)
 		if old, ok := l.conns.Swap(connId, c); ok {
-			old.ClosePacket(packet.NewClose(packet.CloseDuplicateLogin))
+			old.CloseClode(packet.CloseDuplicateLogin)
 			if old.ID().ClientID != connPacket.Identity.ClientID {
 				l.logger.Error("hash collision", xlog.Str("old", old.ID().ClientID), xlog.Str("new", connPacket.Identity.ClientID), xlog.Str("connID", connId))
 			}
 		}
+		per := newPinger(c, time.Second*25, time.Second*3)
+		per.Start()
 	}
 }
 
 type grpcConn struct {
-	id           *packet.Identity
-	raw          grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]
-	closed       atomic.Bool
-	closeHandler func()
+	identity *packet.Identity
+	raw      grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]
 }
 
-func (c *grpcConn) ID() *packet.Identity {
-	return c.id
+func (c *grpcConn) id() *packet.Identity {
+	return c.identity
 }
 func (c *grpcConn) close() error {
-	if c.closed.CompareAndSwap(false, true) {
-		if c.closeHandler != nil {
-			c.closeHandler()
-		}
-	}
 	return nil
 }
-func (c *grpcConn) isClosed() bool {
-	return c.closed.Load()
+func (c *grpcConn) writeData(data []byte) error {
+	return c.raw.Send(&pb.Bytes{Data: data})
 }
-func (c *grpcConn) writePacket(ctx context.Context, p packet.Packet, jump bool) error {
-	data, err := packet.Marshal(p)
-	if err != nil {
-		return err
+func newGRPCConn(id *packet.Identity, raw grpc.BidiStreamingServer[pb.Bytes, pb.Bytes], logger *xlog.Logger, queueCapacity int32) *Conn {
+	g := &grpcConn{
+		identity: id,
+		raw:      raw,
 	}
-	err = c.raw.Send(&pb.Bytes{Data: data})
-	if err != nil {
-		c.close()
-	}
-	return err
-}
-func newGRPCConn(id *packet.Identity, raw grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]) *grpcConn {
-	return &grpcConn{
-		id:  id,
-		raw: raw,
-	}
+	return newConn(g, logger, queueCapacity)
 }
