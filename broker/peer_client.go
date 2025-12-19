@@ -3,25 +3,27 @@ package broker
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"sutext.github.io/cable/broker/protos"
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/xerr"
 	"sutext.github.io/cable/xlog"
 )
 
 type peerClient struct {
 	id     string
 	ip     string
-	ipmu   sync.Mutex
-	broker *broker
-	logger *xlog.Logger
-	cli    protos.PeerServiceClient
+	mu     sync.Mutex
+	rpc    protos.PeerServiceClient
 	conn   *grpc.ClientConn
+	closed atomic.Bool
+	broker *broker
 }
 
 func newPeerClient(id, ip string, broker *broker) *peerClient {
@@ -32,33 +34,59 @@ func newPeerClient(id, ip string, broker *broker) *peerClient {
 	}
 	return p
 }
+func (p *peerClient) Close() {
+	if p.closed.CompareAndSwap(false, true) {
+		if p.conn != nil {
+			p.conn.Close()
+			p.conn = nil
+		}
+		p.rpc = nil
+	}
+}
 func (p *peerClient) connect() {
-	// Set up a connection to the server.
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.closed.Load() {
+		return
+	}
+	if err := p.reconnnect(); err != nil {
+		p.broker.logger.Error("connect to peer failed", xlog.Err(err), xlog.Peer(p.id))
+		time.AfterFunc(time.Second*2, func() {
+			p.connect()
+		})
+	} else {
+		p.broker.logger.Info("peer connected", xlog.Peer(p.id))
+		p.closed.Store(true)
+	}
+}
+func (p *peerClient) reconnnect() error {
 	conn, err := grpc.NewClient(fmt.Sprintf("%s%s", p.ip, p.broker.peerPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		log.Fatalf("did not connect: %v", err)
+		return err
 	}
 	if p.conn != nil {
 		p.conn.Close()
 	}
 	p.conn = conn
-	p.cli = protos.NewPeerServiceClient(conn)
+	p.rpc = protos.NewPeerServiceClient(conn)
+	return nil
 }
-func (p *peerClient) IsReady() bool {
-	return true
+func (p *peerClient) isClosed() bool {
+	return p.closed.Load()
 }
-func (p *peerClient) UpdateIP(ip string) {
-	p.ipmu.Lock()
-	defer p.ipmu.Unlock()
+func (p *peerClient) updateIP(ip string) {
 	if p.ip == ip {
-		p.connect()
 		return
 	}
 	p.broker.logger.Warn("peer ip updated", xlog.Str("ip", ip))
 	p.ip = ip
+	p.closed.Store(false)
 	p.connect()
 }
 func (p *peerClient) sendMessage(ctx context.Context, m *packet.Message, target string, flag uint8) (total, success int32, err error) {
+	if p.closed.Load() {
+		return 0, 0, xerr.PeerNotReady
+	}
 	data, err := coder.Marshal(m)
 	if err != nil {
 		return 0, 0, err
@@ -68,7 +96,7 @@ func (p *peerClient) sendMessage(ctx context.Context, m *packet.Message, target 
 		Target:  target,
 		Message: data,
 	}
-	resp, err := p.cli.SendMessage(ctx, req)
+	resp, err := p.rpc.SendMessage(ctx, req)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -76,26 +104,41 @@ func (p *peerClient) sendMessage(ctx context.Context, m *packet.Message, target 
 }
 
 func (p *peerClient) isOnline(ctx context.Context, uid string) (bool, error) {
-	resp, err := p.cli.IsOnline(ctx, &protos.IsOnlineReq{Uid: uid})
+	if p.closed.Load() {
+		return false, xerr.PeerNotReady
+	}
+	resp, err := p.rpc.IsOnline(ctx, &protos.IsOnlineReq{Uid: uid})
 	if err != nil {
 		return false, err
 	}
 	return resp.Online, nil
 }
 func (p *peerClient) kickConn(ctx context.Context, cid string) error {
-	_, err := p.cli.KickConn(ctx, &protos.KickConnReq{Cid: cid})
+	if p.closed.Load() {
+		return xerr.PeerNotReady
+	}
+	_, err := p.rpc.KickConn(ctx, &protos.KickConnReq{Cid: cid})
 	return err
 }
 func (p *peerClient) kickUser(ctx context.Context, uid string) error {
-	_, err := p.cli.KickUser(ctx, &protos.KickUserReq{Uid: uid})
+	if p.closed.Load() {
+		return xerr.PeerNotReady
+	}
+	_, err := p.rpc.KickUser(ctx, &protos.KickUserReq{Uid: uid})
 	return err
 }
 func (p *peerClient) inspect(ctx context.Context) (*protos.Inspects, error) {
-	return p.cli.Inspect(ctx, &protos.Empty{})
+	if p.closed.Load() {
+		return nil, xerr.PeerNotReady
+	}
+	return p.rpc.Inspect(ctx, &protos.Empty{})
 }
 
 func (p *peerClient) joinChannel(ctx context.Context, uid string, channels []string) (count int32, err error) {
-	resp, err := p.cli.JoinChannel(ctx, &protos.ChannelReq{Uid: uid, Channels: channels})
+	if p.closed.Load() {
+		return 0, xerr.PeerNotReady
+	}
+	resp, err := p.rpc.JoinChannel(ctx, &protos.ChannelReq{Uid: uid, Channels: channels})
 	if err != nil {
 		return 0, err
 	}
@@ -103,7 +146,10 @@ func (p *peerClient) joinChannel(ctx context.Context, uid string, channels []str
 }
 
 func (p *peerClient) leaveChannel(ctx context.Context, uid string, channels []string) (count int32, err error) {
-	resp, err := p.cli.LeaveChannel(ctx, &protos.ChannelReq{Uid: uid, Channels: channels})
+	if !p.isClosed() {
+		return 0, xerr.PeerNotReady
+	}
+	resp, err := p.rpc.LeaveChannel(ctx, &protos.ChannelReq{Uid: uid, Channels: channels})
 	if err != nil {
 		return 0, err
 	}

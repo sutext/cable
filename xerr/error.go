@@ -12,7 +12,7 @@ const (
 	NetworkNotSupported
 	ConnectionNotFound
 	RequestHandlerNotFound
-	BrokerPeerNotReady
+	PeerNotReady
 	InvalidUserID
 	InvalidChannel
 	InvalidPeerMessage
@@ -29,7 +29,7 @@ var errorMap = map[Error]string{
 	NetworkNotSupported:    "network not supported",
 	ConnectionNotFound:     "connection not found",
 	RequestHandlerNotFound: "request handler not found",
-	BrokerPeerNotReady:     "broker peer not ready",
+	PeerNotReady:           "broker peer not ready",
 	InvalidUserID:          "invalid user id",
 	InvalidChannel:         "invalid channel",
 	InvalidPeerMessage:     "invalid peer message",

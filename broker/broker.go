@@ -94,9 +94,8 @@ func (b *broker) clusterSize() int32 {
 	return b.peers.Len() + 1
 }
 func (b *broker) delPeer(id string) {
-	b.logger.Debug("del peer", xlog.Peer(id))
-	if _, ok := b.peers.Get(id); ok {
-		b.peers.Delete(id)
+	if b.peers.Delete(id) {
+		b.logger.Info("peer deleted", xlog.Peer(id))
 	}
 }
 func (b *broker) addPeer(id, ip string) {
@@ -104,14 +103,10 @@ func (b *broker) addPeer(id, ip string) {
 		return
 	}
 	if p, ok := b.peers.Get(id); ok {
-		p.UpdateIP(ip)
+		p.updateIP(ip)
 		return
 	}
 	peer := newPeerClient(id, ip, b)
-	if peer == nil {
-		return
-	}
-	b.logger.Debug("add peer", xlog.Peer(id))
 	b.peers.Set(id, peer)
 	peer.connect()
 }
