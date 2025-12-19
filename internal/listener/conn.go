@@ -2,6 +2,8 @@ package listener
 
 import (
 	"context"
+	"encoding/hex"
+	"hash/crc32"
 	"sync"
 	"time"
 
@@ -76,9 +78,11 @@ func (c *Conn) sendInflightMessage(ctx context.Context, p *packet.Message) (*pac
 		return nil, xerr.ConnectionIsClosed
 	}
 	akcCh := make(chan *packet.Messack)
-	defer close(akcCh)
 	c.messageTasks.Store(p.ID, akcCh)
-	defer c.messageTasks.Delete(p.ID)
+	defer func() {
+		c.messageTasks.Delete(p.ID)
+		close(akcCh)
+	}()
 	if err := c.SendPacket(ctx, p); err != nil {
 		return nil, err
 	}
@@ -94,9 +98,11 @@ func (c *Conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Resp
 		return nil, xerr.ConnectionIsClosed
 	}
 	resp := make(chan *packet.Response)
-	defer close(resp)
 	c.requestTasks.Store(p.ID, resp)
-	defer c.requestTasks.Delete(p.ID)
+	defer func() {
+		c.requestTasks.Delete(p.ID)
+		close(resp)
+	}()
 	if err := c.SendPacket(ctx, p); err != nil {
 		return nil, err
 	}
@@ -141,4 +147,9 @@ func (c *Conn) jumpPacket(ctx context.Context, p packet.Packet) error {
 		return xerr.ConnectionIsClosed
 	}
 	return c.raw.writePacket(ctx, p, true)
+}
+func genConnId(s string) string {
+	h := crc32.NewIEEE()
+	h.Write([]byte(s))
+	return hex.EncodeToString(h.Sum(nil))
 }

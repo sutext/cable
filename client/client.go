@@ -51,6 +51,7 @@ type Client interface {
 type client struct {
 	id             *packet.Identity
 	conn           Conn
+	connId         string
 	closed         atomic.Bool
 	status         Status
 	logger         *xlog.Logger
@@ -62,7 +63,6 @@ type client struct {
 	statusLock     sync.RWMutex
 	pingTimeout    time.Duration
 	pingInterval   time.Duration
-	packetConnID   string
 	requestTasks   sync.Map
 	messageTasks   sync.Map
 	writeTimeout   time.Duration
@@ -187,7 +187,7 @@ func (c *client) reconnect() error {
 		return ack.Code
 	}
 	if connID, ok := ack.Get(packet.PropertyConnID); ok {
-		c.packetConnID = connID
+		c.connId = connID
 	}
 	c.setStatus(StatusOpened)
 	return nil
@@ -231,9 +231,11 @@ func (c *client) sendInflightMessage(ctx context.Context, p *packet.Message) (*p
 		return nil, ErrConnectionNotReady
 	}
 	ackCh := make(chan *packet.Messack)
-	defer close(ackCh)
 	c.messageTasks.Store(p.ID, ackCh)
-	defer c.messageTasks.Delete(p.ID)
+	defer func() {
+		c.messageTasks.Delete(p.ID)
+		close(ackCh)
+	}()
 	if err := c.sendPacket(ctx, false, p); err != nil {
 		return nil, err
 	}
@@ -243,7 +245,7 @@ func (c *client) sendInflightMessage(ctx context.Context, p *packet.Message) (*p
 	case res := <-ackCh:
 		return res, nil
 	case <-ctx.Done():
-		return nil, context.Cause(ctx)
+		return nil, ctx.Err()
 	}
 }
 func (c *client) SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {
@@ -251,9 +253,11 @@ func (c *client) SendRequest(ctx context.Context, p *packet.Request) (*packet.Re
 		return nil, ErrConnectionNotReady
 	}
 	resp := make(chan *packet.Response)
-	defer close(resp)
 	c.requestTasks.Store(p.ID, resp)
-	defer c.requestTasks.Delete(p.ID)
+	defer func() {
+		c.requestTasks.Delete(p.ID)
+		close(resp)
+	}()
 	if err := c.sendPacket(ctx, false, p); err != nil {
 		return nil, err
 	}
@@ -263,7 +267,7 @@ func (c *client) SendRequest(ctx context.Context, p *packet.Request) (*packet.Re
 	case res := <-resp:
 		return res, nil
 	case <-ctx.Done():
-		return nil, context.Cause(ctx)
+		return nil, ctx.Err()
 	}
 }
 
@@ -275,8 +279,8 @@ func (c *client) sendPacket(ctx context.Context, jump bool, p packet.Packet) err
 		if !c.IsReady() {
 			return
 		}
-		if c.packetConnID != "" {
-			p.Set(packet.PropertyConnID, c.packetConnID)
+		if c.connId != "" {
+			p.Set(packet.PropertyConnID, c.connId)
 		}
 		err := c.conn.WritePacket(p)
 		if err != nil {
@@ -319,13 +323,6 @@ func (c *client) recv() {
 		if err != nil {
 			c.tryClose(err)
 			return
-		}
-		if connID, ok := p.Get(packet.PropertyConnID); ok {
-			if connID != c.packetConnID {
-				c.logger.Error("packet conn id not match", xlog.Str("connID", connID), xlog.Str("expect", c.packetConnID))
-				c.tryClose(ErrConnectionFailed)
-				return
-			}
 		}
 		go c.handlePacket(p)
 	}

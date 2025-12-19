@@ -66,7 +66,7 @@ func (l *grpcListener) Connect(bidi grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]
 			return err
 		}
 		timer := time.AfterFunc(time.Second*10, func() {
-			l.logger.Warn("waite conn packet timeout")
+			l.logger.Warn("wait conn packet timeout")
 		})
 		timer.Stop()
 		if p.Type() != packet.CONNECT {
@@ -84,11 +84,11 @@ func (l *grpcListener) Connect(bidi grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]
 			continue
 		}
 		connPacket := p.(*packet.Connect)
-		connID := md5Hash(connPacket.Identity.ClientID)
-		gc := newGRPCConn(connPacket.Identity, bidi, connID)
+		connId := genConnId(connPacket.Identity.ClientID)
+		gc := newGRPCConn(connPacket.Identity, bidi)
 		c := newConn(gc)
 		gc.closeHandler = func() {
-			l.conns.Delete(connID)
+			l.conns.Delete(connId)
 			if l.closeHandler != nil {
 				l.closeHandler(c)
 			}
@@ -98,15 +98,16 @@ func (l *grpcListener) Connect(bidi grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]
 			c.ClosePacket(packet.NewConnack(code))
 			continue
 		}
-		c.SendPacket(context.Background(), packet.NewConnack(packet.ConnectAccepted))
-		l.conns.Set(connID, c)
+		ack := packet.NewConnack(packet.ConnectAccepted)
+		ack.Set(packet.PropertyConnID, connId)
+		c.SendPacket(context.Background(), ack)
+		l.conns.Set(connId, c)
 	}
 }
 
 type grpcConn struct {
 	id           *packet.Identity
 	raw          grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]
-	connID       string
 	closed       atomic.Bool
 	closeHandler func()
 }
@@ -126,7 +127,6 @@ func (c *grpcConn) isClosed() bool {
 	return c.closed.Load()
 }
 func (c *grpcConn) writePacket(ctx context.Context, p packet.Packet, jump bool) error {
-	p.Set(packet.PropertyConnID, c.connID)
 	data, err := packet.Marshal(p)
 	if err != nil {
 		return err
@@ -137,10 +137,9 @@ func (c *grpcConn) writePacket(ctx context.Context, p packet.Packet, jump bool) 
 	}
 	return err
 }
-func newGRPCConn(id *packet.Identity, raw grpc.BidiStreamingServer[pb.Bytes, pb.Bytes], connID string) *grpcConn {
+func newGRPCConn(id *packet.Identity, raw grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]) *grpcConn {
 	return &grpcConn{
-		id:     id,
-		raw:    raw,
-		connID: connID,
+		id:  id,
+		raw: raw,
 	}
 }

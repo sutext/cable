@@ -2,8 +2,6 @@ package listener
 
 import (
 	"context"
-	"crypto/md5"
-	"encoding/hex"
 	"net"
 	"sync/atomic"
 	"time"
@@ -14,8 +12,8 @@ import (
 )
 
 type udpListener struct {
+	conns         safe.Map[string, *Conn]
 	logger        *xlog.Logger
-	connMap       safe.Map[string, *Conn]
 	listener      *net.UDPConn
 	closeHandler  func(c *Conn)
 	packetHandler func(p packet.Packet, c *Conn)
@@ -71,7 +69,7 @@ func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.
 			l.logger.Warn("unknown udp packet", xlog.Str("packet", p.String()))
 			return
 		}
-		c, loaded := l.connMap.Get(connID)
+		c, loaded := l.conns.Get(connID)
 		if !loaded {
 			l.logger.Warn("unknown udp connID", xlog.Str("connID", connID))
 			return
@@ -80,11 +78,11 @@ func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.
 		return
 	}
 	connPacket := p.(*packet.Connect)
-	connID := md5Hash(connPacket.Identity.ClientID)
-	uc := newUDPConn(connPacket.Identity, conn, addr, connID)
+	connId := genConnId(connPacket.Identity.ClientID)
+	uc := newUDPConn(connPacket.Identity, conn, addr)
 	c := newConn(uc)
 	uc.closeHandler = func() {
-		l.connMap.Delete(connID)
+		l.conns.Delete(connId)
 		if l.closeHandler != nil {
 			l.closeHandler(c)
 		}
@@ -94,20 +92,16 @@ func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.
 		c.ClosePacket(packet.NewConnack(code))
 		return
 	}
-	c.SendPacket(context.Background(), packet.NewConnack(packet.ConnectAccepted))
-	l.connMap.Set(connID, c)
-}
-func md5Hash(s string) string {
-	h := md5.New()
-	h.Write([]byte(s))
-	return hex.EncodeToString(h.Sum(nil))
+	ack := packet.NewConnack(packet.ConnectAccepted)
+	ack.Set(packet.PropertyConnID, connId)
+	c.SendPacket(context.Background(), ack)
+	l.conns.Set(connId, c)
 }
 
 type udpConn struct {
 	id           *packet.Identity
 	raw          *net.UDPConn
 	addr         atomic.Pointer[net.UDPAddr]
-	connID       string
 	closed       atomic.Bool
 	closeHandler func()
 }
@@ -129,7 +123,6 @@ func (c *udpConn) isClosed() bool {
 	return c.closed.Load()
 }
 func (c *udpConn) writePacket(ctx context.Context, p packet.Packet, jump bool) error {
-	p.Set(packet.PropertyConnID, c.connID)
 	data, err := packet.Marshal(p)
 	if err != nil {
 		return err
@@ -138,11 +131,10 @@ func (c *udpConn) writePacket(ctx context.Context, p packet.Packet, jump bool) e
 	_, err = c.raw.WriteToUDP(data, c.addr.Load())
 	return err
 }
-func newUDPConn(id *packet.Identity, raw *net.UDPConn, addr *net.UDPAddr, connID string) *udpConn {
+func newUDPConn(id *packet.Identity, raw *net.UDPConn, addr *net.UDPAddr) *udpConn {
 	c := &udpConn{
-		id:     id,
-		raw:    raw,
-		connID: connID,
+		id:  id,
+		raw: raw,
 	}
 	c.addr.Store(addr)
 	return c
