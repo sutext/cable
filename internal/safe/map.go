@@ -40,10 +40,12 @@ func (m *Map[K, V]) Range(f func(key K, value V) bool) {
 		return f(k.(K), v.(V))
 	})
 }
-func (m *Map[K, V]) Delete(key K) {
+func (m *Map[K, V]) Delete(key K) bool {
 	if _, loaded := m.m.LoadAndDelete(key); loaded {
 		m.l.Add(-1)
+		return true
 	}
+	return false
 }
 
 // GetOrSet returns the existing value for the key if present.

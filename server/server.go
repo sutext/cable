@@ -212,7 +212,8 @@ func (s *server) onRequest(c *listener.Conn, p *packet.Request) {
 func (s *server) onClose(c *listener.Conn) {
 	id := c.ID()
 	if id != nil {
-		s.conns.Delete(id.ClientID)
-		s.closeHandler(id)
+		if s.conns.Delete(id.ClientID) {
+			s.closeHandler(id)
+		}
 	}
 }

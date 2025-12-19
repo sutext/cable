@@ -101,7 +101,12 @@ func (l *grpcListener) Connect(bidi grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]
 		ack := packet.NewConnack(packet.ConnectAccepted)
 		ack.Set(packet.PropertyConnID, connId)
 		c.SendPacket(context.Background(), ack)
-		l.conns.Set(connId, c)
+		if old, ok := l.conns.Swap(connId, c); ok {
+			old.ClosePacket(packet.NewClose(packet.CloseDuplicateLogin))
+			if old.ID().ClientID != connPacket.Identity.ClientID {
+				l.logger.Error("hash collision", xlog.Str("old", old.ID().ClientID), xlog.Str("new", connPacket.Identity.ClientID), xlog.Str("connID", connId))
+			}
+		}
 	}
 }
 
