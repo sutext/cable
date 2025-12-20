@@ -20,7 +20,7 @@ func New(interval time.Duration, pinger pinger) *KeepAlive {
 		interval: interval,
 		pinger:   pinger,
 	}
-	k.lastPacketTime.Store(time.Now().UnixMicro())
+	k.lastPacketTime.Store(time.Now().UnixNano())
 	return k
 }
 func (k *KeepAlive) run() {
