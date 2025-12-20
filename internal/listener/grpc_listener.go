@@ -14,12 +14,12 @@ import (
 
 type grpcListener struct {
 	pb.UnimplementedBytesServiceServer
-	conns         safe.Map[string, *Conn]
+	conns         safe.Map[string, Conn]
 	logger        *xlog.Logger
 	listener      *net.TCPListener
-	closeHandler  func(c *Conn)
-	packetHandler func(p packet.Packet, c *Conn)
-	acceptHandler func(p *packet.Connect, c *Conn) packet.ConnectCode
+	closeHandler  func(c Conn)
+	packetHandler func(p packet.Packet, c Conn)
+	acceptHandler func(p *packet.Connect, c Conn) packet.ConnectCode
 	queueCapacity int32
 }
 
@@ -29,13 +29,13 @@ func NewGRPC(logger *xlog.Logger, queueCapacity int32) Listener {
 		queueCapacity: queueCapacity,
 	}
 }
-func (l *grpcListener) OnClose(handler func(c *Conn)) {
+func (l *grpcListener) OnClose(handler func(c Conn)) {
 	l.closeHandler = handler
 }
-func (l *grpcListener) OnAccept(handler func(*packet.Connect, *Conn) packet.ConnectCode) {
+func (l *grpcListener) OnAccept(handler func(*packet.Connect, Conn) packet.ConnectCode) {
 	l.acceptHandler = handler
 }
-func (l *grpcListener) OnPacket(handler func(p packet.Packet, c *Conn)) {
+func (l *grpcListener) OnPacket(handler func(p packet.Packet, c Conn)) {
 	l.packetHandler = handler
 }
 func (l *grpcListener) Close(ctx context.Context) error {
@@ -87,12 +87,12 @@ func (l *grpcListener) Connect(bidi grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]
 		connPacket := p.(*packet.Connect)
 		connId := genConnId(connPacket.Identity.ClientID)
 		c := newGRPCConn(connPacket.Identity, bidi, l.logger, l.queueCapacity)
-		c.closeHandler = func() {
+		c.OnClose(func() {
 			l.conns.Delete(connId)
 			if l.closeHandler != nil {
 				l.closeHandler(c)
 			}
-		}
+		})
 		code := l.acceptHandler(connPacket, c)
 		if code != packet.ConnectAccepted {
 			c.ConnackCode(code, "")
@@ -112,23 +112,23 @@ func (l *grpcListener) Connect(bidi grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]
 }
 
 type grpcConn struct {
-	identity *packet.Identity
-	raw      grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]
+	id  *packet.Identity
+	raw grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]
 }
 
-func (c *grpcConn) id() *packet.Identity {
-	return c.identity
+func (c *grpcConn) ID() *packet.Identity {
+	return c.id
 }
-func (c *grpcConn) close() error {
+func (c *grpcConn) Close() error {
 	return nil
 }
-func (c *grpcConn) writeData(data []byte) error {
+func (c *grpcConn) WriteData(data []byte) error {
 	return c.raw.Send(&pb.Bytes{Data: data})
 }
-func newGRPCConn(id *packet.Identity, raw grpc.BidiStreamingServer[pb.Bytes, pb.Bytes], logger *xlog.Logger, queueCapacity int32) *Conn {
+func newGRPCConn(id *packet.Identity, raw grpc.BidiStreamingServer[pb.Bytes, pb.Bytes], logger *xlog.Logger, queueCapacity int32) Conn {
 	g := &grpcConn{
-		identity: id,
-		raw:      raw,
+		id:  id,
+		raw: raw,
 	}
 	return newConn(g, logger, queueCapacity)
 }

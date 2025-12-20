@@ -316,7 +316,6 @@ func unpack(header, data []byte) (Packet, error) {
 		}
 		return close, nil
 	default:
-		fmt.Printf("unknown packet type: %d\n", packetType)
 		return nil, ErrUnknownPacketType
 	}
 }

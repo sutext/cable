@@ -3,37 +3,37 @@ package xerr
 type Error uint16
 
 const (
-	RequestTimeout Error = iota
-	MessageTimeout
-	ServerIsClosed
-	ServerAlreadyClosed
-	ConnectionIsClosed
-	SendingQueueIsFull
-	NetworkNotSupported
-	ConnectionNotFound
-	RequestHandlerNotFound
-	PeerNotReady
+	PeerNotReady Error = iota
 	InvalidUserID
 	InvalidChannel
+	RequestTimeout
+	MessageTimeout
+	ServerIsClosed
 	InvalidPeerMessage
+	ConnectionIsClosed
+	SendingQueueIsFull
+	ConnectionNotFound
+	ServerAlreadyClosed
+	TransportNotSupported
+	RequestHandlerNotFound
 	InvalidPeerMessageFlag
 )
 
 var errorMap = map[Error]string{
+	PeerNotReady:           "broker peer not ready",
+	InvalidUserID:          "invalid user id",
 	RequestTimeout:         "request timeout",
 	MessageTimeout:         "message timeout",
 	ServerIsClosed:         "server is closed",
-	ServerAlreadyClosed:    "server already closed",
-	ConnectionIsClosed:     "connection is closed",
-	SendingQueueIsFull:     "sending queue is full",
-	NetworkNotSupported:    "network not supported",
-	ConnectionNotFound:     "connection not found",
-	RequestHandlerNotFound: "request handler not found",
-	PeerNotReady:           "broker peer not ready",
-	InvalidUserID:          "invalid user id",
 	InvalidChannel:         "invalid channel",
 	InvalidPeerMessage:     "invalid peer message",
+	ConnectionIsClosed:     "connection is closed",
+	SendingQueueIsFull:     "sending queue is full",
+	ConnectionNotFound:     "connection not found",
+	ServerAlreadyClosed:    "server already closed",
+	TransportNotSupported:  "transport not supported",
 	InvalidPeerMessageFlag: "invalid peer message flag",
+	RequestHandlerNotFound: "request handler not found",
 }
 
 func (e Error) Error() string {

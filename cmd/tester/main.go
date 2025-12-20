@@ -11,7 +11,6 @@ import (
 
 func main() {
 	xlog.SetDefault(xlog.WithLevel(xlog.LevelInfo))
-
 	ctx := context.Background()
 	ctx, cancel := context.WithTimeout(ctx, time.Millisecond*getFrequency()*getMaxConns())
 	tester := NewTester()
@@ -33,7 +32,7 @@ func main() {
 func getMaxConns() time.Duration {
 	count := os.Getenv("MAX_CONNS")
 	if count == "" {
-		return 25000
+		return 5
 	}
 	i, err := strconv.ParseInt(count, 10, 64)
 	if err != nil {

@@ -12,12 +12,12 @@ import (
 )
 
 type udpListener struct {
-	conns         safe.Map[string, *Conn]
+	conns         safe.Map[string, Conn]
 	logger        *xlog.Logger
 	listener      *net.UDPConn
-	closeHandler  func(c *Conn)
-	packetHandler func(p packet.Packet, c *Conn)
-	acceptHandler func(p *packet.Connect, c *Conn) packet.ConnectCode
+	closeHandler  func(c Conn)
+	packetHandler func(p packet.Packet, c Conn)
+	acceptHandler func(p *packet.Connect, c Conn) packet.ConnectCode
 	queueCapacity int32
 }
 
@@ -28,13 +28,13 @@ func NewUDP(looger *xlog.Logger, queueCapacity int32) Listener {
 	}
 }
 
-func (l *udpListener) OnClose(handler func(*Conn)) {
+func (l *udpListener) OnClose(handler func(Conn)) {
 	l.closeHandler = handler
 }
-func (l *udpListener) OnAccept(handler func(*packet.Connect, *Conn) packet.ConnectCode) {
+func (l *udpListener) OnAccept(handler func(*packet.Connect, Conn) packet.ConnectCode) {
 	l.acceptHandler = handler
 }
-func (l *udpListener) OnPacket(handler func(p packet.Packet, c *Conn)) {
+func (l *udpListener) OnPacket(handler func(p packet.Packet, c Conn)) {
 	l.packetHandler = handler
 }
 func (l *udpListener) Close(ctx context.Context) error {
@@ -83,12 +83,12 @@ func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.
 	connPacket := p.(*packet.Connect)
 	connId := genConnId(connPacket.Identity.ClientID)
 	c := newUDPConn(connPacket.Identity, conn, addr, l.logger, l.queueCapacity)
-	c.closeHandler = func() {
+	c.OnClose(func() {
 		l.conns.Delete(connId)
 		if l.closeHandler != nil {
 			l.closeHandler(c)
 		}
-	}
+	})
 	code := l.acceptHandler(connPacket, c)
 	if code != packet.ConnectAccepted {
 		c.ConnackCode(code, "")
@@ -107,26 +107,26 @@ func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.
 }
 
 type udpConn struct {
-	identity *packet.Identity
-	raw      *net.UDPConn
-	addr     atomic.Pointer[net.UDPAddr]
+	id   *packet.Identity
+	raw  *net.UDPConn
+	addr atomic.Pointer[net.UDPAddr]
 }
 
-func (c *udpConn) id() *packet.Identity {
-	return c.identity
+func (c *udpConn) ID() *packet.Identity {
+	return c.id
 }
-func (c *udpConn) close() error {
+func (c *udpConn) Close() error {
 	return nil
 }
 
-func (c *udpConn) writeData(data []byte) error {
+func (c *udpConn) WriteData(data []byte) error {
 	_, err := c.raw.WriteToUDP(data, c.addr.Load())
 	return err
 }
-func newUDPConn(id *packet.Identity, raw *net.UDPConn, addr *net.UDPAddr, logger *xlog.Logger, queueCapacity int32) *Conn {
+func newUDPConn(id *packet.Identity, raw *net.UDPConn, addr *net.UDPAddr, logger *xlog.Logger, queueCapacity int32) Conn {
 	u := &udpConn{
-		identity: id,
-		raw:      raw,
+		id:  id,
+		raw: raw,
 	}
 	u.addr.Store(addr)
 	return newConn(u, logger, queueCapacity)

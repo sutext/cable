@@ -13,18 +13,27 @@ import (
 )
 
 type Server interface {
+	// Serve starts the server and listens for incoming connections.
 	Serve() error
+	// ConnLen returns the number of active connections.
 	ConnLen() int32
-	Network() Transport
+	/// IsActive returns true if the client is active.
 	IsActive(cid string) bool
+	// KickConn kicks a client out of the server.
 	KickConn(cid string) bool
+	// Shutdown shuts down the server and closes all connections.
 	Shutdown(ctx context.Context) error
+	// Brodcast sends a message to all clients.
 	Brodcast(ctx context.Context, p *packet.Message) (total, success int32, err error)
+	// Transport returns the transport of the server.
+	Transport() Transport
+	// SendMessage sends a message to a client.
 	SendMessage(ctx context.Context, cid string, p *packet.Message) error
+	// SendRequest sends a request to a client and returns the response.
 	SendRequest(ctx context.Context, cid string, p *packet.Request) (*packet.Response, error)
 }
 type server struct {
-	conns          safe.Map[string, *listener.Conn]
+	conns          safe.Map[string, listener.Conn]
 	logger         *xlog.Logger
 	closed         atomic.Bool
 	address        string
@@ -61,12 +70,12 @@ func (s *server) Serve() error {
 	case TransportGRPC:
 		s.listener = listener.NewGRPC(s.logger, s.queueCapacity)
 	default:
-		return xerr.NetworkNotSupported
+		return xerr.TransportNotSupported
 	}
 	s.listener.OnClose(s.onClose)
 	s.listener.OnAccept(s.onConnect)
 	s.listener.OnPacket(s.onPacket)
-	s.logger.Info("server listening", xlog.Str("address", s.address), xlog.Str("network", s.transport.String()))
+	s.logger.Info("server listening", xlog.Str("address", s.address), xlog.Str("transport", s.transport.String()))
 	return s.listener.Listen(s.address)
 }
 func (s *server) IsActive(cid string) bool {
@@ -92,7 +101,7 @@ func (s *server) Shutdown(ctx context.Context) error {
 	err := s.listener.Close(ctx)
 	for {
 		activeConn := 0
-		s.conns.Range(func(key string, conn *listener.Conn) bool {
+		s.conns.Range(func(key string, conn listener.Conn) bool {
 			if conn.IsIdle() {
 				conn.Close()
 			} else {
@@ -117,15 +126,12 @@ func (s *server) Shutdown(ctx context.Context) error {
 		}
 	}
 }
-func (s *server) Network() Transport {
-	return s.transport
-}
 func (s *server) Brodcast(ctx context.Context, p *packet.Message) (int32, int32, error) {
 	if s.closed.Load() {
 		return 0, 0, xerr.ServerIsClosed
 	}
 	var total, success int32
-	s.conns.Range(func(cid string, conn *listener.Conn) bool {
+	s.conns.Range(func(cid string, conn listener.Conn) bool {
 		total++
 		if err := conn.SendMessage(ctx, p); err == nil {
 			success++
@@ -133,6 +139,9 @@ func (s *server) Brodcast(ctx context.Context, p *packet.Message) (int32, int32,
 		return true
 	})
 	return total, success, nil
+}
+func (s *server) Transport() Transport {
+	return s.transport
 }
 func (s *server) SendMessage(ctx context.Context, cid string, p *packet.Message) error {
 	if s.closed.Load() {
@@ -154,7 +163,7 @@ func (s *server) SendRequest(ctx context.Context, cid string, p *packet.Request)
 }
 
 // Below is the code of /Users/vidar/github/cable/server/conn.go
-func (s *server) onPacket(p packet.Packet, c *listener.Conn) {
+func (s *server) onPacket(p packet.Packet, c listener.Conn) {
 	if s.closed.Load() {
 		return
 	}
@@ -171,7 +180,6 @@ func (s *server) onPacket(p packet.Packet, c *listener.Conn) {
 		c.SendPong()
 	case packet.PONG:
 		c.RecvPong()
-		break
 	case packet.CLOSE:
 		c.Close()
 	default:
@@ -179,7 +187,7 @@ func (s *server) onPacket(p packet.Packet, c *listener.Conn) {
 	}
 }
 
-func (s *server) onConnect(p *packet.Connect, c *listener.Conn) packet.ConnectCode {
+func (s *server) onConnect(p *packet.Connect, c listener.Conn) packet.ConnectCode {
 	code := s.connectHander(p)
 	if code == packet.ConnectAccepted {
 		if old, loaded := s.conns.Swap(p.Identity.ClientID, c); loaded {
@@ -188,7 +196,7 @@ func (s *server) onConnect(p *packet.Connect, c *listener.Conn) packet.ConnectCo
 	}
 	return code
 }
-func (s *server) onMessage(c *listener.Conn, p *packet.Message) {
+func (s *server) onMessage(c listener.Conn, p *packet.Message) {
 	err := s.messageHandler(p, c.ID())
 	if err != nil {
 		s.logger.Error("failed to handle message", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
@@ -200,7 +208,7 @@ func (s *server) onMessage(c *listener.Conn, p *packet.Message) {
 		}
 	}
 }
-func (s *server) onRequest(c *listener.Conn, p *packet.Request) {
+func (s *server) onRequest(c listener.Conn, p *packet.Request) {
 	res, err := s.requestHandler(p, c.ID())
 	if err != nil {
 		s.logger.Error("failed to handle request", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
@@ -210,11 +218,12 @@ func (s *server) onRequest(c *listener.Conn, p *packet.Request) {
 		s.logger.Error("failed to send response", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 	}
 }
-func (s *server) onClose(c *listener.Conn) {
+func (s *server) onClose(c listener.Conn) {
 	id := c.ID()
-	if id != nil {
-		if s.conns.Delete(id.ClientID) {
-			s.closeHandler(id)
-		}
+	if id == nil {
+		return
+	}
+	if s.conns.Delete(id.ClientID) {
+		s.closeHandler(id)
 	}
 }

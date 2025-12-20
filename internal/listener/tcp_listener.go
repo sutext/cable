@@ -12,9 +12,9 @@ import (
 type tcpListener struct {
 	logger        *xlog.Logger
 	listener      *net.TCPListener
-	closeHandler  func(c *Conn)
-	packetHandler func(p packet.Packet, c *Conn)
-	acceptHandler func(*packet.Connect, *Conn) packet.ConnectCode
+	closeHandler  func(c Conn)
+	packetHandler func(p packet.Packet, c Conn)
+	acceptHandler func(p *packet.Connect, c Conn) packet.ConnectCode
 	queueCapacity int32
 }
 
@@ -24,13 +24,13 @@ func NewTCP(logger *xlog.Logger, queueCapacity int32) Listener {
 		queueCapacity: queueCapacity,
 	}
 }
-func (l *tcpListener) OnClose(handler func(c *Conn)) {
+func (l *tcpListener) OnClose(handler func(c Conn)) {
 	l.closeHandler = handler
 }
-func (l *tcpListener) OnAccept(handler func(*packet.Connect, *Conn) packet.ConnectCode) {
+func (l *tcpListener) OnAccept(handler func(*packet.Connect, Conn) packet.ConnectCode) {
 	l.acceptHandler = handler
 }
-func (l *tcpListener) OnPacket(handler func(p packet.Packet, c *Conn)) {
+func (l *tcpListener) OnPacket(handler func(p packet.Packet, c Conn)) {
 	l.packetHandler = handler
 }
 func (l *tcpListener) Close(ctx context.Context) error {
@@ -77,9 +77,9 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 	}
 	connPacket := p.(*packet.Connect)
 	c := newTCPConn(connPacket.Identity, conn, l.logger, l.queueCapacity)
-	c.closeHandler = func() {
+	c.OnClose(func() {
 		l.closeHandler(c)
-	}
+	})
 	code := l.acceptHandler(connPacket, c)
 	if code != packet.ConnectAccepted {
 		c.ConnackCode(code, "")
@@ -98,25 +98,25 @@ func (l *tcpListener) handleConn(conn *net.TCPConn) {
 }
 
 type tcpConn struct {
-	raw      *net.TCPConn
-	identity *packet.Identity
+	raw *net.TCPConn
+	id  *packet.Identity
 }
 
-func (c *tcpConn) id() *packet.Identity {
-	return c.identity
+func (c *tcpConn) ID() *packet.Identity {
+	return c.id
 }
-func (c *tcpConn) close() error {
+func (c *tcpConn) Close() error {
 	return c.raw.Close()
 }
 
-func (c *tcpConn) writeData(data []byte) error {
+func (c *tcpConn) WriteData(data []byte) error {
 	_, err := c.raw.Write(data)
 	return err
 }
-func newTCPConn(id *packet.Identity, raw *net.TCPConn, logger *xlog.Logger, queueCapacity int32) *Conn {
+func newTCPConn(id *packet.Identity, raw *net.TCPConn, logger *xlog.Logger, queueCapacity int32) Conn {
 	t := &tcpConn{
-		identity: id,
-		raw:      raw,
+		id:  id,
+		raw: raw,
 	}
 	return newConn(t, logger, queueCapacity)
 }
