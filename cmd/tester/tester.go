@@ -68,7 +68,7 @@ func randomChannel() string {
 func (c *Client) OnStatus(status client.Status) {
 	if c.cli.IsReady() {
 		xlog.Info("client opened")
-		go c.run()
+		// go c.run()
 	}
 }
 func (c *Client) OnMessage(msg *packet.Message) error {

@@ -16,6 +16,7 @@ func merge(i, o *protos.Inspects) {
 	i.UserCount += o.UserCount
 	i.ClientCount += o.ClientCount
 	i.ClusterSize = max(i.ClusterSize, o.ClusterSize)
+	i.ChannelCount += o.ChannelCount
 }
 
 func (b *broker) inspect() *protos.Inspects {
@@ -29,15 +30,12 @@ func (b *broker) inspect() *protos.Inspects {
 	// 	}
 	// 	return true
 	// })
-	var connLen int32
-	for _, l := range b.listeners {
-		connLen += l.ConnLen()
-	}
 	return &protos.Inspects{
-		Id:          b.id,
-		UserCount:   b.userClients.Len(),
-		ClientCount: connLen,
-		ClusterSize: b.clusterSize(),
+		Id:           b.id,
+		UserCount:    b.userClients.Len(),
+		ClientCount:  b.clientChannels.Len(),
+		ClusterSize:  b.clusterSize(),
+		ChannelCount: b.clientChannels.Len(),
 	}
 }
 

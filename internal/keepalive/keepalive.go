@@ -21,6 +21,7 @@ func New(interval time.Duration, pinger pinger) *KeepAlive {
 		pinger:   pinger,
 	}
 	k.lastPacketTime.Store(time.Now().UnixNano())
+	k.stoped.Store(true)
 	return k
 }
 func (k *KeepAlive) run() {

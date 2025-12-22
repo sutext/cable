@@ -32,7 +32,7 @@ func main() {
 func getMaxConns() time.Duration {
 	count := os.Getenv("MAX_CONNS")
 	if count == "" {
-		return 5
+		return 25000
 	}
 	i, err := strconv.ParseInt(count, 10, 64)
 	if err != nil {

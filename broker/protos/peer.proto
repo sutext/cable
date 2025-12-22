@@ -4,32 +4,40 @@ option go_package = "./protos";
 
 package protos;
 
+/// An empty message.
 message Empty{
 }
+/// IsOnlineReq is the request message for IsOnline RPC.
 message IsOnlineReq{
   string uid = 1;
 }
+/// IsOnlineResp is the response message for IsOnline RPC.
 message IsOnlineResp{
   bool online = 1;
 }
 
+/// SendMessageReq is the request message for SendMessage RPC.
 message SendMessageReq{
   int32 flag = 1;
   string target = 2;
   bytes message = 3;
 }
+/// SendMessageResp is the response message for SendMessage RPC.
 message SendMessageResp{
  int32 total = 1;
  int32 success = 2;
 }
 
+/// KickUserReq is the request message for KickUser RPC.
 message KickUserReq{
   string uid = 1;
 }
+/// KickConnReq is the request message for KickConn RPC.
 message KickConnReq{
   string cid = 1;
 }
 
+/// Inspects is the response message for Inspect RPC.
 message Inspects{
  string id = 1;
  int32 user_count = 2;
@@ -37,21 +45,32 @@ message Inspects{
  int32 cluster_size = 4;
  int32 channel_count = 5;
 }
+// ChannelReq is the request message for JoinChannel and LeaveChannel RPC.
 message ChannelReq{
   string uid = 1;
   repeated string channels = 2;
 }
+// ChannelResp is the response message for JoinChannel and LeaveChannel RPC.
 message ChannelResp{
   int32 count = 1;
 }
 
 // The greeting service definition.
 service PeerService {
+  // Inspect provides peer inspection info.
+  // For example: user count, client count, cluster size, channel count.
+  // It is mainly used for monitoring and debugging.
   rpc Inspect (Empty) returns (Inspects) {}
+  // IsOnline checks if a user is online.
   rpc IsOnline (IsOnlineReq) returns (IsOnlineResp) {}
+  // KickUser kicks a user from the cluster.
   rpc KickUser (KickUserReq) returns (Empty) {}
+  // KickConn kicks a connection by connection ID.
   rpc KickConn (KickConnReq) returns (Empty) {}
+  // SendMessage sends a message to a user or a channel.
   rpc SendMessage (SendMessageReq) returns (SendMessageResp) {}
+  // JoinChannel adds a user to the specified channels.
   rpc JoinChannel (ChannelReq) returns (ChannelResp) {}
+  // LeaveChannel removes a user from the specified channels.
   rpc LeaveChannel (ChannelReq) returns (ChannelResp) {}
 }

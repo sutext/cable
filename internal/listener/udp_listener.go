@@ -27,19 +27,19 @@ func NewUDP(looger *xlog.Logger, queueCapacity int32) Listener {
 		queueCapacity: queueCapacity,
 	}
 }
-
+func (l *udpListener) Close(ctx context.Context) error {
+	return l.listener.Close()
+}
 func (l *udpListener) OnClose(handler func(Conn)) {
 	l.closeHandler = handler
 }
-func (l *udpListener) OnAccept(handler func(*packet.Connect, Conn) packet.ConnectCode) {
+func (l *udpListener) OnAccept(handler func(p *packet.Connect, c Conn) packet.ConnectCode) {
 	l.acceptHandler = handler
 }
 func (l *udpListener) OnPacket(handler func(p packet.Packet, c Conn)) {
 	l.packetHandler = handler
 }
-func (l *udpListener) Close(ctx context.Context) error {
-	return l.listener.Close()
-}
+
 func (l *udpListener) Listen(address string) error {
 	udpAddr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
@@ -102,8 +102,8 @@ func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.
 			l.logger.Error("hash collision", xlog.Str("old", old.ID().ClientID), xlog.Str("new", connPacket.Identity.ClientID), xlog.Str("connID", connId))
 		}
 	}
-	per := newPinger(c, time.Second*25, time.Second*3)
-	per.Start()
+	ping := newPinger(c, time.Second*25, time.Second*3)
+	ping.Start()
 }
 
 type udpConn struct {

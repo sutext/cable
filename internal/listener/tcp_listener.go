@@ -24,18 +24,19 @@ func NewTCP(logger *xlog.Logger, queueCapacity int32) Listener {
 		queueCapacity: queueCapacity,
 	}
 }
+func (l *tcpListener) Close(ctx context.Context) error {
+	return l.listener.Close()
+}
 func (l *tcpListener) OnClose(handler func(c Conn)) {
 	l.closeHandler = handler
 }
-func (l *tcpListener) OnAccept(handler func(*packet.Connect, Conn) packet.ConnectCode) {
+func (l *tcpListener) OnAccept(handler func(p *packet.Connect, c Conn) packet.ConnectCode) {
 	l.acceptHandler = handler
 }
 func (l *tcpListener) OnPacket(handler func(p packet.Packet, c Conn)) {
 	l.packetHandler = handler
 }
-func (l *tcpListener) Close(ctx context.Context) error {
-	return l.listener.Close()
-}
+
 func (l *tcpListener) Listen(address string) error {
 	addr, err := net.ResolveTCPAddr("tcp", address)
 	if err != nil {

@@ -15,8 +15,6 @@ import (
 type Server interface {
 	// Serve starts the server and listens for incoming connections.
 	Serve() error
-	// ConnLen returns the number of active connections.
-	ConnLen() int32
 	/// IsActive returns true if the client is active.
 	IsActive(cid string) bool
 	// KickConn kicks a client out of the server.
@@ -83,9 +81,6 @@ func (s *server) IsActive(cid string) bool {
 		return !c.IsClosed()
 	}
 	return false
-}
-func (s *server) ConnLen() int32 {
-	return s.conns.Len()
 }
 func (s *server) KickConn(cid string) bool {
 	if c, ok := s.conns.Get(cid); ok {

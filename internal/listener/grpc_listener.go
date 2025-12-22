@@ -29,18 +29,19 @@ func NewGRPC(logger *xlog.Logger, queueCapacity int32) Listener {
 		queueCapacity: queueCapacity,
 	}
 }
+func (l *grpcListener) Close(ctx context.Context) error {
+	return l.listener.Close()
+}
 func (l *grpcListener) OnClose(handler func(c Conn)) {
 	l.closeHandler = handler
 }
-func (l *grpcListener) OnAccept(handler func(*packet.Connect, Conn) packet.ConnectCode) {
+func (l *grpcListener) OnAccept(handler func(p *packet.Connect, c Conn) packet.ConnectCode) {
 	l.acceptHandler = handler
 }
 func (l *grpcListener) OnPacket(handler func(p packet.Packet, c Conn)) {
 	l.packetHandler = handler
 }
-func (l *grpcListener) Close(ctx context.Context) error {
-	return l.listener.Close()
-}
+
 func (l *grpcListener) Listen(address string) error {
 	addr, err := net.ResolveTCPAddr("tcp", address)
 	if err != nil {
@@ -106,8 +107,8 @@ func (l *grpcListener) Connect(bidi grpc.BidiStreamingServer[pb.Bytes, pb.Bytes]
 				l.logger.Error("hash collision", xlog.Str("old", old.ID().ClientID), xlog.Str("new", connPacket.Identity.ClientID), xlog.Str("connID", connId))
 			}
 		}
-		per := newPinger(c, time.Second*25, time.Second*3)
-		per.Start()
+		ping := newPinger(c, time.Second*25, time.Second*3)
+		ping.Start()
 	}
 }
 
