@@ -3,8 +3,10 @@ package broker
 import (
 	"context"
 	"net"
+	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 	"sutext.github.io/cable/broker/protos"
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
@@ -28,7 +30,12 @@ func (s *peerServer) Serve() error {
 		return err
 	}
 	s.listener = lis
-	gs := grpc.NewServer()
+	gs := grpc.NewServer(
+		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             time.Second * 20,
+			PermitWithoutStream: true,
+		}),
+	)
 	protos.RegisterPeerServiceServer(gs, s)
 	return gs.Serve(lis)
 }

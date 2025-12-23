@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 	"sutext.github.io/cable/broker/protos"
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
@@ -52,7 +54,41 @@ func (p *peerClient) connect() {
 	}
 }
 func (p *peerClient) reconnnect() error {
-	conn, err := grpc.NewClient(fmt.Sprintf("%s%s", p.ip, p.broker.peerPort), grpc.WithTransportCredentials(insecure.NewCredentials()))
+	config := `{
+  		"loadBalancingPolicy": "round_robin",
+ 		"methodConfig": [{
+    		"name": [{"service": "protos.PeerService"}],
+    		"waitForReady": true,
+    		"timeout": "3s",
+    		"retryPolicy": {
+      			"maxAttempts": 3,
+      			"initialBackoff": "0.1s",
+      			"maxBackoff": "1s",
+      			"backoffMultiplier": 2,
+      			"retryableStatusCodes": ["UNAVAILABLE"]
+    		}
+  		}]
+	}`
+	conn, err := grpc.NewClient(
+		fmt.Sprintf("%s%s", p.ip, p.broker.peerPort),
+		grpc.WithConnectParams(grpc.ConnectParams{
+			MinConnectTimeout: 5 * time.Second,
+			Backoff: backoff.Config{
+				BaseDelay:  1.0 * time.Second,
+				MaxDelay:   20 * time.Second,
+				Multiplier: 1.2,
+				Jitter:     0.2,
+			},
+		}),
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                30 * time.Second,
+			Timeout:             3 * time.Second,
+			PermitWithoutStream: true,
+		}),
+		grpc.WithNoProxy(),
+		grpc.WithDefaultServiceConfig(config),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
 	if err != nil {
 		return err
 	}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"sync"
 
 	"sutext.github.io/cable/broker/protos"
 	"sutext.github.io/cable/packet"
@@ -39,27 +40,29 @@ func (b *broker) inspect() *protos.Inspects {
 	}
 }
 
-func (b *broker) Inspects() ([]*protos.Inspects, error) {
-	ctx := context.Background()
+func (b *broker) Inspects(ctx context.Context) ([]*protos.Inspects, error) {
 	inspects := make([]*protos.Inspects, 2)
 	inspects[0] = &protos.Inspects{}
 	inspects[1] = b.inspect()
 	merge(inspects[0], inspects[1])
+	wg := sync.WaitGroup{}
 	b.peers.Range(func(k string, v *peerClient) bool {
-		isp, err := v.inspect(ctx)
-		if err != nil {
-			b.logger.Error("inspect failed", xlog.Peer(k), xlog.Err(err))
-			return true
-		}
-		merge(inspects[0], isp)
-		inspects = append(inspects, isp)
+		wg.Go(func() {
+			isp, err := v.inspect(ctx)
+			if err != nil {
+				b.logger.Error("inspect peer failed", xlog.Peer(v.id), xlog.Err(err))
+			}
+			merge(inspects[0], isp)
+			inspects = append(inspects, isp)
+		})
 		return true
 	})
+	wg.Wait()
 	return inspects, nil
 }
 
 func (b *broker) handleInspect(w http.ResponseWriter, r *http.Request) {
-	isps, err := b.Inspects()
+	isps, err := b.Inspects(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
