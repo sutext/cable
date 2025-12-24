@@ -51,6 +51,7 @@ func (b *broker) Inspects(ctx context.Context) ([]*protos.Inspects, error) {
 			isp, err := v.inspect(ctx)
 			if err != nil {
 				b.logger.Error("inspect peer failed", xlog.Peer(v.id), xlog.Err(err))
+				return
 			}
 			merge(inspects[0], isp)
 			inspects = append(inspects, isp)

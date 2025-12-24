@@ -6,6 +6,7 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -32,7 +33,7 @@ func (c *Client) run() {
 		case 1:
 			c.sendToChannel()
 		}
-		time.Sleep(time.Second * time.Duration(30+rand.IntN(10)))
+		time.Sleep(time.Second * 2)
 	}
 }
 
@@ -106,11 +107,38 @@ func (t *Tester) Run() {
 		time.Sleep(time.Second * time.Duration(20+rand.IntN(10)))
 	}
 }
+func statefulSetEndpoint() string {
+	appName := os.Getenv("APP_NAME")
+	if appName == "" {
+		return "cable-cluster"
+	}
+	appCount := os.Getenv("APP_COUNT")
+	if appCount == "" {
+		appCount = "5"
+	}
+	count, err := strconv.ParseInt(appCount, 10, 64)
+	if err != nil || count < 1 {
+		panic("invalid APP_COUNT")
+	}
+	port := os.Getenv("APP_PORT")
+	if port == "" {
+		port = "1883"
+	}
+	service := os.Getenv("APP_SERVICE")
+	if service == "" {
+		service = "cable"
+	}
+	transport := os.Getenv("APP_PROTO")
+	if transport == "" {
+		transport = "tcp"
+	}
+	return fmt.Sprintf("%s://%s-%d.%s:%s", transport, appName, rand.Int64()%count, service, port)
+}
 func (t *Tester) addClient() *Client {
 	endpoint := os.Getenv("ENDPOINT")
 	if endpoint == "" {
-		endpoint = "tcp://localhost:1883"
-		// endpoint = "udp://localhost:1884"
+		endpoint = statefulSetEndpoint()
+		// endpoint = "tcp://localhost:1883"
 		// endpoint = "tcp://190.92.211.227:1883"
 		// endpoint = "udp://190.92.211.227:1884"
 	}

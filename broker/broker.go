@@ -44,7 +44,7 @@ type broker struct {
 	httpServer     *http.Server
 	userClients    safe.KeyMap[server.Transport] //map[uid]map[cid]net
 	channelClients safe.KeyMap[server.Transport] //map[channel]map[cid]net
-	clientChannels safe.KeyMap[server.Transport] //map[cid]map[channel]net
+	clientChannels safe.KeyMap[struct{}]         //map[cid]map[channel]net
 	requstHandlers safe.Map[string, server.RequestHandler]
 }
 
@@ -53,16 +53,16 @@ func NewBroker(opts ...Option) Broker {
 	b := &broker{id: options.brokerID}
 	b.logger = xlog.With("BROKER", b.id)
 	b.handler = options.handler
-	b.muticast = muticast.New(b.id)
-	b.muticast.OnRequest(func(idip string) int32 {
-		strs := strings.Split(idip, ":")
+	b.muticast = muticast.New(b.id, options.peerPort)
+	b.muticast.OnRequest(func(idaddr string) int32 {
+		strs := strings.Split(idaddr, "@")
 		b.addPeer(strs[0], strs[1])
 		return b.clusterSize()
 	})
-	for _, idip := range options.peers {
-		strs := strings.Split(idip, ":")
+	for _, idaddr := range options.peers {
+		strs := strings.Split(idaddr, "@")
 		if len(strs) != 2 {
-			panic("peers format error want id:ip")
+			panic("peers format error want id@ip:port")
 		}
 		b.addPeer(strs[0], strs[1])
 	}
@@ -99,15 +99,15 @@ func (b *broker) delPeer(id string) {
 		b.logger.Info("peer deleted", xlog.Peer(id))
 	}
 }
-func (b *broker) addPeer(id, ip string) {
+func (b *broker) addPeer(id, addr string) {
 	if id == b.id {
 		return
 	}
 	if p, ok := b.peers.Get(id); ok {
-		p.updateIP(ip)
+		p.updateAddr(addr)
 		return
 	}
-	peer := newPeerClient(id, ip, b)
+	peer := newPeerClient(id, addr, b.logger)
 	b.peers.Set(id, peer)
 	peer.connect()
 }
@@ -149,18 +149,18 @@ func (b *broker) syncBroker() {
 	}
 	min := b.clusterSize()
 	max := b.clusterSize()
-	for idip, count := range m {
+	for idaddr, count := range m {
 		if count > max {
 			max = count
 		}
 		if count < min {
 			min = count
 		}
-		strs := strings.Split(idip, ":")
+		strs := strings.Split(idaddr, "@")
 		b.addPeer(strs[0], strs[1])
 	}
 	b.peers.Range(func(id string, peer *peerClient) bool {
-		if _, ok := m[id+":"+peer.ip]; !ok {
+		if _, ok := m[id+"@"+peer.addr]; !ok {
 			b.delPeer(id)
 		}
 		return true
@@ -325,7 +325,7 @@ func (b *broker) HandleRequest(method string, handler server.RequestHandler) {
 }
 func (b *broker) onUserClosed(id *packet.Identity) {
 	b.userClients.DeleteKey(id.UserID, id.ClientID)
-	b.clientChannels.RangeKey(id.ClientID, func(channel string, net server.Transport) bool {
+	b.clientChannels.RangeKey(id.ClientID, func(channel string, _ struct{}) bool {
 		b.channelClients.DeleteKey(channel, id.ClientID)
 		return true
 	})
@@ -344,7 +344,7 @@ func (b *broker) onUserConnect(p *packet.Connect, net server.Transport) packet.C
 	b.userClients.SetKey(p.Identity.UserID, p.Identity.ClientID, net)
 	if chs, err := b.handler.GetChannels(p.Identity.UserID); err == nil {
 		for _, ch := range chs {
-			b.clientChannels.SetKey(p.Identity.ClientID, ch, net)
+			b.clientChannels.SetKey(p.Identity.ClientID, ch, struct{}{})
 			b.channelClients.SetKey(ch, p.Identity.ClientID, net)
 		}
 	}
@@ -438,7 +438,7 @@ func (b *broker) joinChannel(uid string, channels []string) (count int32) {
 		count++
 		for _, ch := range channels {
 			b.channelClients.SetKey(ch, cid, net)
-			b.clientChannels.SetKey(cid, ch, net)
+			b.clientChannels.SetKey(cid, ch, struct{}{})
 		}
 		return true
 	})

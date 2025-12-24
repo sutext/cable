@@ -238,7 +238,7 @@ func (c *conn) SendPacket(ctx context.Context, p packet.Packet) error {
 	return c.sendQueue.Push(ctx, false, func() {
 		err := c.raw.WriteData(data)
 		if err != nil {
-			c.logger.Error("write data error", xlog.Err(err))
+			c.logger.Warn("write data error", xlog.Err(err))
 		}
 	})
 }
@@ -253,7 +253,7 @@ func (c *conn) jumpPacket(ctx context.Context, p packet.Packet) error {
 	return c.sendQueue.Push(ctx, true, func() {
 		err := c.raw.WriteData(data)
 		if err != nil {
-			c.logger.Error("write data error", xlog.Err(err))
+			c.logger.Warn("write data error", xlog.Err(err))
 		}
 	})
 }

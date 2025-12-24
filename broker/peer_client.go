@@ -2,7 +2,6 @@ package broker
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,19 +19,21 @@ import (
 
 type peerClient struct {
 	id     string
-	ip     string
 	mu     sync.Mutex
 	rpc    protos.PeerServiceClient
+	addr   string
+	port   string
 	conn   *grpc.ClientConn
 	ready  atomic.Bool
-	broker *broker
+	logger *xlog.Logger
+	// broker *broker
 }
 
-func newPeerClient(id, ip string, broker *broker) *peerClient {
+func newPeerClient(id, addr string, logger *xlog.Logger) *peerClient {
 	p := &peerClient{
 		id:     id,
-		ip:     ip,
-		broker: broker,
+		addr:   addr,
+		logger: logger,
 	}
 	return p
 }
@@ -44,12 +45,12 @@ func (p *peerClient) connect() {
 		return
 	}
 	if err := p.reconnnect(); err != nil {
-		p.broker.logger.Error("connect to peer failed", xlog.Err(err), xlog.Peer(p.id))
+		p.logger.Error("connect to peer failed", xlog.Err(err), xlog.Peer(p.id))
 		time.AfterFunc(time.Second*2, func() {
 			p.connect()
 		})
 	} else {
-		p.broker.logger.Info("connect to peer success", xlog.Peer(p.id))
+		p.logger.Info("connect to peer success", xlog.Peer(p.id))
 		p.ready.Store(true)
 	}
 }
@@ -69,8 +70,7 @@ func (p *peerClient) reconnnect() error {
     		}
   		}]
 	}`
-	conn, err := grpc.NewClient(
-		fmt.Sprintf("%s%s", p.ip, p.broker.peerPort),
+	conn, err := grpc.NewClient(p.addr,
 		grpc.WithConnectParams(grpc.ConnectParams{
 			MinConnectTimeout: 5 * time.Second,
 			Backoff: backoff.Config{
@@ -99,15 +99,25 @@ func (p *peerClient) reconnnect() error {
 	p.rpc = protos.NewPeerServiceClient(conn)
 	return nil
 }
+func (p *peerClient) Close() {
+	if p.ready.CompareAndSwap(true, false) {
+		if p.conn != nil {
+			p.conn.Close()
+			p.conn = nil
+		}
+		p.logger.Info("peer client closed", xlog.Peer(p.id))
+	}
+
+}
 func (p *peerClient) isReady() bool {
 	return p.ready.Load()
 }
-func (p *peerClient) updateIP(ip string) {
-	if p.ip == ip {
+func (p *peerClient) updateAddr(addr string) {
+	if p.addr == addr {
 		return
 	}
-	p.broker.logger.Warn("peer ip updated", xlog.Str("ip", ip))
-	p.ip = ip
+	p.logger.Warn("peer ip updated", xlog.Str("addr", addr))
+	p.addr = addr
 	p.ready.Store(false)
 	p.connect()
 }

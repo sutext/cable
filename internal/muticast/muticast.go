@@ -19,7 +19,7 @@ type Muticast interface {
 }
 
 type muticast struct {
-	idip     string
+	idaddr   string
 	mu       sync.Mutex
 	addr     *net.UDPAddr
 	conn     *net.UDPConn
@@ -29,13 +29,13 @@ type muticast struct {
 	respChan chan *packet.Response
 }
 
-func New(brokerID string) *muticast {
+func New(id, port string) *muticast {
 	ip, err := getLocalIP()
 	if err != nil {
 		panic(err)
 	}
 	m := &muticast{
-		idip:   fmt.Sprintf("%s:%s", brokerID, ip),
+		idaddr: fmt.Sprintf("%s@%s:%s", id, ip, port),
 		logger: xlog.With("GROUP", "MUTICAST"),
 		addr:   &net.UDPAddr{IP: net.IPv4(224, 0, 0, 9), Port: 9999},
 	}
@@ -77,7 +77,7 @@ func (m *muticast) Serve() error {
 		count := m.req(string(req.Content))
 		enc := coder.NewEncoder()
 		enc.WriteInt32(count)
-		enc.WriteString(m.idip)
+		enc.WriteString(m.idaddr)
 		resp := packet.NewResponse(req.ID, enc.Bytes())
 		bytes, err := packet.Marshal(resp)
 		if err != nil {
@@ -128,7 +128,7 @@ func (m *muticast) Request() (r map[string]int32, err error) {
 	if m.respChan != nil {
 		return nil, fmt.Errorf("Muticast request is already in progress")
 	}
-	req := packet.NewRequest("discovery", []byte(m.idip))
+	req := packet.NewRequest("discovery", []byte(m.idaddr))
 	reqdata, err := packet.Marshal(req)
 	if err != nil {
 		return r, err
