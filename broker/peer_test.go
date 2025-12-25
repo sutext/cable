@@ -9,13 +9,12 @@ import (
 )
 
 func BenchmarkPeerInspect(b *testing.B) {
-	client := newPeerClient("1", "127.0.0.1:4567", xlog.Defualt())
+	client := newPeerClient("cable-cluster-0", "172.16.2.123:4567", xlog.Defualt())
 	client.connect()
 	defer client.Close()
 	b.Run("GrpcSend", func(b *testing.B) {
-		_, _, err := client.sendMessage(context.Background(), packet.NewMessage([]byte("")), "", 0)
-		if err != nil {
-			b.Fatal(err)
+		for b.Loop() {
+			client.sendMessage(context.Background(), packet.NewMessage([]byte("hello")), "aaa", 0)
 		}
 	})
 }
