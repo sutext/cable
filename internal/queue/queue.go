@@ -14,10 +14,10 @@ var (
 
 func (e Error) Error() string {
 	switch e {
-	case ErrQueueIsClosed:
-		return "queue is closed"
 	case ErrQueueIsFull:
 		return "queue is full"
+	case ErrQueueIsClosed:
+		return "queue is closed"
 	default:
 		return "unknown error"
 	}

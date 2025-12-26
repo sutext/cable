@@ -59,7 +59,7 @@ func (l *tcpListener) Listen(address string) error {
 func (l *tcpListener) handleConn(conn *net.TCPConn) {
 	timer := time.AfterFunc(time.Second*10, func() {
 		l.logger.Warn("waite conn packet timeout")
-		packet.WriteTo(conn, packet.NewClose(packet.CloseAuthenticationTimeout))
+		packet.WriteTo(conn, packet.NewClose(packet.CloseAuthTimeout))
 		conn.Close()
 	})
 	p, err := packet.ReadFrom(conn)

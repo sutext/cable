@@ -45,9 +45,6 @@ func NewMessage(payload []byte) *Message {
 func (p *Message) Type() PacketType {
 	return MESSAGE
 }
-func (p *Message) String() string {
-	return fmt.Sprintf("MESSAGE(ID=%d, Qos=%d, Dup=%t, Kind=%d, Props=%v, Payload=%d)", p.ID, p.Qos, p.Dup, p.Kind, p.props, len(p.Payload))
-}
 func (p *Message) Equal(other Packet) bool {
 	if other == nil {
 		return false
@@ -63,7 +60,9 @@ func (p *Message) Equal(other Packet) bool {
 		maps.Equal(p.props, o.props) &&
 		bytes.Equal(p.Payload, o.Payload)
 }
-
+func (p *Message) String() string {
+	return fmt.Sprintf("MESSAGE(ID=%d, Qos=%d, Dup=%t, Kind=%d, Props=%v, Payload=%d)", p.ID, p.Qos, p.Dup, p.Kind, p.props, len(p.Payload))
+}
 func (p *Message) WriteTo(w coder.Encoder) error {
 	var flags uint8
 	if p.Qos > 0 {
@@ -123,9 +122,6 @@ func NewMessack(id int64) *Messack {
 func (p *Messack) Type() PacketType {
 	return MESSACK
 }
-func (p *Messack) String() string {
-	return fmt.Sprintf("MESSACK(id=%d)", p.ID)
-}
 func (p *Messack) Equal(other Packet) bool {
 	if other == nil {
 		return false
@@ -135,6 +131,9 @@ func (p *Messack) Equal(other Packet) bool {
 	}
 	o := other.(*Messack)
 	return maps.Equal(p.props, o.props) && p.ID == o.ID
+}
+func (p *Messack) String() string {
+	return fmt.Sprintf("MESSACK(id=%d)", p.ID)
 }
 func (p *Messack) WriteTo(w coder.Encoder) error {
 	w.WriteInt64(p.ID)

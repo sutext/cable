@@ -10,8 +10,8 @@ import (
 type Retrier struct {
 	limit   int64
 	count   atomic.Int64
-	backoff backoff.Backoff
 	filter  func(error) bool
+	backoff backoff.Backoff
 }
 
 func NewRetrier(limit int64, backoff backoff.Backoff) *Retrier {

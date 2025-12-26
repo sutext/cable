@@ -38,9 +38,6 @@ func NewResponse(id int64, content ...[]byte) *Response {
 func (p *Response) Type() PacketType {
 	return RESPONSE
 }
-func (p *Response) String() string {
-	return fmt.Sprintf("RESPONSE(ID=%d, Code=%d, Headers=%v, Props=%v, Content=%d)", p.ID, p.Code, p.Headers, p.props, len(p.Content))
-}
 func (p *Response) Equal(other Packet) bool {
 	if other == nil {
 		return false
@@ -55,7 +52,9 @@ func (p *Response) Equal(other Packet) bool {
 		maps.Equal(p.Headers, o.Headers) &&
 		bytes.Equal(p.Content, o.Content)
 }
-
+func (p *Response) String() string {
+	return fmt.Sprintf("RESPONSE(ID=%d, Code=%d, Headers=%v, Props=%v, Content=%d)", p.ID, p.Code, p.Headers, p.props, len(p.Content))
+}
 func (p *Response) WriteTo(w coder.Encoder) error {
 	w.WriteInt64(p.ID)
 	w.WriteUInt8(uint8(p.Code))

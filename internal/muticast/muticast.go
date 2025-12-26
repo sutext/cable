@@ -23,9 +23,9 @@ type muticast struct {
 	mu       sync.Mutex
 	addr     *net.UDPAddr
 	conn     *net.UDPConn
-	listener *net.UDPConn
 	req      func(idip string) int32
 	logger   *xlog.Logger
+	listener *net.UDPConn
 	respChan chan *packet.Response
 }
 

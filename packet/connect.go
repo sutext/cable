@@ -144,10 +144,6 @@ func NewConnack(code ConnectCode) *Connack {
 func (p *Connack) Type() PacketType {
 	return CONNACK
 }
-func (p *Connack) String() string {
-	return fmt.Sprintf("CONNACK(Code=%s,Props=%v)", p.Code, p.props)
-}
-
 func (p *Connack) Equal(other Packet) bool {
 	if other == nil {
 		return false
@@ -158,7 +154,9 @@ func (p *Connack) Equal(other Packet) bool {
 	o := other.(*Connack)
 	return maps.Equal(p.props, o.props) && p.Code == o.Code
 }
-
+func (p *Connack) String() string {
+	return fmt.Sprintf("CONNACK(Code=%s,Props=%v)", p.Code, p.props)
+}
 func (p *Connack) WriteTo(w coder.Encoder) error {
 	w.WriteUInt8(uint8(p.Code))
 	return p.packet.WriteTo(w)

@@ -31,9 +31,6 @@ func NewRequest(method string, content ...[]byte) *Request {
 func (p *Request) Type() PacketType {
 	return REQUEST
 }
-func (p *Request) String() string {
-	return fmt.Sprintf("REQUEST(ID=%d, Method=%s, Headers=%v, Props=%v, Content=%d)", p.ID, p.Method, p.Headers, p.props, len(p.Content))
-}
 func (p *Request) Equal(other Packet) bool {
 	if other == nil {
 		return false
@@ -47,6 +44,9 @@ func (p *Request) Equal(other Packet) bool {
 		p.Method == o.Method &&
 		maps.Equal(p.Headers, o.Headers) &&
 		bytes.Equal(p.Content, o.Content)
+}
+func (p *Request) String() string {
+	return fmt.Sprintf("REQUEST(ID=%d, Method=%s, Headers=%v, Props=%v, Content=%d)", p.ID, p.Method, p.Headers, p.props, len(p.Content))
 }
 func (p *Request) WriteTo(w coder.Encoder) error {
 	w.WriteInt64(p.ID)

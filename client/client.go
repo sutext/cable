@@ -15,15 +15,17 @@ import (
 type Error uint8
 
 const (
+	ErrInvalidPacket      Error = 0
 	ErrRequestTimeout     Error = 1
 	ErrConnectionFailed   Error = 2
 	ErrConnectionClosed   Error = 3
 	ErrConnectionNotReady Error = 4
-	ErrInvalidPacket      Error = 5
 )
 
 func (e Error) Error() string {
 	switch e {
+	case ErrInvalidPacket:
+		return "invalid packet"
 	case ErrRequestTimeout:
 		return "request timeout"
 	case ErrConnectionFailed:
@@ -32,8 +34,6 @@ func (e Error) Error() string {
 		return "connection closed"
 	case ErrConnectionNotReady:
 		return "connection not ready"
-	case ErrInvalidPacket:
-		return "invalid packet"
 	default:
 		return "unknown error"
 	}

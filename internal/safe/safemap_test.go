@@ -53,7 +53,6 @@ func BenchmarkKeyMap(b *testing.B) {
 			m.GetKey("foo", "bar")
 			m.DeleteKey("foo", "bar")
 		}
-
 	})
 }
 func BenchmarkAtomic(b *testing.B) {

@@ -54,8 +54,8 @@ type conn struct {
 	requestLock  sync.Mutex
 	messageLock  sync.Mutex
 	closeHandler func()
-	requestTasks map[int64]chan *packet.Response
 	messageTasks map[int64]chan *packet.Messack
+	requestTasks map[int64]chan *packet.Response
 }
 
 func newConn(raw rawconn, logger *xlog.Logger, queueCapacity int32) Conn {

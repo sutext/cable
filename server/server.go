@@ -37,11 +37,11 @@ type server struct {
 	address        string
 	listener       listener.Listener
 	transport      Transport
+	queueCapacity  int32
 	closeHandler   ClosedHandler
-	connectHander  ConnectHandler
+	connectHandler ConnectHandler
 	messageHandler MessageHandler
 	requestHandler RequestHandler
-	queueCapacity  int32
 }
 
 func New(address string, opts ...Option) Server {
@@ -52,7 +52,7 @@ func New(address string, opts ...Option) Server {
 		transport:      options.transport,
 		queueCapacity:  options.queueCapacity,
 		closeHandler:   options.closeHandler,
-		connectHander:  options.connectHandler,
+		connectHandler: options.connectHandler,
 		messageHandler: options.messageHandler,
 		requestHandler: options.requestHandler,
 	}
@@ -182,8 +182,9 @@ func (s *server) onPacket(p packet.Packet, c listener.Conn) {
 	}
 }
 
+// Below is the code of
 func (s *server) onConnect(p *packet.Connect, c listener.Conn) packet.ConnectCode {
-	code := s.connectHander(p)
+	code := s.connectHandler(p)
 	if code == packet.ConnectAccepted {
 		if old, loaded := s.conns.Swap(p.Identity.ClientID, c); loaded {
 			old.CloseClode(packet.CloseDuplicateLogin)

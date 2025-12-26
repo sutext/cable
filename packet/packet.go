@@ -100,7 +100,6 @@ type Packet interface {
 	Type() PacketType
 	Equal(Packet) bool
 }
-
 type packet struct {
 	props map[uint8]string
 }

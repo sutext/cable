@@ -26,7 +26,6 @@ type peerClient struct {
 	conn   *grpc.ClientConn
 	ready  atomic.Bool
 	logger *xlog.Logger
-	// broker *broker
 }
 
 func newPeerClient(id, addr string, logger *xlog.Logger) *peerClient {
