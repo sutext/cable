@@ -36,6 +36,7 @@ func New(id uint64, port string) Muticast {
 		panic(err)
 	}
 	m := &muticast{
+		id:     id,
 		ipaddr: fmt.Sprintf("%s%s", ip, port),
 		logger: xlog.With("GROUP", "MUTICAST"),
 		addr:   &net.UDPAddr{IP: net.IPv4(224, 0, 0, 9), Port: 9999},
@@ -148,7 +149,7 @@ func (m *muticast) Request() (r map[uint64]string, err error) {
 	if err != nil {
 		return r, err
 	}
-	m.respChan = make(chan *packet.Response, 128)
+	m.respChan = make(chan *packet.Response, 8)
 	time.AfterFunc(time.Second*6, func() {
 		close(m.respChan)
 		m.respChan = nil

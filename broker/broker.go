@@ -154,14 +154,11 @@ func (b *broker) autoDiscovery() {
 		time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.autoDiscovery)
 	}
 	for id, addr := range m {
-		if id == b.id {
-			continue
-		}
 		b.addPeer(id, addr)
 	}
 
 	if b.peers.Len() < b.clusterSize-1 {
-		b.logger.Warn("Auto discovery got less than cluster size", xlog.Int("clusterSize", int(b.clusterSize)), xlog.I32("peers", b.peers.Len()))
+		b.logger.Warn("Auto discovery got less than cluster size", xlog.I32("clusterSize", b.clusterSize), xlog.I32("peers", b.peers.Len()))
 		time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.autoDiscovery)
 	} else if b.peers.Len() == b.clusterSize-1 {
 		b.startRaft(false)
