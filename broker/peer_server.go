@@ -49,44 +49,51 @@ func (s *peerServer) Inspect(ctx context.Context, req *protos.Empty) (*protos.In
 	return s.broker.inspect(), nil
 }
 func (s *peerServer) IsOnline(ctx context.Context, req *protos.IsOnlineReq) (*protos.IsOnlineResp, error) {
-	ok := s.broker.isOnline(req.Uid)
+	ok := s.broker.isActive(req.Targets)
 	return &protos.IsOnlineResp{Online: ok}, nil
 }
-func (s *peerServer) JoinChannel(ctx context.Context, req *protos.ChannelReq) (*protos.ChannelResp, error) {
-	count := s.broker.joinChannel(req.Uid, req.Channels)
-	return &protos.ChannelResp{Count: count}, nil
-}
+
 func (s *peerServer) KickConn(ctx context.Context, req *protos.KickConnReq) (*protos.Empty, error) {
-	s.broker.kickConn(req.Cid)
+	s.broker.kickConn(req.Targets)
 	return &protos.Empty{}, nil
 }
-func (s *peerServer) KickUser(ctx context.Context, req *protos.KickUserReq) (*protos.Empty, error) {
-	s.broker.kickUser(req.Uid)
-	return &protos.Empty{}, nil
-}
-func (s *peerServer) LeaveChannel(ctx context.Context, req *protos.ChannelReq) (*protos.ChannelResp, error) {
-	count := s.broker.leaveChannel(req.Uid, req.Channels)
-	return &protos.ChannelResp{Count: count}, nil
-}
-func (s *peerServer) SendMessage(ctx context.Context, req *protos.SendMessageReq) (*protos.SendMessageResp, error) {
+
+//	func (s *peerServer) JoinChannel(ctx context.Context, req *protos.ChannelReq) (*protos.ChannelResp, error) {
+//		count := s.broker.joinChannel(req.Uid, req.Channels)
+//		return &protos.ChannelResp{Count: count}, nil
+//	}
+//
+//	func (s *peerServer) LeaveChannel(ctx context.Context, req *protos.ChannelReq) (*protos.ChannelResp, error) {
+//		count := s.broker.leaveChannel(req.Uid, req.Channels)
+//		return &protos.ChannelResp{Count: count}, nil
+//	}
+func (s *peerServer) SendToAll(ctx context.Context, req *protos.MessageReq) (*protos.MessageResp, error) {
 	msg := &packet.Message{}
 	if err := coder.Unmarshal(req.Message, msg); err != nil {
 		return nil, xerr.InvalidPeerMessage
 	}
-	var total, success int32
-	switch req.Flag {
-	case 0:
-		total, success = s.broker.sendToAll(ctx, msg)
-	case 1:
-		total, success = s.broker.sendToUser(ctx, req.Target, msg)
-	case 2:
-		total, success = s.broker.sendToChannel(ctx, req.Target, msg)
-	default:
-		return nil, xerr.InvalidPeerMessageFlag
-	}
-	return &protos.SendMessageResp{
+	total, success := s.broker.sendToAll(ctx, msg)
+	return &protos.MessageResp{
 		Total:   total,
 		Success: success,
 	}, nil
-
+}
+func (s *peerServer) SendToTargets(ctx context.Context, req *protos.MessageReq) (*protos.MessageResp, error) {
+	msg := &packet.Message{}
+	if err := coder.Unmarshal(req.Message, msg); err != nil {
+		return nil, xerr.InvalidPeerMessage
+	}
+	total, success := s.broker.sendToTargets(ctx, msg, req.Targets)
+	return &protos.MessageResp{
+		Total:   total,
+		Success: success,
+	}, nil
+}
+func (s *peerServer) UserOpened(ctx context.Context, req *protos.UserOpenedReq) (*protos.Empty, error) {
+	s.broker.userOpened(req)
+	return &protos.Empty{}, nil
+}
+func (s *peerServer) UserClosed(ctx context.Context, req *protos.UserClosedReq) (*protos.Empty, error) {
+	s.broker.userClosed(req)
+	return &protos.Empty{}, nil
 }

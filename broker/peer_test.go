@@ -14,7 +14,7 @@ func BenchmarkPeerInspect(b *testing.B) {
 	defer client.Close()
 	b.Run("GrpcSend", func(b *testing.B) {
 		for b.Loop() {
-			client.sendMessage(context.Background(), packet.NewMessage([]byte("hello")), "aaa", 0)
+			client.sendToTargets(context.Background(), packet.NewMessage([]byte("hello")), nil)
 		}
 	})
 }

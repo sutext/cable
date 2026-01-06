@@ -73,7 +73,7 @@ func (s *server) Serve() error {
 	s.listener.OnClose(s.onClose)
 	s.listener.OnAccept(s.onConnect)
 	s.listener.OnPacket(s.onPacket)
-	s.logger.Info("server listening", xlog.Str("address", s.address), xlog.Str("transport", s.transport.String()))
+	s.logger.Info("server listening", xlog.Str("address", s.address), xlog.Str("transport", string(s.transport)))
 	return s.listener.Listen(s.address)
 }
 func (s *server) IsActive(cid string) bool {

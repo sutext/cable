@@ -12,32 +12,15 @@ type ConnectHandler func(p *packet.Connect) packet.ConnectCode
 type MessageHandler func(p *packet.Message, id *packet.Identity) error
 type RequestHandler func(p *packet.Request, id *packet.Identity) (*packet.Response, error)
 
-type Transport uint8
+type Transport string
 
 const (
-	TransportTCP Transport = iota
-	TransportUDP
-	TransportQUIC
-	TransportGRPC
-	TransportWebSocket
+	TransportTCP       Transport = "tcp"
+	TransportUDP       Transport = "udp"
+	TransportQUIC      Transport = "quic"
+	TransportGRPC      Transport = "grpc"
+	TransportWebSocket Transport = "websocket"
 )
-
-func (n Transport) String() string {
-	switch n {
-	case TransportTCP:
-		return "TCP"
-	case TransportUDP:
-		return "UDP"
-	case TransportQUIC:
-		return "QUIC"
-	case TransportGRPC:
-		return "GRPC"
-	case TransportWebSocket:
-		return "WebSocket"
-	default:
-		return "Unknown"
-	}
-}
 
 type Option struct {
 	f func(*options)

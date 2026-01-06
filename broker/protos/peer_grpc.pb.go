@@ -19,13 +19,13 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PeerService_Inspect_FullMethodName      = "/protos.PeerService/Inspect"
-	PeerService_IsOnline_FullMethodName     = "/protos.PeerService/IsOnline"
-	PeerService_KickUser_FullMethodName     = "/protos.PeerService/KickUser"
-	PeerService_KickConn_FullMethodName     = "/protos.PeerService/KickConn"
-	PeerService_SendMessage_FullMethodName  = "/protos.PeerService/SendMessage"
-	PeerService_JoinChannel_FullMethodName  = "/protos.PeerService/JoinChannel"
-	PeerService_LeaveChannel_FullMethodName = "/protos.PeerService/LeaveChannel"
+	PeerService_Inspect_FullMethodName       = "/protos.PeerService/Inspect"
+	PeerService_IsOnline_FullMethodName      = "/protos.PeerService/IsOnline"
+	PeerService_KickConn_FullMethodName      = "/protos.PeerService/KickConn"
+	PeerService_SendToAll_FullMethodName     = "/protos.PeerService/SendToAll"
+	PeerService_SendToTargets_FullMethodName = "/protos.PeerService/SendToTargets"
+	PeerService_UserOpened_FullMethodName    = "/protos.PeerService/UserOpened"
+	PeerService_UserClosed_FullMethodName    = "/protos.PeerService/UserClosed"
 )
 
 // PeerServiceClient is the client API for PeerService service.
@@ -34,13 +34,22 @@ const (
 //
 // The greeting service definition.
 type PeerServiceClient interface {
+	// Inspect provides peer inspection info.
+	// For example: user count, client count, cluster size, channel count.
+	// It is mainly used for monitoring and debugging.
 	Inspect(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Inspects, error)
+	// IsOnline checks if a user is online.
 	IsOnline(ctx context.Context, in *IsOnlineReq, opts ...grpc.CallOption) (*IsOnlineResp, error)
-	KickUser(ctx context.Context, in *KickUserReq, opts ...grpc.CallOption) (*Empty, error)
+	// KickConn kicks a connection by connection ID.
 	KickConn(ctx context.Context, in *KickConnReq, opts ...grpc.CallOption) (*Empty, error)
-	SendMessage(ctx context.Context, in *SendMessageReq, opts ...grpc.CallOption) (*SendMessageResp, error)
-	JoinChannel(ctx context.Context, in *ChannelReq, opts ...grpc.CallOption) (*ChannelResp, error)
-	LeaveChannel(ctx context.Context, in *ChannelReq, opts ...grpc.CallOption) (*ChannelResp, error)
+	// SendMessage sends a message to a user or a channel.
+	SendToAll(ctx context.Context, in *MessageReq, opts ...grpc.CallOption) (*MessageResp, error)
+	// SendToTargets sends a message to a channel.
+	SendToTargets(ctx context.Context, in *MessageReq, opts ...grpc.CallOption) (*MessageResp, error)
+	// UserOpened is called when a user opens a connection.
+	UserOpened(ctx context.Context, in *UserOpenedReq, opts ...grpc.CallOption) (*Empty, error)
+	// UserClosed is called when a user closes a connection.
+	UserClosed(ctx context.Context, in *UserClosedReq, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type peerServiceClient struct {
@@ -71,16 +80,6 @@ func (c *peerServiceClient) IsOnline(ctx context.Context, in *IsOnlineReq, opts 
 	return out, nil
 }
 
-func (c *peerServiceClient) KickUser(ctx context.Context, in *KickUserReq, opts ...grpc.CallOption) (*Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Empty)
-	err := c.cc.Invoke(ctx, PeerService_KickUser_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *peerServiceClient) KickConn(ctx context.Context, in *KickConnReq, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Empty)
@@ -91,30 +90,40 @@ func (c *peerServiceClient) KickConn(ctx context.Context, in *KickConnReq, opts 
 	return out, nil
 }
 
-func (c *peerServiceClient) SendMessage(ctx context.Context, in *SendMessageReq, opts ...grpc.CallOption) (*SendMessageResp, error) {
+func (c *peerServiceClient) SendToAll(ctx context.Context, in *MessageReq, opts ...grpc.CallOption) (*MessageResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SendMessageResp)
-	err := c.cc.Invoke(ctx, PeerService_SendMessage_FullMethodName, in, out, cOpts...)
+	out := new(MessageResp)
+	err := c.cc.Invoke(ctx, PeerService_SendToAll_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *peerServiceClient) JoinChannel(ctx context.Context, in *ChannelReq, opts ...grpc.CallOption) (*ChannelResp, error) {
+func (c *peerServiceClient) SendToTargets(ctx context.Context, in *MessageReq, opts ...grpc.CallOption) (*MessageResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ChannelResp)
-	err := c.cc.Invoke(ctx, PeerService_JoinChannel_FullMethodName, in, out, cOpts...)
+	out := new(MessageResp)
+	err := c.cc.Invoke(ctx, PeerService_SendToTargets_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *peerServiceClient) LeaveChannel(ctx context.Context, in *ChannelReq, opts ...grpc.CallOption) (*ChannelResp, error) {
+func (c *peerServiceClient) UserOpened(ctx context.Context, in *UserOpenedReq, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ChannelResp)
-	err := c.cc.Invoke(ctx, PeerService_LeaveChannel_FullMethodName, in, out, cOpts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, PeerService_UserOpened_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *peerServiceClient) UserClosed(ctx context.Context, in *UserClosedReq, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, PeerService_UserClosed_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -127,13 +136,22 @@ func (c *peerServiceClient) LeaveChannel(ctx context.Context, in *ChannelReq, op
 //
 // The greeting service definition.
 type PeerServiceServer interface {
+	// Inspect provides peer inspection info.
+	// For example: user count, client count, cluster size, channel count.
+	// It is mainly used for monitoring and debugging.
 	Inspect(context.Context, *Empty) (*Inspects, error)
+	// IsOnline checks if a user is online.
 	IsOnline(context.Context, *IsOnlineReq) (*IsOnlineResp, error)
-	KickUser(context.Context, *KickUserReq) (*Empty, error)
+	// KickConn kicks a connection by connection ID.
 	KickConn(context.Context, *KickConnReq) (*Empty, error)
-	SendMessage(context.Context, *SendMessageReq) (*SendMessageResp, error)
-	JoinChannel(context.Context, *ChannelReq) (*ChannelResp, error)
-	LeaveChannel(context.Context, *ChannelReq) (*ChannelResp, error)
+	// SendMessage sends a message to a user or a channel.
+	SendToAll(context.Context, *MessageReq) (*MessageResp, error)
+	// SendToTargets sends a message to a channel.
+	SendToTargets(context.Context, *MessageReq) (*MessageResp, error)
+	// UserOpened is called when a user opens a connection.
+	UserOpened(context.Context, *UserOpenedReq) (*Empty, error)
+	// UserClosed is called when a user closes a connection.
+	UserClosed(context.Context, *UserClosedReq) (*Empty, error)
 	mustEmbedUnimplementedPeerServiceServer()
 }
 
@@ -150,20 +168,20 @@ func (UnimplementedPeerServiceServer) Inspect(context.Context, *Empty) (*Inspect
 func (UnimplementedPeerServiceServer) IsOnline(context.Context, *IsOnlineReq) (*IsOnlineResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method IsOnline not implemented")
 }
-func (UnimplementedPeerServiceServer) KickUser(context.Context, *KickUserReq) (*Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method KickUser not implemented")
-}
 func (UnimplementedPeerServiceServer) KickConn(context.Context, *KickConnReq) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method KickConn not implemented")
 }
-func (UnimplementedPeerServiceServer) SendMessage(context.Context, *SendMessageReq) (*SendMessageResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SendMessage not implemented")
+func (UnimplementedPeerServiceServer) SendToAll(context.Context, *MessageReq) (*MessageResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendToAll not implemented")
 }
-func (UnimplementedPeerServiceServer) JoinChannel(context.Context, *ChannelReq) (*ChannelResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method JoinChannel not implemented")
+func (UnimplementedPeerServiceServer) SendToTargets(context.Context, *MessageReq) (*MessageResp, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendToTargets not implemented")
 }
-func (UnimplementedPeerServiceServer) LeaveChannel(context.Context, *ChannelReq) (*ChannelResp, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method LeaveChannel not implemented")
+func (UnimplementedPeerServiceServer) UserOpened(context.Context, *UserOpenedReq) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UserOpened not implemented")
+}
+func (UnimplementedPeerServiceServer) UserClosed(context.Context, *UserClosedReq) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UserClosed not implemented")
 }
 func (UnimplementedPeerServiceServer) mustEmbedUnimplementedPeerServiceServer() {}
 func (UnimplementedPeerServiceServer) testEmbeddedByValue()                     {}
@@ -222,24 +240,6 @@ func _PeerService_IsOnline_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PeerService_KickUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(KickUserReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PeerServiceServer).KickUser(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: PeerService_KickUser_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PeerServiceServer).KickUser(ctx, req.(*KickUserReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _PeerService_KickConn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(KickConnReq)
 	if err := dec(in); err != nil {
@@ -258,56 +258,74 @@ func _PeerService_KickConn_Handler(srv interface{}, ctx context.Context, dec fun
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PeerService_SendMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SendMessageReq)
+func _PeerService_SendToAll_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MessageReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PeerServiceServer).SendMessage(ctx, in)
+		return srv.(PeerServiceServer).SendToAll(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PeerService_SendMessage_FullMethodName,
+		FullMethod: PeerService_SendToAll_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PeerServiceServer).SendMessage(ctx, req.(*SendMessageReq))
+		return srv.(PeerServiceServer).SendToAll(ctx, req.(*MessageReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PeerService_JoinChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ChannelReq)
+func _PeerService_SendToTargets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MessageReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PeerServiceServer).JoinChannel(ctx, in)
+		return srv.(PeerServiceServer).SendToTargets(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PeerService_JoinChannel_FullMethodName,
+		FullMethod: PeerService_SendToTargets_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PeerServiceServer).JoinChannel(ctx, req.(*ChannelReq))
+		return srv.(PeerServiceServer).SendToTargets(ctx, req.(*MessageReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PeerService_LeaveChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ChannelReq)
+func _PeerService_UserOpened_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UserOpenedReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PeerServiceServer).LeaveChannel(ctx, in)
+		return srv.(PeerServiceServer).UserOpened(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PeerService_LeaveChannel_FullMethodName,
+		FullMethod: PeerService_UserOpened_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PeerServiceServer).LeaveChannel(ctx, req.(*ChannelReq))
+		return srv.(PeerServiceServer).UserOpened(ctx, req.(*UserOpenedReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PeerService_UserClosed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UserClosedReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PeerServiceServer).UserClosed(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PeerService_UserClosed_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PeerServiceServer).UserClosed(ctx, req.(*UserClosedReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -328,24 +346,24 @@ var PeerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PeerService_IsOnline_Handler,
 		},
 		{
-			MethodName: "KickUser",
-			Handler:    _PeerService_KickUser_Handler,
-		},
-		{
 			MethodName: "KickConn",
 			Handler:    _PeerService_KickConn_Handler,
 		},
 		{
-			MethodName: "SendMessage",
-			Handler:    _PeerService_SendMessage_Handler,
+			MethodName: "SendToAll",
+			Handler:    _PeerService_SendToAll_Handler,
 		},
 		{
-			MethodName: "JoinChannel",
-			Handler:    _PeerService_JoinChannel_Handler,
+			MethodName: "SendToTargets",
+			Handler:    _PeerService_SendToTargets_Handler,
 		},
 		{
-			MethodName: "LeaveChannel",
-			Handler:    _PeerService_LeaveChannel_Handler,
+			MethodName: "UserOpened",
+			Handler:    _PeerService_UserOpened_Handler,
+		},
+		{
+			MethodName: "UserClosed",
+			Handler:    _PeerService_UserClosed_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

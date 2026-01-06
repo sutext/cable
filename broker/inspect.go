@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strings"
 	"sync"
 
 	"sutext.github.io/cable/broker/protos"
@@ -120,34 +119,35 @@ func (b *broker) handleMessage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(data)
 }
-func (b *broker) handleJoin(w http.ResponseWriter, r *http.Request) {
-	uid := r.URL.Query().Get("uid")
-	if uid == "" {
-		http.Error(w, "uid is required", http.StatusBadRequest)
-		return
-	}
-	chs := r.URL.Query().Get("channels")
-	if chs == "" {
-		http.Error(w, "channels is required", http.StatusBadRequest)
-		return
-	}
-	channels := strings.Split(chs, ",")
-	count, err := b.JoinChannel(r.Context(), uid, channels...)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	resp := map[string]int32{
-		"count": count,
-	}
-	data, err := json.MarshalIndent(resp, "", "  ")
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(data)
-}
+
+//	func (b *broker) handleJoin(w http.ResponseWriter, r *http.Request) {
+//		uid := r.URL.Query().Get("uid")
+//		if uid == "" {
+//			http.Error(w, "uid is required", http.StatusBadRequest)
+//			return
+//		}
+//		chs := r.URL.Query().Get("channels")
+//		if chs == "" {
+//			http.Error(w, "channels is required", http.StatusBadRequest)
+//			return
+//		}
+//		channels := strings.Split(chs, ",")
+//		count, err := b.JoinChannel(r.Context(), uid, channels...)
+//		if err != nil {
+//			http.Error(w, err.Error(), http.StatusInternalServerError)
+//			return
+//		}
+//		resp := map[string]int32{
+//			"count": count,
+//		}
+//		data, err := json.MarshalIndent(resp, "", "  ")
+//		if err != nil {
+//			http.Error(w, err.Error(), http.StatusInternalServerError)
+//			return
+//		}
+//		w.Header().Set("Content-Type", "application/json")
+//		w.Write(data)
+//	}
 func (b *broker) handleBrodcast(w http.ResponseWriter, r *http.Request) {
 	msg := r.URL.Query().Get("msg")
 	if msg == "" {

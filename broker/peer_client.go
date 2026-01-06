@@ -120,7 +120,7 @@ func (p *peerClient) updateAddr(addr string) {
 	p.ready.Store(false)
 	p.connect()
 }
-func (p *peerClient) sendMessage(ctx context.Context, m *packet.Message, target string, flag uint8) (total, success int32, err error) {
+func (p *peerClient) sendToAll(ctx context.Context, m *packet.Message) (total, success int32, err error) {
 	if !p.isReady() {
 		return 0, 0, xerr.PeerNotReady
 	}
@@ -128,40 +128,48 @@ func (p *peerClient) sendMessage(ctx context.Context, m *packet.Message, target 
 	if err != nil {
 		return 0, 0, err
 	}
-	req := &protos.SendMessageReq{
-		Flag:    int32(flag),
-		Target:  target,
+	req := &protos.MessageReq{
 		Message: data,
 	}
-	resp, err := p.rpc.SendMessage(ctx, req)
+	resp, err := p.rpc.SendToAll(ctx, req)
 	if err != nil {
 		return 0, 0, err
 	}
 	return resp.Total, resp.Success, nil
 }
-
-func (p *peerClient) isOnline(ctx context.Context, uid string) (bool, error) {
+func (p *peerClient) sendToTargets(ctx context.Context, m *packet.Message, tragets []*protos.Target) (total, success int32, err error) {
+	if !p.isReady() {
+		return 0, 0, xerr.PeerNotReady
+	}
+	data, err := coder.Marshal(m)
+	if err != nil {
+		return 0, 0, err
+	}
+	req := &protos.MessageReq{
+		Message: data,
+		Targets: tragets,
+	}
+	resp, err := p.rpc.SendToTargets(ctx, req)
+	if err != nil {
+		return 0, 0, err
+	}
+	return resp.Total, resp.Success, nil
+}
+func (p *peerClient) isOnline(ctx context.Context, targets []*protos.Target) (bool, error) {
 	if !p.isReady() {
 		return false, xerr.PeerNotReady
 	}
-	resp, err := p.rpc.IsOnline(ctx, &protos.IsOnlineReq{Uid: uid})
+	resp, err := p.rpc.IsOnline(ctx, &protos.IsOnlineReq{Targets: targets})
 	if err != nil {
 		return false, err
 	}
 	return resp.Online, nil
 }
-func (p *peerClient) kickConn(ctx context.Context, cid string) error {
+func (p *peerClient) kickConn(ctx context.Context, targets []*protos.Target) error {
 	if !p.isReady() {
 		return xerr.PeerNotReady
 	}
-	_, err := p.rpc.KickConn(ctx, &protos.KickConnReq{Cid: cid})
-	return err
-}
-func (p *peerClient) kickUser(ctx context.Context, uid string) error {
-	if !p.isReady() {
-		return xerr.PeerNotReady
-	}
-	_, err := p.rpc.KickUser(ctx, &protos.KickUserReq{Uid: uid})
+	_, err := p.rpc.KickConn(ctx, &protos.KickConnReq{Targets: targets})
 	return err
 }
 func (p *peerClient) inspect(ctx context.Context) (*protos.Inspects, error) {
@@ -170,25 +178,39 @@ func (p *peerClient) inspect(ctx context.Context) (*protos.Inspects, error) {
 	}
 	return p.rpc.Inspect(ctx, &protos.Empty{})
 }
-
-func (p *peerClient) joinChannel(ctx context.Context, uid string, channels []string) (count int32, err error) {
+func (p *peerClient) userOpened(ctx context.Context, req *protos.UserOpenedReq) error {
 	if !p.isReady() {
-		return 0, xerr.PeerNotReady
+		return xerr.PeerNotReady
 	}
-	resp, err := p.rpc.JoinChannel(ctx, &protos.ChannelReq{Uid: uid, Channels: channels})
-	if err != nil {
-		return 0, err
+	_, err := p.rpc.UserOpened(ctx, req)
+	return err
+}
+func (p *peerClient) userClosed(ctx context.Context, req *protos.UserClosedReq) error {
+	if !p.isReady() {
+		return xerr.PeerNotReady
 	}
-	return resp.Count, nil
+	_, err := p.rpc.UserClosed(ctx, req)
+	return err
 }
 
-func (p *peerClient) leaveChannel(ctx context.Context, uid string, channels []string) (count int32, err error) {
-	if !p.isReady() {
-		return 0, xerr.PeerNotReady
-	}
-	resp, err := p.rpc.LeaveChannel(ctx, &protos.ChannelReq{Uid: uid, Channels: channels})
-	if err != nil {
-		return 0, err
-	}
-	return resp.Count, nil
-}
+// func (p *peerClient) joinChannel(ctx context.Context, uid string, channels []string) (count int32, err error) {
+// 	if !p.isReady() {
+// 		return 0, xerr.PeerNotReady
+// 	}
+// 	resp, err := p.rpc.JoinChannel(ctx, &protos.ChannelReq{Uid: uid, Channels: channels})
+// 	if err != nil {
+// 		return 0, err
+// 	}
+// 	return resp.Count, nil
+// }
+
+// func (p *peerClient) leaveChannel(ctx context.Context, uid string, channels []string) (count int32, err error) {
+// 	if !p.isReady() {
+// 		return 0, xerr.PeerNotReady
+// 	}
+// 	resp, err := p.rpc.LeaveChannel(ctx, &protos.ChannelReq{Uid: uid, Channels: channels})
+// 	if err != nil {
+// 		return 0, err
+// 	}
+// 	return resp.Count, nil
+// }

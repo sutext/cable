@@ -7,34 +7,35 @@ package protos;
 /// An empty message.
 message Empty{
 }
+/// Target represents a message target
+message Target{
+  string cid = 1;
+  string net = 2;
+}
 /// IsOnlineReq is the request message for IsOnline RPC.
 message IsOnlineReq{
-  string uid = 1;
+  repeated Target targets = 1;
 }
 /// IsOnlineResp is the response message for IsOnline RPC.
 message IsOnlineResp{
   bool online = 1;
 }
 
-/// SendMessageReq is the request message for SendMessage RPC.
-message SendMessageReq{
-  int32 flag = 1;
-  string target = 2;
+/// MessageReq is the request message for SendToClients RPC.
+message MessageReq{
   bytes message = 3;
+  repeated Target targets = 4;
 }
-/// SendMessageResp is the response message for SendMessage RPC.
-message SendMessageResp{
+
+/// MessageResp is the response message for SendMessage RPC.
+message MessageResp{
  int32 total = 1;
  int32 success = 2;
 }
 
-/// KickUserReq is the request message for KickUser RPC.
-message KickUserReq{
-  string uid = 1;
-}
-/// KickConnReq is the request message for KickConn RPC.
+/// KickConnReq is the request message for KickUser RPC.
 message KickConnReq{
-  string cid = 1;
+  repeated Target targets = 1;
 }
 
 /// Inspects is the response message for Inspect RPC.
@@ -45,15 +46,27 @@ message Inspects{
  int32 cluster_size = 4;
  int32 channel_count = 5;
 }
-// ChannelReq is the request message for JoinChannel and LeaveChannel RPC.
-message ChannelReq{
+// UserOpenedReq is the request message for UserOpened RPC.
+message UserOpenedReq {
   string uid = 1;
-  repeated string channels = 2;
+  string cid = 2;
+  string net = 3;
+  string peer_id = 4;
 }
-// ChannelResp is the response message for JoinChannel and LeaveChannel RPC.
-message ChannelResp{
-  int32 count = 1;
+// UserClosedReq is the request message for UserClosed RPC.
+message UserClosedReq {
+  string uid = 1;
+  string cid = 2;
 }
+// // ChannelReq is the request message for JoinChannel and LeaveChannel RPC.
+// message ChannelReq{
+//   string uid = 1;
+//   repeated string channels = 2;
+// }
+// // ChannelResp is the response message for JoinChannel and LeaveChannel RPC.
+// message ChannelResp{
+//   int32 count = 1;
+// }
 
 // The greeting service definition.
 service PeerService {
@@ -63,14 +76,18 @@ service PeerService {
   rpc Inspect (Empty) returns (Inspects) {}
   // IsOnline checks if a user is online.
   rpc IsOnline (IsOnlineReq) returns (IsOnlineResp) {}
-  // KickUser kicks a user from the cluster.
-  rpc KickUser (KickUserReq) returns (Empty) {}
   // KickConn kicks a connection by connection ID.
   rpc KickConn (KickConnReq) returns (Empty) {}
   // SendMessage sends a message to a user or a channel.
-  rpc SendMessage (SendMessageReq) returns (SendMessageResp) {}
+  rpc SendToAll (MessageReq) returns (MessageResp) {}
+  // SendToTargets sends a message to a channel.
+  rpc SendToTargets (MessageReq) returns (MessageResp) {}
+  // UserOpened is called when a user opens a connection.
+  rpc UserOpened (UserOpenedReq) returns (Empty) {}
+  // UserClosed is called when a user closes a connection.
+  rpc UserClosed (UserClosedReq) returns (Empty) {}
   // JoinChannel adds a user to the specified channels.
-  rpc JoinChannel (ChannelReq) returns (ChannelResp) {}
-  // LeaveChannel removes a user from the specified channels.
-  rpc LeaveChannel (ChannelReq) returns (ChannelResp) {}
+  // rpc JoinChannel (ChannelReq) returns (ChannelResp) {}
+  // // LeaveChannel removes a user from the specified channels.
+  // rpc LeaveChannel (ChannelReq) returns (ChannelResp) {}
 }

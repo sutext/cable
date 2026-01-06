@@ -21,6 +21,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// / An empty message.
 type Empty struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -57,16 +58,70 @@ func (*Empty) Descriptor() ([]byte, []int) {
 	return file_broker_protos_peer_proto_rawDescGZIP(), []int{0}
 }
 
+// / Target represents a message target
+type Target struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cid           string                 `protobuf:"bytes,1,opt,name=cid,proto3" json:"cid,omitempty"`
+	Net           string                 `protobuf:"bytes,2,opt,name=net,proto3" json:"net,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Target) Reset() {
+	*x = Target{}
+	mi := &file_broker_protos_peer_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Target) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Target) ProtoMessage() {}
+
+func (x *Target) ProtoReflect() protoreflect.Message {
+	mi := &file_broker_protos_peer_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Target.ProtoReflect.Descriptor instead.
+func (*Target) Descriptor() ([]byte, []int) {
+	return file_broker_protos_peer_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *Target) GetCid() string {
+	if x != nil {
+		return x.Cid
+	}
+	return ""
+}
+
+func (x *Target) GetNet() string {
+	if x != nil {
+		return x.Net
+	}
+	return ""
+}
+
+// / IsOnlineReq is the request message for IsOnline RPC.
 type IsOnlineReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Uid           string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`
+	Targets       []*Target              `protobuf:"bytes,1,rep,name=targets,proto3" json:"targets,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *IsOnlineReq) Reset() {
 	*x = IsOnlineReq{}
-	mi := &file_broker_protos_peer_proto_msgTypes[1]
+	mi := &file_broker_protos_peer_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -78,7 +133,7 @@ func (x *IsOnlineReq) String() string {
 func (*IsOnlineReq) ProtoMessage() {}
 
 func (x *IsOnlineReq) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[1]
+	mi := &file_broker_protos_peer_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -91,16 +146,17 @@ func (x *IsOnlineReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IsOnlineReq.ProtoReflect.Descriptor instead.
 func (*IsOnlineReq) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{1}
+	return file_broker_protos_peer_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *IsOnlineReq) GetUid() string {
+func (x *IsOnlineReq) GetTargets() []*Target {
 	if x != nil {
-		return x.Uid
+		return x.Targets
 	}
-	return ""
+	return nil
 }
 
+// / IsOnlineResp is the response message for IsOnline RPC.
 type IsOnlineResp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Online        bool                   `protobuf:"varint,1,opt,name=online,proto3" json:"online,omitempty"`
@@ -110,7 +166,7 @@ type IsOnlineResp struct {
 
 func (x *IsOnlineResp) Reset() {
 	*x = IsOnlineResp{}
-	mi := &file_broker_protos_peer_proto_msgTypes[2]
+	mi := &file_broker_protos_peer_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -122,7 +178,7 @@ func (x *IsOnlineResp) String() string {
 func (*IsOnlineResp) ProtoMessage() {}
 
 func (x *IsOnlineResp) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[2]
+	mi := &file_broker_protos_peer_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -135,7 +191,7 @@ func (x *IsOnlineResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IsOnlineResp.ProtoReflect.Descriptor instead.
 func (*IsOnlineResp) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{2}
+	return file_broker_protos_peer_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *IsOnlineResp) GetOnline() bool {
@@ -145,30 +201,30 @@ func (x *IsOnlineResp) GetOnline() bool {
 	return false
 }
 
-type SendMessageReq struct {
+// / MessageReq is the request message for SendToClients RPC.
+type MessageReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Flag          int32                  `protobuf:"varint,1,opt,name=flag,proto3" json:"flag,omitempty"`
-	Target        string                 `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
 	Message       []byte                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	Targets       []*Target              `protobuf:"bytes,4,rep,name=targets,proto3" json:"targets,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *SendMessageReq) Reset() {
-	*x = SendMessageReq{}
-	mi := &file_broker_protos_peer_proto_msgTypes[3]
+func (x *MessageReq) Reset() {
+	*x = MessageReq{}
+	mi := &file_broker_protos_peer_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *SendMessageReq) String() string {
+func (x *MessageReq) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*SendMessageReq) ProtoMessage() {}
+func (*MessageReq) ProtoMessage() {}
 
-func (x *SendMessageReq) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[3]
+func (x *MessageReq) ProtoReflect() protoreflect.Message {
+	mi := &file_broker_protos_peer_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -179,33 +235,27 @@ func (x *SendMessageReq) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use SendMessageReq.ProtoReflect.Descriptor instead.
-func (*SendMessageReq) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{3}
+// Deprecated: Use MessageReq.ProtoReflect.Descriptor instead.
+func (*MessageReq) Descriptor() ([]byte, []int) {
+	return file_broker_protos_peer_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *SendMessageReq) GetFlag() int32 {
-	if x != nil {
-		return x.Flag
-	}
-	return 0
-}
-
-func (x *SendMessageReq) GetTarget() string {
-	if x != nil {
-		return x.Target
-	}
-	return ""
-}
-
-func (x *SendMessageReq) GetMessage() []byte {
+func (x *MessageReq) GetMessage() []byte {
 	if x != nil {
 		return x.Message
 	}
 	return nil
 }
 
-type SendMessageResp struct {
+func (x *MessageReq) GetTargets() []*Target {
+	if x != nil {
+		return x.Targets
+	}
+	return nil
+}
+
+// / MessageResp is the response message for SendMessage RPC.
+type MessageResp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Total         int32                  `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`
 	Success       int32                  `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"`
@@ -213,21 +263,21 @@ type SendMessageResp struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *SendMessageResp) Reset() {
-	*x = SendMessageResp{}
-	mi := &file_broker_protos_peer_proto_msgTypes[4]
+func (x *MessageResp) Reset() {
+	*x = MessageResp{}
+	mi := &file_broker_protos_peer_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *SendMessageResp) String() string {
+func (x *MessageResp) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*SendMessageResp) ProtoMessage() {}
+func (*MessageResp) ProtoMessage() {}
 
-func (x *SendMessageResp) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[4]
+func (x *MessageResp) ProtoReflect() protoreflect.Message {
+	mi := &file_broker_protos_peer_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -238,72 +288,29 @@ func (x *SendMessageResp) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use SendMessageResp.ProtoReflect.Descriptor instead.
-func (*SendMessageResp) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{4}
+// Deprecated: Use MessageResp.ProtoReflect.Descriptor instead.
+func (*MessageResp) Descriptor() ([]byte, []int) {
+	return file_broker_protos_peer_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *SendMessageResp) GetTotal() int32 {
+func (x *MessageResp) GetTotal() int32 {
 	if x != nil {
 		return x.Total
 	}
 	return 0
 }
 
-func (x *SendMessageResp) GetSuccess() int32 {
+func (x *MessageResp) GetSuccess() int32 {
 	if x != nil {
 		return x.Success
 	}
 	return 0
 }
 
-type KickUserReq struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Uid           string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *KickUserReq) Reset() {
-	*x = KickUserReq{}
-	mi := &file_broker_protos_peer_proto_msgTypes[5]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *KickUserReq) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*KickUserReq) ProtoMessage() {}
-
-func (x *KickUserReq) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[5]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use KickUserReq.ProtoReflect.Descriptor instead.
-func (*KickUserReq) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{5}
-}
-
-func (x *KickUserReq) GetUid() string {
-	if x != nil {
-		return x.Uid
-	}
-	return ""
-}
-
+// / KickConnReq is the request message for KickUser RPC.
 type KickConnReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Cid           string                 `protobuf:"bytes,1,opt,name=cid,proto3" json:"cid,omitempty"`
+	Targets       []*Target              `protobuf:"bytes,1,rep,name=targets,proto3" json:"targets,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -338,13 +345,14 @@ func (*KickConnReq) Descriptor() ([]byte, []int) {
 	return file_broker_protos_peer_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *KickConnReq) GetCid() string {
+func (x *KickConnReq) GetTargets() []*Target {
 	if x != nil {
-		return x.Cid
+		return x.Targets
 	}
-	return ""
+	return nil
 }
 
+// / Inspects is the response message for Inspect RPC.
 type Inspects struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -421,28 +429,31 @@ func (x *Inspects) GetChannelCount() int32 {
 	return 0
 }
 
-type ChannelReq struct {
+// UserOpenedReq is the request message for UserOpened RPC.
+type UserOpenedReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Uid           string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`
-	Channels      []string               `protobuf:"bytes,2,rep,name=channels,proto3" json:"channels,omitempty"`
+	Cid           string                 `protobuf:"bytes,2,opt,name=cid,proto3" json:"cid,omitempty"`
+	Net           string                 `protobuf:"bytes,3,opt,name=net,proto3" json:"net,omitempty"`
+	PeerId        string                 `protobuf:"bytes,4,opt,name=peer_id,json=peerId,proto3" json:"peer_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ChannelReq) Reset() {
-	*x = ChannelReq{}
+func (x *UserOpenedReq) Reset() {
+	*x = UserOpenedReq{}
 	mi := &file_broker_protos_peer_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ChannelReq) String() string {
+func (x *UserOpenedReq) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ChannelReq) ProtoMessage() {}
+func (*UserOpenedReq) ProtoMessage() {}
 
-func (x *ChannelReq) ProtoReflect() protoreflect.Message {
+func (x *UserOpenedReq) ProtoReflect() protoreflect.Message {
 	mi := &file_broker_protos_peer_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -454,46 +465,62 @@ func (x *ChannelReq) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ChannelReq.ProtoReflect.Descriptor instead.
-func (*ChannelReq) Descriptor() ([]byte, []int) {
+// Deprecated: Use UserOpenedReq.ProtoReflect.Descriptor instead.
+func (*UserOpenedReq) Descriptor() ([]byte, []int) {
 	return file_broker_protos_peer_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *ChannelReq) GetUid() string {
+func (x *UserOpenedReq) GetUid() string {
 	if x != nil {
 		return x.Uid
 	}
 	return ""
 }
 
-func (x *ChannelReq) GetChannels() []string {
+func (x *UserOpenedReq) GetCid() string {
 	if x != nil {
-		return x.Channels
+		return x.Cid
 	}
-	return nil
+	return ""
 }
 
-type ChannelResp struct {
+func (x *UserOpenedReq) GetNet() string {
+	if x != nil {
+		return x.Net
+	}
+	return ""
+}
+
+func (x *UserOpenedReq) GetPeerId() string {
+	if x != nil {
+		return x.PeerId
+	}
+	return ""
+}
+
+// UserClosedReq is the request message for UserClosed RPC.
+type UserClosedReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Count         int32                  `protobuf:"varint,1,opt,name=count,proto3" json:"count,omitempty"`
+	Uid           string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`
+	Cid           string                 `protobuf:"bytes,2,opt,name=cid,proto3" json:"cid,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ChannelResp) Reset() {
-	*x = ChannelResp{}
+func (x *UserClosedReq) Reset() {
+	*x = UserClosedReq{}
 	mi := &file_broker_protos_peer_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ChannelResp) String() string {
+func (x *UserClosedReq) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ChannelResp) ProtoMessage() {}
+func (*UserClosedReq) ProtoMessage() {}
 
-func (x *ChannelResp) ProtoReflect() protoreflect.Message {
+func (x *UserClosedReq) ProtoReflect() protoreflect.Message {
 	mi := &file_broker_protos_peer_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -505,16 +532,23 @@ func (x *ChannelResp) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ChannelResp.ProtoReflect.Descriptor instead.
-func (*ChannelResp) Descriptor() ([]byte, []int) {
+// Deprecated: Use UserClosedReq.ProtoReflect.Descriptor instead.
+func (*UserClosedReq) Descriptor() ([]byte, []int) {
 	return file_broker_protos_peer_proto_rawDescGZIP(), []int{9}
 }
 
-func (x *ChannelResp) GetCount() int32 {
+func (x *UserClosedReq) GetUid() string {
 	if x != nil {
-		return x.Count
+		return x.Uid
 	}
-	return 0
+	return ""
+}
+
+func (x *UserClosedReq) GetCid() string {
+	if x != nil {
+		return x.Cid
+	}
+	return ""
 }
 
 var File_broker_protos_peer_proto protoreflect.FileDescriptor
@@ -522,43 +556,48 @@ var File_broker_protos_peer_proto protoreflect.FileDescriptor
 const file_broker_protos_peer_proto_rawDesc = "" +
 	"\n" +
 	"\x18broker/protos/peer.proto\x12\x06protos\"\a\n" +
-	"\x05Empty\"\x1f\n" +
-	"\vIsOnlineReq\x12\x10\n" +
-	"\x03uid\x18\x01 \x01(\tR\x03uid\"&\n" +
+	"\x05Empty\",\n" +
+	"\x06Target\x12\x10\n" +
+	"\x03cid\x18\x01 \x01(\tR\x03cid\x12\x10\n" +
+	"\x03net\x18\x02 \x01(\tR\x03net\"7\n" +
+	"\vIsOnlineReq\x12(\n" +
+	"\atargets\x18\x01 \x03(\v2\x0e.protos.TargetR\atargets\"&\n" +
 	"\fIsOnlineResp\x12\x16\n" +
-	"\x06online\x18\x01 \x01(\bR\x06online\"V\n" +
-	"\x0eSendMessageReq\x12\x12\n" +
-	"\x04flag\x18\x01 \x01(\x05R\x04flag\x12\x16\n" +
-	"\x06target\x18\x02 \x01(\tR\x06target\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\fR\amessage\"A\n" +
-	"\x0fSendMessageResp\x12\x14\n" +
+	"\x06online\x18\x01 \x01(\bR\x06online\"P\n" +
+	"\n" +
+	"MessageReq\x12\x18\n" +
+	"\amessage\x18\x03 \x01(\fR\amessage\x12(\n" +
+	"\atargets\x18\x04 \x03(\v2\x0e.protos.TargetR\atargets\"=\n" +
+	"\vMessageResp\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x18\n" +
-	"\asuccess\x18\x02 \x01(\x05R\asuccess\"\x1f\n" +
-	"\vKickUserReq\x12\x10\n" +
-	"\x03uid\x18\x01 \x01(\tR\x03uid\"\x1f\n" +
-	"\vKickConnReq\x12\x10\n" +
-	"\x03cid\x18\x01 \x01(\tR\x03cid\"\xa4\x01\n" +
+	"\asuccess\x18\x02 \x01(\x05R\asuccess\"7\n" +
+	"\vKickConnReq\x12(\n" +
+	"\atargets\x18\x01 \x03(\v2\x0e.protos.TargetR\atargets\"\xa4\x01\n" +
 	"\bInspects\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
 	"user_count\x18\x02 \x01(\x05R\tuserCount\x12!\n" +
 	"\fclient_count\x18\x03 \x01(\x05R\vclientCount\x12!\n" +
 	"\fcluster_size\x18\x04 \x01(\x05R\vclusterSize\x12#\n" +
-	"\rchannel_count\x18\x05 \x01(\x05R\fchannelCount\":\n" +
-	"\n" +
-	"ChannelReq\x12\x10\n" +
-	"\x03uid\x18\x01 \x01(\tR\x03uid\x12\x1a\n" +
-	"\bchannels\x18\x02 \x03(\tR\bchannels\"#\n" +
-	"\vChannelResp\x12\x14\n" +
-	"\x05count\x18\x01 \x01(\x05R\x05count2\x8f\x03\n" +
+	"\rchannel_count\x18\x05 \x01(\x05R\fchannelCount\"^\n" +
+	"\rUserOpenedReq\x12\x10\n" +
+	"\x03uid\x18\x01 \x01(\tR\x03uid\x12\x10\n" +
+	"\x03cid\x18\x02 \x01(\tR\x03cid\x12\x10\n" +
+	"\x03net\x18\x03 \x01(\tR\x03net\x12\x17\n" +
+	"\apeer_id\x18\x04 \x01(\tR\x06peerId\"3\n" +
+	"\rUserClosedReq\x12\x10\n" +
+	"\x03uid\x18\x01 \x01(\tR\x03uid\x12\x10\n" +
+	"\x03cid\x18\x02 \x01(\tR\x03cid2\x86\x03\n" +
 	"\vPeerService\x12,\n" +
 	"\aInspect\x12\r.protos.Empty\x1a\x10.protos.Inspects\"\x00\x127\n" +
 	"\bIsOnline\x12\x13.protos.IsOnlineReq\x1a\x14.protos.IsOnlineResp\"\x00\x120\n" +
-	"\bKickUser\x12\x13.protos.KickUserReq\x1a\r.protos.Empty\"\x00\x120\n" +
-	"\bKickConn\x12\x13.protos.KickConnReq\x1a\r.protos.Empty\"\x00\x12@\n" +
-	"\vSendMessage\x12\x16.protos.SendMessageReq\x1a\x17.protos.SendMessageResp\"\x00\x128\n" +
-	"\vJoinChannel\x12\x12.protos.ChannelReq\x1a\x13.protos.ChannelResp\"\x00\x129\n" +
-	"\fLeaveChannel\x12\x12.protos.ChannelReq\x1a\x13.protos.ChannelResp\"\x00B\n" +
+	"\bKickConn\x12\x13.protos.KickConnReq\x1a\r.protos.Empty\"\x00\x126\n" +
+	"\tSendToAll\x12\x12.protos.MessageReq\x1a\x13.protos.MessageResp\"\x00\x12:\n" +
+	"\rSendToTargets\x12\x12.protos.MessageReq\x1a\x13.protos.MessageResp\"\x00\x124\n" +
+	"\n" +
+	"UserOpened\x12\x15.protos.UserOpenedReq\x1a\r.protos.Empty\"\x00\x124\n" +
+	"\n" +
+	"UserClosed\x12\x15.protos.UserClosedReq\x1a\r.protos.Empty\"\x00B\n" +
 	"Z\b./protosb\x06proto3"
 
 var (
@@ -575,37 +614,40 @@ func file_broker_protos_peer_proto_rawDescGZIP() []byte {
 
 var file_broker_protos_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_broker_protos_peer_proto_goTypes = []any{
-	(*Empty)(nil),           // 0: protos.Empty
-	(*IsOnlineReq)(nil),     // 1: protos.IsOnlineReq
-	(*IsOnlineResp)(nil),    // 2: protos.IsOnlineResp
-	(*SendMessageReq)(nil),  // 3: protos.SendMessageReq
-	(*SendMessageResp)(nil), // 4: protos.SendMessageResp
-	(*KickUserReq)(nil),     // 5: protos.KickUserReq
-	(*KickConnReq)(nil),     // 6: protos.KickConnReq
-	(*Inspects)(nil),        // 7: protos.Inspects
-	(*ChannelReq)(nil),      // 8: protos.ChannelReq
-	(*ChannelResp)(nil),     // 9: protos.ChannelResp
+	(*Empty)(nil),         // 0: protos.Empty
+	(*Target)(nil),        // 1: protos.Target
+	(*IsOnlineReq)(nil),   // 2: protos.IsOnlineReq
+	(*IsOnlineResp)(nil),  // 3: protos.IsOnlineResp
+	(*MessageReq)(nil),    // 4: protos.MessageReq
+	(*MessageResp)(nil),   // 5: protos.MessageResp
+	(*KickConnReq)(nil),   // 6: protos.KickConnReq
+	(*Inspects)(nil),      // 7: protos.Inspects
+	(*UserOpenedReq)(nil), // 8: protos.UserOpenedReq
+	(*UserClosedReq)(nil), // 9: protos.UserClosedReq
 }
 var file_broker_protos_peer_proto_depIdxs = []int32{
-	0, // 0: protos.PeerService.Inspect:input_type -> protos.Empty
-	1, // 1: protos.PeerService.IsOnline:input_type -> protos.IsOnlineReq
-	5, // 2: protos.PeerService.KickUser:input_type -> protos.KickUserReq
-	6, // 3: protos.PeerService.KickConn:input_type -> protos.KickConnReq
-	3, // 4: protos.PeerService.SendMessage:input_type -> protos.SendMessageReq
-	8, // 5: protos.PeerService.JoinChannel:input_type -> protos.ChannelReq
-	8, // 6: protos.PeerService.LeaveChannel:input_type -> protos.ChannelReq
-	7, // 7: protos.PeerService.Inspect:output_type -> protos.Inspects
-	2, // 8: protos.PeerService.IsOnline:output_type -> protos.IsOnlineResp
-	0, // 9: protos.PeerService.KickUser:output_type -> protos.Empty
-	0, // 10: protos.PeerService.KickConn:output_type -> protos.Empty
-	4, // 11: protos.PeerService.SendMessage:output_type -> protos.SendMessageResp
-	9, // 12: protos.PeerService.JoinChannel:output_type -> protos.ChannelResp
-	9, // 13: protos.PeerService.LeaveChannel:output_type -> protos.ChannelResp
-	7, // [7:14] is the sub-list for method output_type
-	0, // [0:7] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	1,  // 0: protos.IsOnlineReq.targets:type_name -> protos.Target
+	1,  // 1: protos.MessageReq.targets:type_name -> protos.Target
+	1,  // 2: protos.KickConnReq.targets:type_name -> protos.Target
+	0,  // 3: protos.PeerService.Inspect:input_type -> protos.Empty
+	2,  // 4: protos.PeerService.IsOnline:input_type -> protos.IsOnlineReq
+	6,  // 5: protos.PeerService.KickConn:input_type -> protos.KickConnReq
+	4,  // 6: protos.PeerService.SendToAll:input_type -> protos.MessageReq
+	4,  // 7: protos.PeerService.SendToTargets:input_type -> protos.MessageReq
+	8,  // 8: protos.PeerService.UserOpened:input_type -> protos.UserOpenedReq
+	9,  // 9: protos.PeerService.UserClosed:input_type -> protos.UserClosedReq
+	7,  // 10: protos.PeerService.Inspect:output_type -> protos.Inspects
+	3,  // 11: protos.PeerService.IsOnline:output_type -> protos.IsOnlineResp
+	0,  // 12: protos.PeerService.KickConn:output_type -> protos.Empty
+	5,  // 13: protos.PeerService.SendToAll:output_type -> protos.MessageResp
+	5,  // 14: protos.PeerService.SendToTargets:output_type -> protos.MessageResp
+	0,  // 15: protos.PeerService.UserOpened:output_type -> protos.Empty
+	0,  // 16: protos.PeerService.UserClosed:output_type -> protos.Empty
+	10, // [10:17] is the sub-list for method output_type
+	3,  // [3:10] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_broker_protos_peer_proto_init() }
