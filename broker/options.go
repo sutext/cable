@@ -48,7 +48,7 @@ func newOptions(opts ...Option) *options {
 		handler:     &emptyHandler{},
 		httpPort:    ":8888",
 		peerPort:    ":4567",
-		brokerID:    getBrokerID(),
+		brokerID:    getBrokerID() + 10000,
 		clusterSize: 3,
 		listeners: map[server.Transport]string{
 			server.TransportTCP:  ":1883",
