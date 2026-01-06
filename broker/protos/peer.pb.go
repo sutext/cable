@@ -551,6 +551,52 @@ func (x *UserClosedReq) GetCid() string {
 	return ""
 }
 
+// RaftMessage represents a Raft message
+type RaftMessage struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Raft message data in binary format
+	Data          []byte `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RaftMessage) Reset() {
+	*x = RaftMessage{}
+	mi := &file_broker_protos_peer_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RaftMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RaftMessage) ProtoMessage() {}
+
+func (x *RaftMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_broker_protos_peer_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RaftMessage.ProtoReflect.Descriptor instead.
+func (*RaftMessage) Descriptor() ([]byte, []int) {
+	return file_broker_protos_peer_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *RaftMessage) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
 var File_broker_protos_peer_proto protoreflect.FileDescriptor
 
 const file_broker_protos_peer_proto_rawDesc = "" +
@@ -587,7 +633,9 @@ const file_broker_protos_peer_proto_rawDesc = "" +
 	"\apeer_id\x18\x04 \x01(\tR\x06peerId\"3\n" +
 	"\rUserClosedReq\x12\x10\n" +
 	"\x03uid\x18\x01 \x01(\tR\x03uid\x12\x10\n" +
-	"\x03cid\x18\x02 \x01(\tR\x03cid2\x86\x03\n" +
+	"\x03cid\x18\x02 \x01(\tR\x03cid\"!\n" +
+	"\vRaftMessage\x12\x12\n" +
+	"\x04data\x18\x01 \x01(\fR\x04data2\xbf\x03\n" +
 	"\vPeerService\x12,\n" +
 	"\aInspect\x12\r.protos.Empty\x1a\x10.protos.Inspects\"\x00\x127\n" +
 	"\bIsOnline\x12\x13.protos.IsOnlineReq\x1a\x14.protos.IsOnlineResp\"\x00\x120\n" +
@@ -597,7 +645,8 @@ const file_broker_protos_peer_proto_rawDesc = "" +
 	"\n" +
 	"UserOpened\x12\x15.protos.UserOpenedReq\x1a\r.protos.Empty\"\x00\x124\n" +
 	"\n" +
-	"UserClosed\x12\x15.protos.UserClosedReq\x1a\r.protos.Empty\"\x00B\n" +
+	"UserClosed\x12\x15.protos.UserClosedReq\x1a\r.protos.Empty\"\x00\x127\n" +
+	"\x0fSendRaftMessage\x12\x13.protos.RaftMessage\x1a\r.protos.Empty\"\x00B\n" +
 	"Z\b./protosb\x06proto3"
 
 var (
@@ -612,7 +661,7 @@ func file_broker_protos_peer_proto_rawDescGZIP() []byte {
 	return file_broker_protos_peer_proto_rawDescData
 }
 
-var file_broker_protos_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_broker_protos_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_broker_protos_peer_proto_goTypes = []any{
 	(*Empty)(nil),         // 0: protos.Empty
 	(*Target)(nil),        // 1: protos.Target
@@ -624,6 +673,7 @@ var file_broker_protos_peer_proto_goTypes = []any{
 	(*Inspects)(nil),      // 7: protos.Inspects
 	(*UserOpenedReq)(nil), // 8: protos.UserOpenedReq
 	(*UserClosedReq)(nil), // 9: protos.UserClosedReq
+	(*RaftMessage)(nil),   // 10: protos.RaftMessage
 }
 var file_broker_protos_peer_proto_depIdxs = []int32{
 	1,  // 0: protos.IsOnlineReq.targets:type_name -> protos.Target
@@ -636,15 +686,17 @@ var file_broker_protos_peer_proto_depIdxs = []int32{
 	4,  // 7: protos.PeerService.SendToTargets:input_type -> protos.MessageReq
 	8,  // 8: protos.PeerService.UserOpened:input_type -> protos.UserOpenedReq
 	9,  // 9: protos.PeerService.UserClosed:input_type -> protos.UserClosedReq
-	7,  // 10: protos.PeerService.Inspect:output_type -> protos.Inspects
-	3,  // 11: protos.PeerService.IsOnline:output_type -> protos.IsOnlineResp
-	0,  // 12: protos.PeerService.KickConn:output_type -> protos.Empty
-	5,  // 13: protos.PeerService.SendToAll:output_type -> protos.MessageResp
-	5,  // 14: protos.PeerService.SendToTargets:output_type -> protos.MessageResp
-	0,  // 15: protos.PeerService.UserOpened:output_type -> protos.Empty
-	0,  // 16: protos.PeerService.UserClosed:output_type -> protos.Empty
-	10, // [10:17] is the sub-list for method output_type
-	3,  // [3:10] is the sub-list for method input_type
+	10, // 10: protos.PeerService.SendRaftMessage:input_type -> protos.RaftMessage
+	7,  // 11: protos.PeerService.Inspect:output_type -> protos.Inspects
+	3,  // 12: protos.PeerService.IsOnline:output_type -> protos.IsOnlineResp
+	0,  // 13: protos.PeerService.KickConn:output_type -> protos.Empty
+	5,  // 14: protos.PeerService.SendToAll:output_type -> protos.MessageResp
+	5,  // 15: protos.PeerService.SendToTargets:output_type -> protos.MessageResp
+	0,  // 16: protos.PeerService.UserOpened:output_type -> protos.Empty
+	0,  // 17: protos.PeerService.UserClosed:output_type -> protos.Empty
+	0,  // 18: protos.PeerService.SendRaftMessage:output_type -> protos.Empty
+	11, // [11:19] is the sub-list for method output_type
+	3,  // [3:11] is the sub-list for method input_type
 	3,  // [3:3] is the sub-list for extension type_name
 	3,  // [3:3] is the sub-list for extension extendee
 	0,  // [0:3] is the sub-list for field type_name
@@ -661,7 +713,7 @@ func file_broker_protos_peer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_broker_protos_peer_proto_rawDesc), len(file_broker_protos_peer_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

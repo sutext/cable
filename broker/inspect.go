@@ -3,6 +3,7 @@ package broker
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -31,10 +32,10 @@ func (b *broker) inspect() *protos.Inspects {
 	// 	return true
 	// })
 	return &protos.Inspects{
-		Id:           b.id,
+		Id:           fmt.Sprintf("%d", b.id),
 		UserCount:    b.userClients.Len(),
 		ClientCount:  b.clientChannels.Len(),
-		ClusterSize:  b.clusterSize(),
+		ClusterSize:  b.clusterSize,
 		ChannelCount: b.clientChannels.Len(),
 	}
 }
@@ -45,7 +46,7 @@ func (b *broker) Inspects(ctx context.Context) ([]*protos.Inspects, error) {
 	inspects[1] = b.inspect()
 	merge(inspects[0], inspects[1])
 	wg := sync.WaitGroup{}
-	b.peers.Range(func(k string, v *peerClient) bool {
+	b.peers.Range(func(k uint64, v *peerClient) bool {
 		wg.Go(func() {
 			isp, err := v.inspect(ctx)
 			if err != nil {
@@ -172,6 +173,14 @@ func (b *broker) handleBrodcast(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 func (b *broker) handleHealth(w http.ResponseWriter, r *http.Request) {
+	if b.node == nil {
+		http.Error(w, "node is nil", http.StatusInternalServerError)
+		return
+	}
+	if !b.ready.Load() {
+		http.Error(w, "broker is not ready", http.StatusInternalServerError)
+		return
+	}
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("ok"))
 }

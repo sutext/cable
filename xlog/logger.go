@@ -73,8 +73,8 @@ func Cid(id string) slog.Attr {
 func Msg(msg string) slog.Attr {
 	return slog.String("message", msg)
 }
-func Peer(id string) slog.Attr {
-	return slog.String("peerId", id)
+func Peer(id uint64) slog.Attr {
+	return slog.Uint64("peerId", id)
 }
 func Channel(ch string) slog.Attr {
 	return slog.String("channelId", ch)

@@ -19,13 +19,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PeerService_Inspect_FullMethodName       = "/protos.PeerService/Inspect"
-	PeerService_IsOnline_FullMethodName      = "/protos.PeerService/IsOnline"
-	PeerService_KickConn_FullMethodName      = "/protos.PeerService/KickConn"
-	PeerService_SendToAll_FullMethodName     = "/protos.PeerService/SendToAll"
-	PeerService_SendToTargets_FullMethodName = "/protos.PeerService/SendToTargets"
-	PeerService_UserOpened_FullMethodName    = "/protos.PeerService/UserOpened"
-	PeerService_UserClosed_FullMethodName    = "/protos.PeerService/UserClosed"
+	PeerService_Inspect_FullMethodName         = "/protos.PeerService/Inspect"
+	PeerService_IsOnline_FullMethodName        = "/protos.PeerService/IsOnline"
+	PeerService_KickConn_FullMethodName        = "/protos.PeerService/KickConn"
+	PeerService_SendToAll_FullMethodName       = "/protos.PeerService/SendToAll"
+	PeerService_SendToTargets_FullMethodName   = "/protos.PeerService/SendToTargets"
+	PeerService_UserOpened_FullMethodName      = "/protos.PeerService/UserOpened"
+	PeerService_UserClosed_FullMethodName      = "/protos.PeerService/UserClosed"
+	PeerService_SendRaftMessage_FullMethodName = "/protos.PeerService/SendRaftMessage"
 )
 
 // PeerServiceClient is the client API for PeerService service.
@@ -50,6 +51,13 @@ type PeerServiceClient interface {
 	UserOpened(ctx context.Context, in *UserOpenedReq, opts ...grpc.CallOption) (*Empty, error)
 	// UserClosed is called when a user closes a connection.
 	UserClosed(ctx context.Context, in *UserClosedReq, opts ...grpc.CallOption) (*Empty, error)
+	// JoinChannel adds a user to the specified channels.
+	// rpc JoinChannel (ChannelReq) returns (ChannelResp) {}
+	// // LeaveChannel removes a user from the specified channels.
+	// rpc LeaveChannel (ChannelReq) returns (ChannelResp) {}
+	// -------------------- Raft 相关方法 --------------------
+	// SendRaftMessage handles a Raft message from another node
+	SendRaftMessage(ctx context.Context, in *RaftMessage, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type peerServiceClient struct {
@@ -130,6 +138,16 @@ func (c *peerServiceClient) UserClosed(ctx context.Context, in *UserClosedReq, o
 	return out, nil
 }
 
+func (c *peerServiceClient) SendRaftMessage(ctx context.Context, in *RaftMessage, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, PeerService_SendRaftMessage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PeerServiceServer is the server API for PeerService service.
 // All implementations must embed UnimplementedPeerServiceServer
 // for forward compatibility.
@@ -152,6 +170,13 @@ type PeerServiceServer interface {
 	UserOpened(context.Context, *UserOpenedReq) (*Empty, error)
 	// UserClosed is called when a user closes a connection.
 	UserClosed(context.Context, *UserClosedReq) (*Empty, error)
+	// JoinChannel adds a user to the specified channels.
+	// rpc JoinChannel (ChannelReq) returns (ChannelResp) {}
+	// // LeaveChannel removes a user from the specified channels.
+	// rpc LeaveChannel (ChannelReq) returns (ChannelResp) {}
+	// -------------------- Raft 相关方法 --------------------
+	// SendRaftMessage handles a Raft message from another node
+	SendRaftMessage(context.Context, *RaftMessage) (*Empty, error)
 	mustEmbedUnimplementedPeerServiceServer()
 }
 
@@ -182,6 +207,9 @@ func (UnimplementedPeerServiceServer) UserOpened(context.Context, *UserOpenedReq
 }
 func (UnimplementedPeerServiceServer) UserClosed(context.Context, *UserClosedReq) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UserClosed not implemented")
+}
+func (UnimplementedPeerServiceServer) SendRaftMessage(context.Context, *RaftMessage) (*Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SendRaftMessage not implemented")
 }
 func (UnimplementedPeerServiceServer) mustEmbedUnimplementedPeerServiceServer() {}
 func (UnimplementedPeerServiceServer) testEmbeddedByValue()                     {}
@@ -330,6 +358,24 @@ func _PeerService_UserClosed_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PeerService_SendRaftMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RaftMessage)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PeerServiceServer).SendRaftMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PeerService_SendRaftMessage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PeerServiceServer).SendRaftMessage(ctx, req.(*RaftMessage))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PeerService_ServiceDesc is the grpc.ServiceDesc for PeerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -364,6 +410,10 @@ var PeerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UserClosed",
 			Handler:    _PeerService_UserClosed_Handler,
+		},
+		{
+			MethodName: "SendRaftMessage",
+			Handler:    _PeerService_SendRaftMessage_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

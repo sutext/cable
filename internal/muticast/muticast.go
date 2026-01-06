@@ -13,29 +13,30 @@ import (
 
 type Muticast interface {
 	Serve() error
-	Request() (map[string]int32, error)
-	OnRequest(func(string) int32)
+	Request() (map[uint64]string, error)
+	OnRequest(func(uint64, string))
 	Shutdown() error
 }
 
 type muticast struct {
-	idaddr   string
+	id       uint64
+	ipaddr   string
 	mu       sync.Mutex
 	addr     *net.UDPAddr
 	conn     *net.UDPConn
-	req      func(idip string) int32
+	req      func(id uint64, addr string)
 	logger   *xlog.Logger
 	listener *net.UDPConn
 	respChan chan *packet.Response
 }
 
-func New(id, port string) *muticast {
+func New(id uint64, port string) Muticast {
 	ip, err := getLocalIP()
 	if err != nil {
 		panic(err)
 	}
 	m := &muticast{
-		idaddr: fmt.Sprintf("%s@%s:%s", id, ip, port),
+		ipaddr: fmt.Sprintf("%s%s", ip, port),
 		logger: xlog.With("GROUP", "MUTICAST"),
 		addr:   &net.UDPAddr{IP: net.IPv4(224, 0, 0, 9), Port: 9999},
 	}
@@ -74,10 +75,21 @@ func (m *muticast) Serve() error {
 			m.logger.Error("request method is not discovery")
 			continue
 		}
-		count := m.req(string(req.Content))
+		dec := coder.NewDecoder(req.Content)
+		id, err := dec.ReadUInt64()
+		if err != nil {
+			m.logger.Error("decode request error", xlog.Err(err))
+			continue
+		}
+		ipaddr, err := dec.ReadString()
+		if err != nil {
+			m.logger.Error("decode request error", xlog.Err(err))
+			continue
+		}
+		m.req(id, ipaddr)
 		enc := coder.NewEncoder()
-		enc.WriteInt32(count)
-		enc.WriteString(m.idaddr)
+		enc.WriteUInt64(m.id)
+		enc.WriteString(m.ipaddr)
 		resp := packet.NewResponse(req.ID, enc.Bytes())
 		bytes, err := packet.Marshal(resp)
 		if err != nil {
@@ -94,7 +106,7 @@ func (m *muticast) Shutdown() error {
 	err = m.listener.Close()
 	return err
 }
-func (m *muticast) OnRequest(f func(string) int32) {
+func (m *muticast) OnRequest(f func(uint64, string)) {
 	m.req = f
 }
 func (m *muticast) listen() error {
@@ -122,13 +134,16 @@ func (m *muticast) listen() error {
 		m.respChan <- p.(*packet.Response)
 	}
 }
-func (m *muticast) Request() (r map[string]int32, err error) {
+func (m *muticast) Request() (r map[uint64]string, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.respChan != nil {
 		return nil, fmt.Errorf("Muticast request is already in progress")
 	}
-	req := packet.NewRequest("discovery", []byte(m.idaddr))
+	enc := coder.NewEncoder()
+	enc.WriteUInt64(m.id)
+	enc.WriteString(m.ipaddr)
+	req := packet.NewRequest("discovery", enc.Bytes())
 	reqdata, err := packet.Marshal(req)
 	if err != nil {
 		return r, err
@@ -142,20 +157,20 @@ func (m *muticast) Request() (r map[string]int32, err error) {
 	if err != nil {
 		return r, err
 	}
-	r = make(map[string]int32)
+	r = make(map[uint64]string)
 	for resp := range m.respChan {
-		denc := coder.NewDecoder(resp.Content)
-		count, err := denc.ReadInt32()
+		dec := coder.NewDecoder(resp.Content)
+		id, err := dec.ReadUInt64()
 		if err != nil {
-			m.logger.Error("decode response error", xlog.Err(err))
+			m.logger.Error("decode request error", xlog.Err(err))
 			continue
 		}
-		id, err := denc.ReadString()
+		ipaddr, err := dec.ReadString()
 		if err != nil {
-			m.logger.Error("decode response error", xlog.Err(err))
+			m.logger.Error("decode request error", xlog.Err(err))
 			continue
 		}
-		r[id] = count
+		r[id] = ipaddr
 	}
 	return r, nil
 }

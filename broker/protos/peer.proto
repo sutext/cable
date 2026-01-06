@@ -58,15 +58,12 @@ message UserClosedReq {
   string uid = 1;
   string cid = 2;
 }
-// // ChannelReq is the request message for JoinChannel and LeaveChannel RPC.
-// message ChannelReq{
-//   string uid = 1;
-//   repeated string channels = 2;
-// }
-// // ChannelResp is the response message for JoinChannel and LeaveChannel RPC.
-// message ChannelResp{
-//   int32 count = 1;
-// }
+
+// RaftMessage represents a Raft message
+message RaftMessage {
+  // Raft message data in binary format
+  bytes data = 1;
+}
 
 // The greeting service definition.
 service PeerService {
@@ -90,4 +87,7 @@ service PeerService {
   // rpc JoinChannel (ChannelReq) returns (ChannelResp) {}
   // // LeaveChannel removes a user from the specified channels.
   // rpc LeaveChannel (ChannelReq) returns (ChannelResp) {}
+  // -------------------- Raft 相关方法 --------------------
+  // SendRaftMessage handles a Raft message from another node
+  rpc SendRaftMessage (RaftMessage) returns (Empty) {}
 }

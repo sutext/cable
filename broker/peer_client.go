@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"go.etcd.io/raft/v3/raftpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials/insecure"
@@ -18,7 +19,7 @@ import (
 )
 
 type peerClient struct {
-	id     string
+	id     uint64
 	mu     sync.Mutex
 	rpc    protos.PeerServiceClient
 	addr   string
@@ -28,7 +29,7 @@ type peerClient struct {
 	logger *xlog.Logger
 }
 
-func newPeerClient(id, addr string, logger *xlog.Logger) *peerClient {
+func newPeerClient(id uint64, addr string, logger *xlog.Logger) *peerClient {
 	p := &peerClient{
 		id:     id,
 		addr:   addr,
@@ -178,18 +179,20 @@ func (p *peerClient) inspect(ctx context.Context) (*protos.Inspects, error) {
 	}
 	return p.rpc.Inspect(ctx, &protos.Empty{})
 }
-func (p *peerClient) userOpened(ctx context.Context, req *protos.UserOpenedReq) error {
+
+// sendRaftMessage 发送Raft消息到远程节点
+func (p *peerClient) sendRaftMessage(ctx context.Context, msg raftpb.Message) error {
 	if !p.isReady() {
 		return xerr.PeerNotReady
 	}
-	_, err := p.rpc.UserOpened(ctx, req)
-	return err
-}
-func (p *peerClient) userClosed(ctx context.Context, req *protos.UserClosedReq) error {
-	if !p.isReady() {
-		return xerr.PeerNotReady
+	data, err := msg.Marshal()
+	if err != nil {
+		return err
 	}
-	_, err := p.rpc.UserClosed(ctx, req)
+	req := &protos.RaftMessage{
+		Data: data,
+	}
+	_, err = p.rpc.SendRaftMessage(ctx, req)
 	return err
 }
 
