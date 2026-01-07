@@ -41,14 +41,14 @@ func (b *broker) startRaft(join bool) {
 		MaxInflightMsgs: 256,
 	}
 	if join {
+		b.node = raft.RestartNode(c)
+	} else {
 		initPeers := make([]raft.Peer, 0, b.peers.Len())
 		b.peers.Range(func(key uint64, value *peerClient) bool {
 			initPeers = append(initPeers, raft.Peer{ID: key})
 			return true
 		})
 		b.node = raft.StartNode(c, initPeers)
-	} else {
-		b.node = raft.RestartNode(c)
 	}
 	go b.raftLoop()
 }
