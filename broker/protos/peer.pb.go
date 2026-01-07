@@ -353,31 +353,32 @@ func (x *KickConnReq) GetTargets() []*Target {
 }
 
 // / Inspects is the response message for Inspect RPC.
-type Inspects struct {
+type Status struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	UserCount     int32                  `protobuf:"varint,2,opt,name=user_count,json=userCount,proto3" json:"user_count,omitempty"`
 	ClientCount   int32                  `protobuf:"varint,3,opt,name=client_count,json=clientCount,proto3" json:"client_count,omitempty"`
 	ClusterSize   int32                  `protobuf:"varint,4,opt,name=cluster_size,json=clusterSize,proto3" json:"cluster_size,omitempty"`
 	ChannelCount  int32                  `protobuf:"varint,5,opt,name=channel_count,json=channelCount,proto3" json:"channel_count,omitempty"`
+	RaftState     string                 `protobuf:"bytes,6,opt,name=raft_state,json=raftState,proto3" json:"raft_state,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Inspects) Reset() {
-	*x = Inspects{}
+func (x *Status) Reset() {
+	*x = Status{}
 	mi := &file_broker_protos_peer_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Inspects) String() string {
+func (x *Status) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Inspects) ProtoMessage() {}
+func (*Status) ProtoMessage() {}
 
-func (x *Inspects) ProtoReflect() protoreflect.Message {
+func (x *Status) ProtoReflect() protoreflect.Message {
 	mi := &file_broker_protos_peer_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -389,164 +390,49 @@ func (x *Inspects) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Inspects.ProtoReflect.Descriptor instead.
-func (*Inspects) Descriptor() ([]byte, []int) {
+// Deprecated: Use Status.ProtoReflect.Descriptor instead.
+func (*Status) Descriptor() ([]byte, []int) {
 	return file_broker_protos_peer_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *Inspects) GetId() string {
+func (x *Status) GetId() uint64 {
 	if x != nil {
 		return x.Id
 	}
-	return ""
+	return 0
 }
 
-func (x *Inspects) GetUserCount() int32 {
+func (x *Status) GetUserCount() int32 {
 	if x != nil {
 		return x.UserCount
 	}
 	return 0
 }
 
-func (x *Inspects) GetClientCount() int32 {
+func (x *Status) GetClientCount() int32 {
 	if x != nil {
 		return x.ClientCount
 	}
 	return 0
 }
 
-func (x *Inspects) GetClusterSize() int32 {
+func (x *Status) GetClusterSize() int32 {
 	if x != nil {
 		return x.ClusterSize
 	}
 	return 0
 }
 
-func (x *Inspects) GetChannelCount() int32 {
+func (x *Status) GetChannelCount() int32 {
 	if x != nil {
 		return x.ChannelCount
 	}
 	return 0
 }
 
-// UserOpenedReq is the request message for UserOpened RPC.
-type UserOpenedReq struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Uid           string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`
-	Cid           string                 `protobuf:"bytes,2,opt,name=cid,proto3" json:"cid,omitempty"`
-	Net           string                 `protobuf:"bytes,3,opt,name=net,proto3" json:"net,omitempty"`
-	PeerId        string                 `protobuf:"bytes,4,opt,name=peer_id,json=peerId,proto3" json:"peer_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *UserOpenedReq) Reset() {
-	*x = UserOpenedReq{}
-	mi := &file_broker_protos_peer_proto_msgTypes[8]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *UserOpenedReq) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*UserOpenedReq) ProtoMessage() {}
-
-func (x *UserOpenedReq) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[8]
+func (x *Status) GetRaftState() string {
 	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use UserOpenedReq.ProtoReflect.Descriptor instead.
-func (*UserOpenedReq) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{8}
-}
-
-func (x *UserOpenedReq) GetUid() string {
-	if x != nil {
-		return x.Uid
-	}
-	return ""
-}
-
-func (x *UserOpenedReq) GetCid() string {
-	if x != nil {
-		return x.Cid
-	}
-	return ""
-}
-
-func (x *UserOpenedReq) GetNet() string {
-	if x != nil {
-		return x.Net
-	}
-	return ""
-}
-
-func (x *UserOpenedReq) GetPeerId() string {
-	if x != nil {
-		return x.PeerId
-	}
-	return ""
-}
-
-// UserClosedReq is the request message for UserClosed RPC.
-type UserClosedReq struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Uid           string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`
-	Cid           string                 `protobuf:"bytes,2,opt,name=cid,proto3" json:"cid,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *UserClosedReq) Reset() {
-	*x = UserClosedReq{}
-	mi := &file_broker_protos_peer_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *UserClosedReq) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*UserClosedReq) ProtoMessage() {}
-
-func (x *UserClosedReq) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use UserClosedReq.ProtoReflect.Descriptor instead.
-func (*UserClosedReq) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *UserClosedReq) GetUid() string {
-	if x != nil {
-		return x.Uid
-	}
-	return ""
-}
-
-func (x *UserClosedReq) GetCid() string {
-	if x != nil {
-		return x.Cid
+		return x.RaftState
 	}
 	return ""
 }
@@ -562,7 +448,7 @@ type RaftMessage struct {
 
 func (x *RaftMessage) Reset() {
 	*x = RaftMessage{}
-	mi := &file_broker_protos_peer_proto_msgTypes[10]
+	mi := &file_broker_protos_peer_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -574,7 +460,7 @@ func (x *RaftMessage) String() string {
 func (*RaftMessage) ProtoMessage() {}
 
 func (x *RaftMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[10]
+	mi := &file_broker_protos_peer_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -587,7 +473,7 @@ func (x *RaftMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RaftMessage.ProtoReflect.Descriptor instead.
 func (*RaftMessage) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{10}
+	return file_broker_protos_peer_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *RaftMessage) GetData() []byte {
@@ -618,34 +504,24 @@ const file_broker_protos_peer_proto_rawDesc = "" +
 	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x18\n" +
 	"\asuccess\x18\x02 \x01(\x05R\asuccess\"7\n" +
 	"\vKickConnReq\x12(\n" +
-	"\atargets\x18\x01 \x03(\v2\x0e.protos.TargetR\atargets\"\xa4\x01\n" +
-	"\bInspects\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
+	"\atargets\x18\x01 \x03(\v2\x0e.protos.TargetR\atargets\"\xc1\x01\n" +
+	"\x06Status\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1d\n" +
 	"\n" +
 	"user_count\x18\x02 \x01(\x05R\tuserCount\x12!\n" +
 	"\fclient_count\x18\x03 \x01(\x05R\vclientCount\x12!\n" +
 	"\fcluster_size\x18\x04 \x01(\x05R\vclusterSize\x12#\n" +
-	"\rchannel_count\x18\x05 \x01(\x05R\fchannelCount\"^\n" +
-	"\rUserOpenedReq\x12\x10\n" +
-	"\x03uid\x18\x01 \x01(\tR\x03uid\x12\x10\n" +
-	"\x03cid\x18\x02 \x01(\tR\x03cid\x12\x10\n" +
-	"\x03net\x18\x03 \x01(\tR\x03net\x12\x17\n" +
-	"\apeer_id\x18\x04 \x01(\tR\x06peerId\"3\n" +
-	"\rUserClosedReq\x12\x10\n" +
-	"\x03uid\x18\x01 \x01(\tR\x03uid\x12\x10\n" +
-	"\x03cid\x18\x02 \x01(\tR\x03cid\"!\n" +
+	"\rchannel_count\x18\x05 \x01(\x05R\fchannelCount\x12\x1d\n" +
+	"\n" +
+	"raft_state\x18\x06 \x01(\tR\traftState\"!\n" +
 	"\vRaftMessage\x12\x12\n" +
-	"\x04data\x18\x01 \x01(\fR\x04data2\xbf\x03\n" +
-	"\vPeerService\x12,\n" +
-	"\aInspect\x12\r.protos.Empty\x1a\x10.protos.Inspects\"\x00\x127\n" +
+	"\x04data\x18\x01 \x01(\fR\x04data2\xd1\x02\n" +
+	"\vPeerService\x12*\n" +
+	"\aInspect\x12\r.protos.Empty\x1a\x0e.protos.Status\"\x00\x127\n" +
 	"\bIsOnline\x12\x13.protos.IsOnlineReq\x1a\x14.protos.IsOnlineResp\"\x00\x120\n" +
 	"\bKickConn\x12\x13.protos.KickConnReq\x1a\r.protos.Empty\"\x00\x126\n" +
 	"\tSendToAll\x12\x12.protos.MessageReq\x1a\x13.protos.MessageResp\"\x00\x12:\n" +
-	"\rSendToTargets\x12\x12.protos.MessageReq\x1a\x13.protos.MessageResp\"\x00\x124\n" +
-	"\n" +
-	"UserOpened\x12\x15.protos.UserOpenedReq\x1a\r.protos.Empty\"\x00\x124\n" +
-	"\n" +
-	"UserClosed\x12\x15.protos.UserClosedReq\x1a\r.protos.Empty\"\x00\x127\n" +
+	"\rSendToTargets\x12\x12.protos.MessageReq\x1a\x13.protos.MessageResp\"\x00\x127\n" +
 	"\x0fSendRaftMessage\x12\x13.protos.RaftMessage\x1a\r.protos.Empty\"\x00B\n" +
 	"Z\b./protosb\x06proto3"
 
@@ -661,45 +537,39 @@ func file_broker_protos_peer_proto_rawDescGZIP() []byte {
 	return file_broker_protos_peer_proto_rawDescData
 }
 
-var file_broker_protos_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_broker_protos_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_broker_protos_peer_proto_goTypes = []any{
-	(*Empty)(nil),         // 0: protos.Empty
-	(*Target)(nil),        // 1: protos.Target
-	(*IsOnlineReq)(nil),   // 2: protos.IsOnlineReq
-	(*IsOnlineResp)(nil),  // 3: protos.IsOnlineResp
-	(*MessageReq)(nil),    // 4: protos.MessageReq
-	(*MessageResp)(nil),   // 5: protos.MessageResp
-	(*KickConnReq)(nil),   // 6: protos.KickConnReq
-	(*Inspects)(nil),      // 7: protos.Inspects
-	(*UserOpenedReq)(nil), // 8: protos.UserOpenedReq
-	(*UserClosedReq)(nil), // 9: protos.UserClosedReq
-	(*RaftMessage)(nil),   // 10: protos.RaftMessage
+	(*Empty)(nil),        // 0: protos.Empty
+	(*Target)(nil),       // 1: protos.Target
+	(*IsOnlineReq)(nil),  // 2: protos.IsOnlineReq
+	(*IsOnlineResp)(nil), // 3: protos.IsOnlineResp
+	(*MessageReq)(nil),   // 4: protos.MessageReq
+	(*MessageResp)(nil),  // 5: protos.MessageResp
+	(*KickConnReq)(nil),  // 6: protos.KickConnReq
+	(*Status)(nil),       // 7: protos.Status
+	(*RaftMessage)(nil),  // 8: protos.RaftMessage
 }
 var file_broker_protos_peer_proto_depIdxs = []int32{
-	1,  // 0: protos.IsOnlineReq.targets:type_name -> protos.Target
-	1,  // 1: protos.MessageReq.targets:type_name -> protos.Target
-	1,  // 2: protos.KickConnReq.targets:type_name -> protos.Target
-	0,  // 3: protos.PeerService.Inspect:input_type -> protos.Empty
-	2,  // 4: protos.PeerService.IsOnline:input_type -> protos.IsOnlineReq
-	6,  // 5: protos.PeerService.KickConn:input_type -> protos.KickConnReq
-	4,  // 6: protos.PeerService.SendToAll:input_type -> protos.MessageReq
-	4,  // 7: protos.PeerService.SendToTargets:input_type -> protos.MessageReq
-	8,  // 8: protos.PeerService.UserOpened:input_type -> protos.UserOpenedReq
-	9,  // 9: protos.PeerService.UserClosed:input_type -> protos.UserClosedReq
-	10, // 10: protos.PeerService.SendRaftMessage:input_type -> protos.RaftMessage
-	7,  // 11: protos.PeerService.Inspect:output_type -> protos.Inspects
-	3,  // 12: protos.PeerService.IsOnline:output_type -> protos.IsOnlineResp
-	0,  // 13: protos.PeerService.KickConn:output_type -> protos.Empty
-	5,  // 14: protos.PeerService.SendToAll:output_type -> protos.MessageResp
-	5,  // 15: protos.PeerService.SendToTargets:output_type -> protos.MessageResp
-	0,  // 16: protos.PeerService.UserOpened:output_type -> protos.Empty
-	0,  // 17: protos.PeerService.UserClosed:output_type -> protos.Empty
-	0,  // 18: protos.PeerService.SendRaftMessage:output_type -> protos.Empty
-	11, // [11:19] is the sub-list for method output_type
-	3,  // [3:11] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	1, // 0: protos.IsOnlineReq.targets:type_name -> protos.Target
+	1, // 1: protos.MessageReq.targets:type_name -> protos.Target
+	1, // 2: protos.KickConnReq.targets:type_name -> protos.Target
+	0, // 3: protos.PeerService.Inspect:input_type -> protos.Empty
+	2, // 4: protos.PeerService.IsOnline:input_type -> protos.IsOnlineReq
+	6, // 5: protos.PeerService.KickConn:input_type -> protos.KickConnReq
+	4, // 6: protos.PeerService.SendToAll:input_type -> protos.MessageReq
+	4, // 7: protos.PeerService.SendToTargets:input_type -> protos.MessageReq
+	8, // 8: protos.PeerService.SendRaftMessage:input_type -> protos.RaftMessage
+	7, // 9: protos.PeerService.Inspect:output_type -> protos.Status
+	3, // 10: protos.PeerService.IsOnline:output_type -> protos.IsOnlineResp
+	0, // 11: protos.PeerService.KickConn:output_type -> protos.Empty
+	5, // 12: protos.PeerService.SendToAll:output_type -> protos.MessageResp
+	5, // 13: protos.PeerService.SendToTargets:output_type -> protos.MessageResp
+	0, // 14: protos.PeerService.SendRaftMessage:output_type -> protos.Empty
+	9, // [9:15] is the sub-list for method output_type
+	3, // [3:9] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_broker_protos_peer_proto_init() }
@@ -713,7 +583,7 @@ func file_broker_protos_peer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_broker_protos_peer_proto_rawDesc), len(file_broker_protos_peer_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

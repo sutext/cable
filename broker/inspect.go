@@ -3,8 +3,8 @@ package broker
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 
 	"sutext.github.io/cable/broker/protos"
@@ -12,54 +12,33 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
-func merge(i, o *protos.Inspects) {
-	i.Id = "all"
-	i.UserCount += o.UserCount
-	i.ClientCount += o.ClientCount
-	i.ClusterSize = max(i.ClusterSize, o.ClusterSize)
-	i.ChannelCount += o.ChannelCount
-}
-
-func (b *broker) inspect() *protos.Inspects {
-	// peersInpsects := make(map[string]*protos.PeerInspect)
-	// b.peers.Range(func(k string, v *peer_client) bool {
-	// 	peersInpsects[k] = &protos.PeerInspect{
-	// 		Status:      v.client.Status().String(),
-	// 		SendRate:    v.client.SendRate(),
-	// 		WriteRate:   v.client.WriteRate(),
-	// 		QueueLength: v.client.SendQueueLength(),
-	// 	}
-	// 	return true
-	// })
-	return &protos.Inspects{
-		Id:           fmt.Sprintf("%d", b.id),
+func (b *broker) status() *protos.Status {
+	return &protos.Status{
+		Id:           b.id,
 		UserCount:    b.userClients.Len(),
 		ClientCount:  b.clientChannels.Len(),
 		ClusterSize:  b.clusterSize,
 		ChannelCount: b.clientChannels.Len(),
+		RaftState:    b.raftNode.Status().String(),
 	}
 }
 
-func (b *broker) Inspects(ctx context.Context) ([]*protos.Inspects, error) {
-	inspects := make([]*protos.Inspects, 2)
-	inspects[0] = &protos.Inspects{}
-	inspects[1] = b.inspect()
-	merge(inspects[0], inspects[1])
+func (b *broker) Inspects(ctx context.Context) ([]*protos.Status, error) {
+	ss := make([]*protos.Status, b.clusterSize)
 	wg := sync.WaitGroup{}
-	b.peers.Range(func(k uint64, v *peerClient) bool {
+	b.peers.Range(func(id uint64, cli *peerClient) bool {
 		wg.Go(func() {
-			isp, err := v.inspect(ctx)
+			s, err := cli.inspect(ctx)
 			if err != nil {
-				b.logger.Error("inspect peer failed", xlog.Peer(v.id), xlog.Err(err))
+				b.logger.Error("inspect peer failed", xlog.Peer(id), xlog.Err(err))
 				return
 			}
-			merge(inspects[0], isp)
-			inspects = append(inspects, isp)
+			ss = append(ss, s)
 		})
 		return true
 	})
 	wg.Wait()
-	return inspects, nil
+	return ss, nil
 }
 
 func (b *broker) handleInspect(w http.ResponseWriter, r *http.Request) {
@@ -121,34 +100,26 @@ func (b *broker) handleMessage(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
-//	func (b *broker) handleJoin(w http.ResponseWriter, r *http.Request) {
-//		uid := r.URL.Query().Get("uid")
-//		if uid == "" {
-//			http.Error(w, "uid is required", http.StatusBadRequest)
-//			return
-//		}
-//		chs := r.URL.Query().Get("channels")
-//		if chs == "" {
-//			http.Error(w, "channels is required", http.StatusBadRequest)
-//			return
-//		}
-//		channels := strings.Split(chs, ",")
-//		count, err := b.JoinChannel(r.Context(), uid, channels...)
-//		if err != nil {
-//			http.Error(w, err.Error(), http.StatusInternalServerError)
-//			return
-//		}
-//		resp := map[string]int32{
-//			"count": count,
-//		}
-//		data, err := json.MarshalIndent(resp, "", "  ")
-//		if err != nil {
-//			http.Error(w, err.Error(), http.StatusInternalServerError)
-//			return
-//		}
-//		w.Header().Set("Content-Type", "application/json")
-//		w.Write(data)
-//	}
+func (b *broker) handleJoin(w http.ResponseWriter, r *http.Request) {
+	uid := r.URL.Query().Get("uid")
+	if uid == "" {
+		http.Error(w, "uid is required", http.StatusBadRequest)
+		return
+	}
+	chs := r.URL.Query().Get("channels")
+	if chs == "" {
+		http.Error(w, "channels is required", http.StatusBadRequest)
+		return
+	}
+	channels := strings.Split(chs, ",")
+	err := b.JoinChannel(r.Context(), uid, channels...)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ok"))
+}
 func (b *broker) handleBrodcast(w http.ResponseWriter, r *http.Request) {
 	msg := r.URL.Query().Get("msg")
 	if msg == "" {
@@ -173,7 +144,7 @@ func (b *broker) handleBrodcast(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 func (b *broker) handleHealth(w http.ResponseWriter, r *http.Request) {
-	if b.node == nil {
+	if b.raftNode == nil {
 		http.Error(w, "node is nil", http.StatusInternalServerError)
 		return
 	}

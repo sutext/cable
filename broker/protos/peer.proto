@@ -39,24 +39,13 @@ message KickConnReq{
 }
 
 /// Inspects is the response message for Inspect RPC.
-message Inspects{
- string id = 1;
+message Status{
+ uint64 id = 1;
  int32 user_count = 2;
  int32 client_count = 3;
  int32 cluster_size = 4;
  int32 channel_count = 5;
-}
-// UserOpenedReq is the request message for UserOpened RPC.
-message UserOpenedReq {
-  string uid = 1;
-  string cid = 2;
-  string net = 3;
-  string peer_id = 4;
-}
-// UserClosedReq is the request message for UserClosed RPC.
-message UserClosedReq {
-  string uid = 1;
-  string cid = 2;
+ string raft_state = 6;
 }
 
 // RaftMessage represents a Raft message
@@ -70,7 +59,7 @@ service PeerService {
   // Inspect provides peer inspection info.
   // For example: user count, client count, cluster size, channel count.
   // It is mainly used for monitoring and debugging.
-  rpc Inspect (Empty) returns (Inspects) {}
+  rpc Inspect (Empty) returns (Status) {}
   // IsOnline checks if a user is online.
   rpc IsOnline (IsOnlineReq) returns (IsOnlineResp) {}
   // KickConn kicks a connection by connection ID.
@@ -79,15 +68,6 @@ service PeerService {
   rpc SendToAll (MessageReq) returns (MessageResp) {}
   // SendToTargets sends a message to a channel.
   rpc SendToTargets (MessageReq) returns (MessageResp) {}
-  // UserOpened is called when a user opens a connection.
-  rpc UserOpened (UserOpenedReq) returns (Empty) {}
-  // UserClosed is called when a user closes a connection.
-  rpc UserClosed (UserClosedReq) returns (Empty) {}
-  // JoinChannel adds a user to the specified channels.
-  // rpc JoinChannel (ChannelReq) returns (ChannelResp) {}
-  // // LeaveChannel removes a user from the specified channels.
-  // rpc LeaveChannel (ChannelReq) returns (ChannelResp) {}
-  // -------------------- Raft 相关方法 --------------------
   // SendRaftMessage handles a Raft message from another node
   rpc SendRaftMessage (RaftMessage) returns (Empty) {}
 }

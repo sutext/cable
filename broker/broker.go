@@ -21,7 +21,7 @@ import (
 type Broker interface {
 	Start() error
 	Shutdown(ctx context.Context) error
-	Inspects(ctx context.Context) ([]*protos.Inspects, error)
+	Inspects(ctx context.Context) ([]*protos.Status, error)
 	IsOnline(ctx context.Context, uid string) (ok bool)
 	KickUser(ctx context.Context, uid string)
 	SendToAll(ctx context.Context, m *packet.Message) (total, success int32, err error)
@@ -52,20 +52,19 @@ type broker struct {
 	channelClients safe.KeyMap[idAndNet] //map[channel]map[cid]net
 	clientChannels safe.KeyMap[struct{}] //map[cid]map[channel]net
 	requstHandlers safe.Map[string, server.RequestHandler]
-	//for raft
-	node       raft.Node
-	shutdownCh chan struct{}
-	storage    *raft.MemoryStorage
-	leaderID   atomic.Uint64 // 当前leader节点ID
-	isLeader   atomic.Bool   // 当前节点是否是leader
-	lastLeader time.Time     // 最后一次看到leader的时间
+	raftNode       raft.Node
+	stopRaft       chan struct{}
+	raftStorage    *raft.MemoryStorage
+	raftLeader     atomic.Uint64
+	isLeader       atomic.Bool
+	lastLeader     time.Time
 }
 
 func NewBroker(opts ...Option) Broker {
 	options := newOptions(opts...)
 	b := &broker{
 		id:          options.brokerID,
-		shutdownCh:  make(chan struct{}),
+		stopRaft:    make(chan struct{}),
 		clusterSize: options.clusterSize,
 	}
 	b.logger = xlog.With("BROKER", b.id)
@@ -90,7 +89,7 @@ func NewBroker(opts ...Option) Broker {
 	b.peerPort = options.peerPort
 	b.peerServer = newPeerServer(b, b.peerPort)
 	mux := http.NewServeMux()
-	// mux.HandleFunc("/join", b.handleJoin)
+	mux.HandleFunc("/join", b.handleJoin)
 	mux.HandleFunc("/inspect", b.handleInspect)
 	mux.HandleFunc("/kickout", b.handleKickout)
 	mux.HandleFunc("/message", b.handleMessage)
@@ -113,7 +112,7 @@ func (b *broker) addPeer(id uint64, addr string) {
 	peer.connect()
 	if b.peers.Len() > b.clusterSize-1 {
 		if b.isLeader.Load() {
-			b.addRaftNode(id)
+			b.addRaftNode(context.Background(), id)
 		}
 	}
 }
@@ -305,7 +304,7 @@ func (b *broker) JoinChannel(ctx context.Context, uid string, channels ...string
 		uid:      uid,
 		channels: channels,
 	}
-	return b.SubmitOperation(op)
+	return b.submitRaftOp(ctx, op)
 }
 
 func (b *broker) LeaveChannel(ctx context.Context, uid string, channels ...string) error {
@@ -313,7 +312,7 @@ func (b *broker) LeaveChannel(ctx context.Context, uid string, channels ...strin
 		uid:      uid,
 		channels: channels,
 	}
-	return b.SubmitOperation(op)
+	return b.submitRaftOp(ctx, op)
 }
 func (b *broker) HandleRequest(method string, handler server.RequestHandler) {
 	b.requstHandlers.Set(method, handler)
@@ -323,8 +322,7 @@ func (b *broker) onUserClosed(id *packet.Identity) {
 		uid: id.UserID,
 		cid: id.ClientID,
 	}
-
-	if err := b.SubmitOperation(op); err != nil {
+	if err := b.submitRaftOp(context.Background(), op); err != nil {
 		b.logger.Error("Failed to submit user disconnect op", xlog.Err(err))
 	}
 	b.handler.OnClosed(id)
@@ -365,7 +363,7 @@ func (b *broker) onUserConnect(p *packet.Connect, net server.Transport) packet.C
 		net:      string(net),
 		brokerID: b.id,
 	}
-	if err := b.SubmitOperation(op); err != nil {
+	if err := b.submitRaftOp(context.Background(), op); err != nil {
 		b.logger.Error("Failed to submit user connect op", xlog.Err(err))
 		return packet.ConnectRejected
 	}

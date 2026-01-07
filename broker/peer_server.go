@@ -46,8 +46,8 @@ func (s *peerServer) Shutdown(ctx context.Context) error {
 	}
 	return s.listener.Close()
 }
-func (s *peerServer) Inspect(ctx context.Context, req *protos.Empty) (*protos.Inspects, error) {
-	return s.broker.inspect(), nil
+func (s *peerServer) Inspect(ctx context.Context, req *protos.Empty) (*protos.Status, error) {
+	return s.broker.status(), nil
 }
 func (s *peerServer) IsOnline(ctx context.Context, req *protos.IsOnlineReq) (*protos.IsOnlineResp, error) {
 	ok := s.broker.isActive(req.Targets)
@@ -95,10 +95,10 @@ func (s *peerServer) SendRaftMessage(ctx context.Context, req *protos.RaftMessag
 	if err := msg.Unmarshal(req.Data); err != nil {
 		return nil, err
 	}
-	if s.broker.node == nil {
+	if s.broker.raftNode == nil {
 		return nil, xerr.RaftNodeNotReady
 	}
-	if err := s.broker.node.Step(ctx, msg); err != nil {
+	if err := s.broker.raftNode.Step(ctx, msg); err != nil {
 		return nil, err
 	}
 	return &protos.Empty{}, nil

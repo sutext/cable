@@ -10,28 +10,12 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
-func (b *broker) addRaftNode(id uint64) {
-	cc := raftpb.ConfChange{
-		Type:   raftpb.ConfChangeAddNode,
-		NodeID: id,
-	}
-	b.node.ProposeConfChange(context.Background(), cc)
-}
-
-func (b *broker) removeRaftNode(id uint64) {
-	cc := raftpb.ConfChange{
-		Type:   raftpb.ConfChangeRemoveNode,
-		NodeID: id,
-	}
-	b.node.ProposeConfChange(context.Background(), cc)
-}
-
 func (b *broker) startRaft(join bool) {
-	if b.node != nil {
+	if b.raftNode != nil {
 		return
 	}
 	storage := raft.NewMemoryStorage()
-	b.storage = storage
+	b.raftStorage = storage
 	c := &raft.Config{
 		ID:              b.id,
 		ElectionTick:    10,
@@ -41,7 +25,7 @@ func (b *broker) startRaft(join bool) {
 		MaxInflightMsgs: 256,
 	}
 	if join {
-		b.node = raft.RestartNode(c)
+		b.raftNode = raft.RestartNode(c)
 	} else {
 		initPeers := make([]raft.Peer, b.clusterSize)
 		initPeers[0] = raft.Peer{ID: b.id}
@@ -49,51 +33,48 @@ func (b *broker) startRaft(join bool) {
 			initPeers = append(initPeers, raft.Peer{ID: key})
 			return true
 		})
-		b.node = raft.StartNode(c, initPeers)
+		b.raftNode = raft.StartNode(c, initPeers)
 	}
 	go b.raftLoop()
 }
 
-// raftLoop 处理Raft节点的消息循环
 func (b *broker) raftLoop() {
 	b.lastLeader = time.Now()
 	ticker := time.NewTicker(time.Millisecond * 100)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-b.shutdownCh:
+		case <-b.stopRaft:
 			return
 		case <-ticker.C:
-			b.node.Tick()
-		case rd := <-b.node.Ready():
-			// 保存HardState和Entries到存储
+			b.raftNode.Tick()
+		case rd := <-b.raftNode.Ready():
 			if !raft.IsEmptyHardState(rd.HardState) {
-				if err := b.storage.SetHardState(rd.HardState); err != nil {
+				if err := b.raftStorage.SetHardState(rd.HardState); err != nil {
 					b.logger.Error("Failed to set hard state", xlog.Err(err))
 				}
 			}
-
 			if len(rd.Entries) > 0 {
-				if err := b.storage.Append(rd.Entries); err != nil {
+				if err := b.raftStorage.Append(rd.Entries); err != nil {
 					b.logger.Error("Failed to append entries", xlog.Err(err))
 				}
 			}
-
 			if !raft.IsEmptySnap(rd.Snapshot) {
-				if err := b.storage.ApplySnapshot(rd.Snapshot); err != nil {
+				if err := b.raftStorage.ApplySnapshot(rd.Snapshot); err != nil {
 					b.logger.Error("Failed to apply snapshot", xlog.Err(err))
 				}
 			}
 			for _, entry := range rd.CommittedEntries {
-				b.processCommittedEntry(entry)
+				b.processRaftEntry(entry)
 			}
 			if rd.SoftState != nil {
 				newLeader := rd.SoftState.Lead
-				if b.leaderID.Load() != newLeader {
-					b.leaderID.Store(newLeader)
+				if b.raftLeader.Load() != newLeader {
+					b.raftLeader.Store(newLeader)
 					b.isLeader.Store(b.id == newLeader)
 					b.logger.Info("New leader elected", xlog.Peer(newLeader))
 				}
+				b.ready.Store(true)
 			}
 			for _, msg := range rd.Messages {
 				if peer, ok := b.peers.Get(msg.To); ok {
@@ -105,29 +86,24 @@ func (b *broker) raftLoop() {
 					b.lastLeader = time.Now()
 				}
 			}
-			b.node.Advance()
+			b.raftNode.Advance()
 		}
 	}
 }
 
-// processCommittedEntry 处理已提交的Raft日志条目
-func (b *broker) processCommittedEntry(entry raftpb.Entry) {
-	// 处理不同类型的日志条目
+func (b *broker) processRaftEntry(entry raftpb.Entry) {
 	switch entry.Type {
 	case raftpb.EntryNormal:
 		if len(entry.Data) > 0 {
-			// 应用日志到状态机
-			b.applyLogToStateMachine(entry.Data)
+			b.processRaftData(entry.Data)
 		}
-	case raftpb.EntryConfChange:
-		// 处理配置变更
+	case raftpb.EntryConfChange, raftpb.EntryConfChangeV2:
 		var cc raftpb.ConfChange
 		if err := cc.Unmarshal(entry.Data); err != nil {
 			b.logger.Error("Failed to unmarshal conf change", xlog.Err(err))
 			return
 		}
-		b.node.ApplyConfChange(cc)
-		// 更新本地节点列表
+		b.raftNode.ApplyConfChange(cc)
 		switch cc.Type {
 		case raftpb.ConfChangeAddNode:
 			b.clusterSize = b.peers.Len() + 1
@@ -139,8 +115,7 @@ func (b *broker) processCommittedEntry(entry raftpb.Entry) {
 	}
 }
 
-// applyLogToStateMachine 应用日志到状态机
-func (b *broker) applyLogToStateMachine(data []byte) {
+func (b *broker) processRaftData(data []byte) {
 	opt := optype(data[0])
 	switch opt {
 	case optypeUserOpened:
@@ -149,35 +124,35 @@ func (b *broker) applyLogToStateMachine(data []byte) {
 			b.logger.Error("Failed to unmarshal user opened op", xlog.Err(err))
 			return
 		}
-		b.handleUserOpeed(op)
+		b.raftUserOpened(op)
 	case optypeUserClosed:
 		op := &userClosedOp{}
 		if err := coder.Unmarshal(data[1:], op); err != nil {
 			b.logger.Error("Failed to unmarshal user closed op", xlog.Err(err))
 			return
 		}
-		b.handleUserClosed(op)
+		b.raftUserClosed(op)
 	case optypeJoinChannel:
 		op := &joinChannelOp{}
 		if err := coder.Unmarshal(data[1:], op); err != nil {
 			b.logger.Error("Failed to unmarshal join channel op", xlog.Err(err))
 			return
 		}
-		b.handleJoinChannel(op)
+		b.raftJoinChannel(op)
 	case optypeLeaveChannel:
 		op := &leaveChannelOp{}
 		if err := coder.Unmarshal(data[1:], op); err != nil {
 			b.logger.Error("Failed to unmarshal leave channel op", xlog.Err(err))
 			return
 		}
-		b.handleLeaveChannel(op)
+		b.raftLeaveChannel(op)
 	default:
 		b.logger.Error("Unknown operation type", xlog.U32("type", uint32(opt)))
 		return
 	}
 }
 
-func (b *broker) handleUserOpeed(op *userOpenedOp) {
+func (b *broker) raftUserOpened(op *userOpenedOp) {
 	b.userClients.SetKey(op.uid, op.cid, idAndNet{
 		id:  op.brokerID,
 		net: op.net,
@@ -190,7 +165,7 @@ func (b *broker) handleUserOpeed(op *userOpenedOp) {
 	}
 }
 
-func (b *broker) handleUserClosed(op *userClosedOp) {
+func (b *broker) raftUserClosed(op *userClosedOp) {
 	b.userClients.DeleteKey(op.uid, op.cid)
 	b.clientChannels.RangeKey(op.cid, func(channel string, _ struct{}) bool {
 		b.channelClients.DeleteKey(channel, op.cid)
@@ -199,7 +174,7 @@ func (b *broker) handleUserClosed(op *userClosedOp) {
 	b.clientChannels.Delete(op.cid)
 }
 
-func (b *broker) handleJoinChannel(op *joinChannelOp) {
+func (b *broker) raftJoinChannel(op *joinChannelOp) {
 	b.userClients.RangeKey(op.uid, func(cid string, idnet idAndNet) bool {
 		for _, ch := range op.channels {
 			b.channelClients.SetKey(ch, cid, idnet)
@@ -208,7 +183,7 @@ func (b *broker) handleJoinChannel(op *joinChannelOp) {
 		return true
 	})
 }
-func (b *broker) handleLeaveChannel(op *leaveChannelOp) {
+func (b *broker) raftLeaveChannel(op *leaveChannelOp) {
 	b.userClients.RangeKey(op.uid, func(cid string, idnet idAndNet) bool {
 		for _, ch := range op.channels {
 			b.channelClients.DeleteKey(ch, cid)
@@ -218,21 +193,25 @@ func (b *broker) handleLeaveChannel(op *leaveChannelOp) {
 	})
 }
 
-// SubmitOperation 提交状态机操作到Raft集群
-func (b *broker) SubmitOperation(op opdata) error {
+func (b *broker) submitRaftOp(ctx context.Context, op opdata) error {
 	enc := coder.NewEncoder()
 	enc.WriteUInt8(uint8(op.opt()))
 	op.WriteTo(enc)
-	b.node.Propose(context.Background(), enc.Bytes())
+	b.raftNode.Propose(ctx, enc.Bytes())
 	return nil
 }
-
-// GetStateMachineStatus 获取状态机状态
-func (b *broker) GetStateMachineStatus() map[string]interface{} {
-	// 返回状态机状态信息
-	return map[string]interface{}{
-		"user_count":    b.userClients.Len(),
-		"channel_count": b.channelClients.Len(),
-		"broker_id":     b.id,
+func (b *broker) addRaftNode(ctx context.Context, id uint64) {
+	cc := raftpb.ConfChange{
+		Type:   raftpb.ConfChangeAddNode,
+		NodeID: id,
 	}
+	b.raftNode.ProposeConfChange(ctx, cc)
+}
+
+func (b *broker) removeRaftNode(ctx context.Context, id uint64) {
+	cc := raftpb.ConfChange{
+		Type:   raftpb.ConfChangeRemoveNode,
+		NodeID: id,
+	}
+	b.raftNode.ProposeConfChange(ctx, cc)
 }

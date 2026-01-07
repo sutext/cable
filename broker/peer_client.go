@@ -173,7 +173,7 @@ func (p *peerClient) kickConn(ctx context.Context, targets []*protos.Target) err
 	_, err := p.rpc.KickConn(ctx, &protos.KickConnReq{Targets: targets})
 	return err
 }
-func (p *peerClient) inspect(ctx context.Context) (*protos.Inspects, error) {
+func (p *peerClient) inspect(ctx context.Context) (*protos.Status, error) {
 	if !p.isReady() {
 		return nil, xerr.PeerNotReady
 	}
@@ -195,25 +195,3 @@ func (p *peerClient) sendRaftMessage(ctx context.Context, msg raftpb.Message) er
 	_, err = p.rpc.SendRaftMessage(ctx, req)
 	return err
 }
-
-// func (p *peerClient) joinChannel(ctx context.Context, uid string, channels []string) (count int32, err error) {
-// 	if !p.isReady() {
-// 		return 0, xerr.PeerNotReady
-// 	}
-// 	resp, err := p.rpc.JoinChannel(ctx, &protos.ChannelReq{Uid: uid, Channels: channels})
-// 	if err != nil {
-// 		return 0, err
-// 	}
-// 	return resp.Count, nil
-// }
-
-// func (p *peerClient) leaveChannel(ctx context.Context, uid string, channels []string) (count int32, err error) {
-// 	if !p.isReady() {
-// 		return 0, xerr.PeerNotReady
-// 	}
-// 	resp, err := p.rpc.LeaveChannel(ctx, &protos.ChannelReq{Uid: uid, Channels: channels})
-// 	if err != nil {
-// 		return 0, err
-// 	}
-// 	return resp.Count, nil
-// }

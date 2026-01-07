@@ -24,8 +24,6 @@ const (
 	PeerService_KickConn_FullMethodName        = "/protos.PeerService/KickConn"
 	PeerService_SendToAll_FullMethodName       = "/protos.PeerService/SendToAll"
 	PeerService_SendToTargets_FullMethodName   = "/protos.PeerService/SendToTargets"
-	PeerService_UserOpened_FullMethodName      = "/protos.PeerService/UserOpened"
-	PeerService_UserClosed_FullMethodName      = "/protos.PeerService/UserClosed"
 	PeerService_SendRaftMessage_FullMethodName = "/protos.PeerService/SendRaftMessage"
 )
 
@@ -38,7 +36,7 @@ type PeerServiceClient interface {
 	// Inspect provides peer inspection info.
 	// For example: user count, client count, cluster size, channel count.
 	// It is mainly used for monitoring and debugging.
-	Inspect(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Inspects, error)
+	Inspect(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Status, error)
 	// IsOnline checks if a user is online.
 	IsOnline(ctx context.Context, in *IsOnlineReq, opts ...grpc.CallOption) (*IsOnlineResp, error)
 	// KickConn kicks a connection by connection ID.
@@ -47,15 +45,6 @@ type PeerServiceClient interface {
 	SendToAll(ctx context.Context, in *MessageReq, opts ...grpc.CallOption) (*MessageResp, error)
 	// SendToTargets sends a message to a channel.
 	SendToTargets(ctx context.Context, in *MessageReq, opts ...grpc.CallOption) (*MessageResp, error)
-	// UserOpened is called when a user opens a connection.
-	UserOpened(ctx context.Context, in *UserOpenedReq, opts ...grpc.CallOption) (*Empty, error)
-	// UserClosed is called when a user closes a connection.
-	UserClosed(ctx context.Context, in *UserClosedReq, opts ...grpc.CallOption) (*Empty, error)
-	// JoinChannel adds a user to the specified channels.
-	// rpc JoinChannel (ChannelReq) returns (ChannelResp) {}
-	// // LeaveChannel removes a user from the specified channels.
-	// rpc LeaveChannel (ChannelReq) returns (ChannelResp) {}
-	// -------------------- Raft 相关方法 --------------------
 	// SendRaftMessage handles a Raft message from another node
 	SendRaftMessage(ctx context.Context, in *RaftMessage, opts ...grpc.CallOption) (*Empty, error)
 }
@@ -68,9 +57,9 @@ func NewPeerServiceClient(cc grpc.ClientConnInterface) PeerServiceClient {
 	return &peerServiceClient{cc}
 }
 
-func (c *peerServiceClient) Inspect(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Inspects, error) {
+func (c *peerServiceClient) Inspect(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Status, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Inspects)
+	out := new(Status)
 	err := c.cc.Invoke(ctx, PeerService_Inspect_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -118,26 +107,6 @@ func (c *peerServiceClient) SendToTargets(ctx context.Context, in *MessageReq, o
 	return out, nil
 }
 
-func (c *peerServiceClient) UserOpened(ctx context.Context, in *UserOpenedReq, opts ...grpc.CallOption) (*Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Empty)
-	err := c.cc.Invoke(ctx, PeerService_UserOpened_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *peerServiceClient) UserClosed(ctx context.Context, in *UserClosedReq, opts ...grpc.CallOption) (*Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Empty)
-	err := c.cc.Invoke(ctx, PeerService_UserClosed_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *peerServiceClient) SendRaftMessage(ctx context.Context, in *RaftMessage, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Empty)
@@ -157,7 +126,7 @@ type PeerServiceServer interface {
 	// Inspect provides peer inspection info.
 	// For example: user count, client count, cluster size, channel count.
 	// It is mainly used for monitoring and debugging.
-	Inspect(context.Context, *Empty) (*Inspects, error)
+	Inspect(context.Context, *Empty) (*Status, error)
 	// IsOnline checks if a user is online.
 	IsOnline(context.Context, *IsOnlineReq) (*IsOnlineResp, error)
 	// KickConn kicks a connection by connection ID.
@@ -166,15 +135,6 @@ type PeerServiceServer interface {
 	SendToAll(context.Context, *MessageReq) (*MessageResp, error)
 	// SendToTargets sends a message to a channel.
 	SendToTargets(context.Context, *MessageReq) (*MessageResp, error)
-	// UserOpened is called when a user opens a connection.
-	UserOpened(context.Context, *UserOpenedReq) (*Empty, error)
-	// UserClosed is called when a user closes a connection.
-	UserClosed(context.Context, *UserClosedReq) (*Empty, error)
-	// JoinChannel adds a user to the specified channels.
-	// rpc JoinChannel (ChannelReq) returns (ChannelResp) {}
-	// // LeaveChannel removes a user from the specified channels.
-	// rpc LeaveChannel (ChannelReq) returns (ChannelResp) {}
-	// -------------------- Raft 相关方法 --------------------
 	// SendRaftMessage handles a Raft message from another node
 	SendRaftMessage(context.Context, *RaftMessage) (*Empty, error)
 	mustEmbedUnimplementedPeerServiceServer()
@@ -187,7 +147,7 @@ type PeerServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedPeerServiceServer struct{}
 
-func (UnimplementedPeerServiceServer) Inspect(context.Context, *Empty) (*Inspects, error) {
+func (UnimplementedPeerServiceServer) Inspect(context.Context, *Empty) (*Status, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Inspect not implemented")
 }
 func (UnimplementedPeerServiceServer) IsOnline(context.Context, *IsOnlineReq) (*IsOnlineResp, error) {
@@ -201,12 +161,6 @@ func (UnimplementedPeerServiceServer) SendToAll(context.Context, *MessageReq) (*
 }
 func (UnimplementedPeerServiceServer) SendToTargets(context.Context, *MessageReq) (*MessageResp, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendToTargets not implemented")
-}
-func (UnimplementedPeerServiceServer) UserOpened(context.Context, *UserOpenedReq) (*Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UserOpened not implemented")
-}
-func (UnimplementedPeerServiceServer) UserClosed(context.Context, *UserClosedReq) (*Empty, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UserClosed not implemented")
 }
 func (UnimplementedPeerServiceServer) SendRaftMessage(context.Context, *RaftMessage) (*Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SendRaftMessage not implemented")
@@ -322,42 +276,6 @@ func _PeerService_SendToTargets_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PeerService_UserOpened_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UserOpenedReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PeerServiceServer).UserOpened(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: PeerService_UserOpened_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PeerServiceServer).UserOpened(ctx, req.(*UserOpenedReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _PeerService_UserClosed_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UserClosedReq)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(PeerServiceServer).UserClosed(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: PeerService_UserClosed_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PeerServiceServer).UserClosed(ctx, req.(*UserClosedReq))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _PeerService_SendRaftMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RaftMessage)
 	if err := dec(in); err != nil {
@@ -402,14 +320,6 @@ var PeerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendToTargets",
 			Handler:    _PeerService_SendToTargets_Handler,
-		},
-		{
-			MethodName: "UserOpened",
-			Handler:    _PeerService_UserOpened_Handler,
-		},
-		{
-			MethodName: "UserClosed",
-			Handler:    _PeerService_UserClosed_Handler,
 		},
 		{
 			MethodName: "SendRaftMessage",
