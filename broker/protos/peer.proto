@@ -45,7 +45,7 @@ message Status{
  int32 client_count = 3;
  int32 cluster_size = 4;
  int32 channel_count = 5;
- string raft_state = 6;
+ bytes raft_state = 6;
 }
 
 // RaftMessage represents a Raft message

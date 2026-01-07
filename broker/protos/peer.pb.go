@@ -360,7 +360,7 @@ type Status struct {
 	ClientCount   int32                  `protobuf:"varint,3,opt,name=client_count,json=clientCount,proto3" json:"client_count,omitempty"`
 	ClusterSize   int32                  `protobuf:"varint,4,opt,name=cluster_size,json=clusterSize,proto3" json:"cluster_size,omitempty"`
 	ChannelCount  int32                  `protobuf:"varint,5,opt,name=channel_count,json=channelCount,proto3" json:"channel_count,omitempty"`
-	RaftState     string                 `protobuf:"bytes,6,opt,name=raft_state,json=raftState,proto3" json:"raft_state,omitempty"`
+	RaftState     []byte                 `protobuf:"bytes,6,opt,name=raft_state,json=raftState,proto3" json:"raft_state,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -430,11 +430,11 @@ func (x *Status) GetChannelCount() int32 {
 	return 0
 }
 
-func (x *Status) GetRaftState() string {
+func (x *Status) GetRaftState() []byte {
 	if x != nil {
 		return x.RaftState
 	}
-	return ""
+	return nil
 }
 
 // RaftMessage represents a Raft message
@@ -513,7 +513,7 @@ const file_broker_protos_peer_proto_rawDesc = "" +
 	"\fcluster_size\x18\x04 \x01(\x05R\vclusterSize\x12#\n" +
 	"\rchannel_count\x18\x05 \x01(\x05R\fchannelCount\x12\x1d\n" +
 	"\n" +
-	"raft_state\x18\x06 \x01(\tR\traftState\"!\n" +
+	"raft_state\x18\x06 \x01(\fR\traftState\"!\n" +
 	"\vRaftMessage\x12\x12\n" +
 	"\x04data\x18\x01 \x01(\fR\x04data2\xd1\x02\n" +
 	"\vPeerService\x12*\n" +

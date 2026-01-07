@@ -26,6 +26,22 @@ spec:
               value: "true"
             - name: LOG_LEVEL
               value: debug
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8888
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8888
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 1
+            failureThreshold: 3
   podManagementPolicy: Parallel
   updateStrategy:
     type: RollingUpdate

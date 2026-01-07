@@ -14,11 +14,9 @@ import (
 
 func (b *broker) status() *protos.Status {
 	s := b.raftNode.Status()
-	var rs string
-	if sdata, err := json.MarshalIndent(s, "", "  "); err != nil {
-		rs = s.String()
-	} else {
-		rs = string(sdata)
+	sdata, err := json.MarshalIndent(s, "", "  ")
+	if err != nil {
+		sdata = []byte(s.String())
 	}
 	return &protos.Status{
 		Id:           b.id,
@@ -26,12 +24,12 @@ func (b *broker) status() *protos.Status {
 		ClientCount:  b.clientChannels.Len(),
 		ClusterSize:  b.clusterSize,
 		ChannelCount: b.clientChannels.Len(),
-		RaftState:    rs,
+		RaftState:    sdata,
 	}
 }
 
 func (b *broker) Inspects(ctx context.Context) ([]*protos.Status, error) {
-	ss := make([]*protos.Status, b.clusterSize)
+	ss := make([]*protos.Status, 0, b.clusterSize)
 	ss[0] = b.status()
 	wg := sync.WaitGroup{}
 	b.peers.Range(func(id uint64, cli *peerClient) bool {
