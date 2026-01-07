@@ -43,7 +43,8 @@ func (b *broker) startRaft(join bool) {
 	if join {
 		b.node = raft.RestartNode(c)
 	} else {
-		initPeers := make([]raft.Peer, 0, b.peers.Len())
+		initPeers := make([]raft.Peer, b.clusterSize)
+		initPeers[0] = raft.Peer{ID: b.id}
 		b.peers.Range(func(key uint64, value *peerClient) bool {
 			initPeers = append(initPeers, raft.Peer{ID: key})
 			return true
@@ -83,12 +84,9 @@ func (b *broker) raftLoop() {
 					b.logger.Error("Failed to apply snapshot", xlog.Err(err))
 				}
 			}
-
-			// 处理已提交的日志
 			for _, entry := range rd.CommittedEntries {
 				b.processCommittedEntry(entry)
 			}
-			// 处理leader变化
 			if rd.SoftState != nil {
 				newLeader := rd.SoftState.Lead
 				if b.leaderID.Load() != newLeader {
@@ -97,21 +95,16 @@ func (b *broker) raftLoop() {
 					b.logger.Info("New leader elected", xlog.Peer(newLeader))
 				}
 			}
-			// 发送Raft消息给其他节点
 			for _, msg := range rd.Messages {
-				// 根据消息类型和目标节点处理
 				if peer, ok := b.peers.Get(msg.To); ok {
-					// 使用现有的peerClient发送Raft消息
 					if err := peer.sendRaftMessage(context.Background(), msg); err != nil {
 						b.logger.Error("Failed to send raft message to peer", xlog.Err(err))
 					}
 				}
-				// 记录leader活动
 				if msg.Type == raftpb.MsgHeartbeat {
 					b.lastLeader = time.Now()
 				}
 			}
-			// 推进Raft节点状态
 			b.node.Advance()
 		}
 	}
