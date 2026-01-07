@@ -12,25 +12,20 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
-func (b *broker) status() *protos.Status {
-	s := b.raftNode.Status()
-	sdata, err := json.MarshalIndent(s, "", "  ")
-	if err != nil {
-		sdata = []byte(s.String())
-	}
+func (b *broker) inspect() *protos.Status {
 	return &protos.Status{
 		Id:           b.id,
 		UserCount:    b.userClients.Len(),
 		ClientCount:  b.clientChannels.Len(),
 		ClusterSize:  b.clusterSize,
 		ChannelCount: b.clientChannels.Len(),
-		RaftState:    sdata,
+		RaftState:    b.raftNode.Status().String(),
 	}
 }
 
 func (b *broker) Inspects(ctx context.Context) ([]*protos.Status, error) {
 	ss := make([]*protos.Status, 0, b.clusterSize)
-	ss[0] = b.status()
+	ss[0] = b.inspect()
 	wg := sync.WaitGroup{}
 	b.peers.Range(func(id uint64, cli *peerClient) bool {
 		wg.Go(func() {

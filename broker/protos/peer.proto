@@ -7,14 +7,10 @@ package protos;
 /// An empty message.
 message Empty{
 }
-/// Target represents a message target
-message Target{
-  string cid = 1;
-  string net = 2;
-}
+
 /// IsOnlineReq is the request message for IsOnline RPC.
 message IsOnlineReq{
-  repeated Target targets = 1;
+  map<string,string> targets = 1;
 }
 /// IsOnlineResp is the response message for IsOnline RPC.
 message IsOnlineResp{
@@ -24,7 +20,7 @@ message IsOnlineResp{
 /// MessageReq is the request message for SendToClients RPC.
 message MessageReq{
   bytes message = 3;
-  repeated Target targets = 4;
+  map<string,string> targets = 4;
 }
 
 /// MessageResp is the response message for SendMessage RPC.
@@ -35,7 +31,7 @@ message MessageResp{
 
 /// KickConnReq is the request message for KickUser RPC.
 message KickConnReq{
-  repeated Target targets = 1;
+  map<string,string> targets = 1;
 }
 
 /// Inspects is the response message for Inspect RPC.
@@ -45,7 +41,7 @@ message Status{
  int32 client_count = 3;
  int32 cluster_size = 4;
  int32 channel_count = 5;
- bytes raft_state = 6;
+ string raft_state = 6;
 }
 
 // RaftMessage represents a Raft message

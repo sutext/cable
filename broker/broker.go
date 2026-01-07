@@ -43,7 +43,7 @@ type broker struct {
 	logger         *xlog.Logger
 	handler        Handler
 	muticast       muticast.Muticast
-	listeners      map[server.Transport]server.Server
+	listeners      map[string]server.Server
 	peerPort       string
 	peerServer     *peerServer
 	httpServer     *http.Server
@@ -73,12 +73,12 @@ func NewBroker(opts ...Option) Broker {
 	b.muticast.OnRequest(func(id uint64, addr string) {
 		b.addPeer(id, addr)
 	})
-	b.listeners = make(map[server.Transport]server.Server, len(options.listeners))
+	b.listeners = make(map[string]server.Server, len(options.listeners))
 	for net, addr := range options.listeners {
 		b.listeners[net] = server.New(addr,
 			server.WithClose(b.onUserClosed),
 			server.WithLogger(b.logger),
-			server.WithTransport(net),
+			server.WithNetwork(net),
 			server.WithMessage(b.onUserMessage),
 			server.WithRequest(b.onUserRequest),
 			server.WithConnect(func(p *packet.Connect) packet.ConnectCode {
@@ -183,21 +183,26 @@ func (b *broker) Shutdown(ctx context.Context) (err error) {
 	}
 	return err
 }
-func (b *broker) groupedUsers(uid string) map[uint64][]*protos.Target {
-	grouped := make(map[uint64][]*protos.Target)
+func (b *broker) groupedUsers(uid string) map[uint64]map[string]string {
+	grouped := make(map[uint64]map[string]string)
 	b.userClients.RangeKey(uid, func(cid string, ian idAndNet) bool {
-		ts := grouped[ian.id]
-		ts = append(ts, &protos.Target{Net: ian.net, Cid: cid})
+		ts, ok := grouped[ian.id]
+		if !ok {
+			ts = make(map[string]string)
+		}
+		ts[cid] = string(ian.net)
 		grouped[ian.id] = ts
 		return true
 	})
 	return grouped
 }
-func (b *broker) groupedChannels(channel string) map[uint64][]*protos.Target {
-	grouped := make(map[uint64][]*protos.Target)
+func (b *broker) groupedChannels(channel string) map[uint64]map[string]string {
+	grouped := make(map[uint64]map[string]string)
 	b.channelClients.RangeKey(channel, func(cid string, ian idAndNet) bool {
-		ts := grouped[ian.id]
-		ts = append(ts, &protos.Target{Net: ian.net, Cid: cid})
+		ts, ok := grouped[ian.id]
+		if !ok {
+			ts = make(map[string]string)
+		}
 		grouped[ian.id] = ts
 		return true
 	})
@@ -327,7 +332,7 @@ func (b *broker) onUserClosed(id *packet.Identity) {
 	}
 	b.handler.OnClosed(id)
 }
-func (b *broker) onUserConnect(p *packet.Connect, net server.Transport) packet.ConnectCode {
+func (b *broker) onUserConnect(p *packet.Connect, net string) packet.ConnectCode {
 	code := b.handler.OnConnect(p)
 	if code != packet.ConnectAccepted {
 		return code
@@ -343,13 +348,13 @@ func (b *broker) onUserConnect(p *packet.Connect, net server.Transport) packet.C
 				xlog.Str("new_net", string(net)),
 			)
 			if id.id == b.id {
-				if l, ok := b.listeners[server.Transport(id.net)]; ok {
+				if l, ok := b.listeners[id.net]; ok {
 					l.KickConn(p.Identity.ClientID)
 				}
 			} else {
 				if peer, ok := b.peers.Get(id.id); ok {
-					t := protos.Target{Net: id.net, Cid: p.Identity.ClientID}
-					if err := peer.kickConn(context.Background(), []*protos.Target{&t}); err != nil {
+					t := map[string]string{p.Identity.ClientID: string(net)}
+					if err := peer.kickConn(context.Background(), t); err != nil {
 						b.logger.Error("kick old connection from peer failed", xlog.Peer(id.id), xlog.Err(err))
 					}
 				}
@@ -380,10 +385,10 @@ func (b *broker) onUserRequest(p *packet.Request, id *packet.Identity) (*packet.
 	return handler(p, id)
 }
 
-func (b *broker) isActive(targets []*protos.Target) bool {
-	for _, target := range targets {
-		if l, ok := b.listeners[server.Transport(target.Net)]; ok {
-			if l.IsActive(target.Cid) {
+func (b *broker) isActive(targets map[string]string) bool {
+	for cid, net := range targets {
+		if l, ok := b.listeners[net]; ok {
+			if l.IsActive(cid) {
 				return true
 			}
 		}
@@ -391,10 +396,10 @@ func (b *broker) isActive(targets []*protos.Target) bool {
 
 	return false
 }
-func (b *broker) kickConn(targets []*protos.Target) {
-	for _, target := range targets {
-		if l, ok := b.listeners[server.Transport(target.Net)]; ok {
-			l.KickConn(target.Cid)
+func (b *broker) kickConn(targets map[string]string) {
+	for cid, net := range targets {
+		if l, ok := b.listeners[net]; ok {
+			l.KickConn(cid)
 		}
 	}
 }
@@ -410,12 +415,12 @@ func (b *broker) sendToAll(ctx context.Context, m *packet.Message) (total, succe
 	}
 	return total, success
 }
-func (b *broker) sendToTargets(ctx context.Context, m *packet.Message, targets []*protos.Target) (total, success int32) {
-	for _, t := range targets {
+func (b *broker) sendToTargets(ctx context.Context, m *packet.Message, targets map[string]string) (total, success int32) {
+	for cid, net := range targets {
 		total++
-		if l, ok := b.listeners[server.Transport(t.Net)]; ok {
-			if err := l.SendMessage(ctx, t.Cid, m); err != nil {
-				b.logger.Error("send message to cid failed", xlog.Cid(t.Cid), xlog.Err(err))
+		if l, ok := b.listeners[net]; ok {
+			if err := l.SendMessage(ctx, cid, m); err != nil {
+				b.logger.Error("send message to cid failed", xlog.Cid(cid), xlog.Err(err))
 			} else {
 				success++
 			}

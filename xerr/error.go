@@ -15,7 +15,7 @@ const (
 	SendingQueueIsFull
 	ConnectionNotFound
 	ServerAlreadyClosed
-	TransportNotSupported
+	NetworkNotSupported
 	RequestHandlerNotFound
 	InvalidPeerMessageFlag
 )
@@ -33,7 +33,7 @@ var errorMap = map[Error]string{
 	SendingQueueIsFull:     "sending queue is full",
 	ConnectionNotFound:     "connection not found",
 	ServerAlreadyClosed:    "server already closed",
-	TransportNotSupported:  "transport not supported",
+	NetworkNotSupported:    "network not supported",
 	InvalidPeerMessageFlag: "invalid peer message flag",
 	RequestHandlerNotFound: "request handler not found",
 }

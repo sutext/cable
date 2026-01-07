@@ -47,7 +47,7 @@ func (s *peerServer) Shutdown(ctx context.Context) error {
 	return s.listener.Close()
 }
 func (s *peerServer) Inspect(ctx context.Context, req *protos.Empty) (*protos.Status, error) {
-	return s.broker.status(), nil
+	return s.broker.inspect(), nil
 }
 func (s *peerServer) IsOnline(ctx context.Context, req *protos.IsOnlineReq) (*protos.IsOnlineResp, error) {
 	ok := s.broker.isActive(req.Targets)
@@ -58,16 +58,6 @@ func (s *peerServer) KickConn(ctx context.Context, req *protos.KickConnReq) (*pr
 	s.broker.kickConn(req.Targets)
 	return &protos.Empty{}, nil
 }
-
-//	func (s *peerServer) JoinChannel(ctx context.Context, req *protos.ChannelReq) (*protos.ChannelResp, error) {
-//		count := s.broker.joinChannel(req.Uid, req.Channels)
-//		return &protos.ChannelResp{Count: count}, nil
-//	}
-//
-//	func (s *peerServer) LeaveChannel(ctx context.Context, req *protos.ChannelReq) (*protos.ChannelResp, error) {
-//		count := s.broker.leaveChannel(req.Uid, req.Channels)
-//		return &protos.ChannelResp{Count: count}, nil
-//	}
 func (s *peerServer) SendToAll(ctx context.Context, req *protos.MessageReq) (*protos.MessageResp, error) {
 	msg := &packet.Message{}
 	if err := coder.Unmarshal(req.Message, msg); err != nil {

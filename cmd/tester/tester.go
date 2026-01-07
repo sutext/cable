@@ -128,11 +128,11 @@ func statefulSetEndpoint() string {
 	if service == "" {
 		service = "cable"
 	}
-	transport := os.Getenv("APP_PROTO")
-	if transport == "" {
-		transport = "tcp"
+	network := os.Getenv("APP_PROTO")
+	if network == "" {
+		network = "tcp"
 	}
-	return fmt.Sprintf("%s://%s-%d.%s:%s", transport, appName, rand.Int64()%count, service, port)
+	return fmt.Sprintf("%s://%s-%d.%s:%s", network, appName, rand.Int64()%count, service, port)
 }
 func (t *Tester) addClient() *Client {
 	endpoint := os.Getenv("ENDPOINT")
@@ -148,7 +148,7 @@ func (t *Tester) addClient() *Client {
 	}
 	result := &Client{}
 	result.cli = client.New(strs[1],
-		client.WithTransport(client.Transport(strs[0])),
+		client.WithNetwork(strs[0]),
 		client.WithKeepAlive(time.Second*5, time.Second*60),
 		client.WithHandler(result),
 	)

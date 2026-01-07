@@ -15,6 +15,8 @@ import (
 type Server interface {
 	// Serve starts the server and listens for incoming connections.
 	Serve() error
+	// Network returns the network of the server.
+	Network() string
 	/// IsActive returns true if the client is active.
 	IsActive(cid string) bool
 	// KickConn kicks a client out of the server.
@@ -23,8 +25,6 @@ type Server interface {
 	Shutdown(ctx context.Context) error
 	// Brodcast sends a message to all clients.
 	Brodcast(ctx context.Context, p *packet.Message) (total, success int32, err error)
-	// Transport returns the transport of the server.
-	Transport() Transport
 	// SendMessage sends a message to a client.
 	SendMessage(ctx context.Context, cid string, p *packet.Message) error
 	// SendRequest sends a request to a client and returns the response.
@@ -35,8 +35,8 @@ type server struct {
 	logger         *xlog.Logger
 	closed         atomic.Bool
 	address        string
+	network        string
 	listener       listener.Listener
-	transport      Transport
 	queueCapacity  int32
 	closeHandler   ClosedHandler
 	connectHandler ConnectHandler
@@ -49,7 +49,7 @@ func New(address string, opts ...Option) Server {
 	s := &server{
 		logger:         options.logger,
 		address:        address,
-		transport:      options.transport,
+		network:        options.network,
 		queueCapacity:  options.queueCapacity,
 		closeHandler:   options.closeHandler,
 		connectHandler: options.connectHandler,
@@ -60,20 +60,20 @@ func New(address string, opts ...Option) Server {
 }
 
 func (s *server) Serve() error {
-	switch s.transport {
-	case TransportTCP:
+	switch s.network {
+	case NetworkTCP:
 		s.listener = listener.NewTCP(s.logger, s.queueCapacity)
-	case TransportUDP:
+	case NetworkUDP:
 		s.listener = listener.NewUDP(s.logger, s.queueCapacity)
-	case TransportGRPC:
+	case NetworkGRPC:
 		s.listener = listener.NewGRPC(s.logger, s.queueCapacity)
 	default:
-		return xerr.TransportNotSupported
+		return xerr.NetworkNotSupported
 	}
 	s.listener.OnClose(s.onClose)
 	s.listener.OnAccept(s.onConnect)
 	s.listener.OnPacket(s.onPacket)
-	s.logger.Info("server listening", xlog.Str("address", s.address), xlog.Str("transport", string(s.transport)))
+	s.logger.Info("server listening", xlog.Str("address", s.address), xlog.Str("network", string(s.network)))
 	return s.listener.Listen(s.address)
 }
 func (s *server) IsActive(cid string) bool {
@@ -135,8 +135,8 @@ func (s *server) Brodcast(ctx context.Context, p *packet.Message) (int32, int32,
 	})
 	return total, success, nil
 }
-func (s *server) Transport() Transport {
-	return s.transport
+func (s *server) Network() string {
+	return s.network
 }
 func (s *server) SendMessage(ctx context.Context, cid string, p *packet.Message) error {
 	if s.closed.Load() {

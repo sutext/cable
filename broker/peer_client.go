@@ -138,7 +138,7 @@ func (p *peerClient) sendToAll(ctx context.Context, m *packet.Message) (total, s
 	}
 	return resp.Total, resp.Success, nil
 }
-func (p *peerClient) sendToTargets(ctx context.Context, m *packet.Message, tragets []*protos.Target) (total, success int32, err error) {
+func (p *peerClient) sendToTargets(ctx context.Context, m *packet.Message, tragets map[string]string) (total, success int32, err error) {
 	if !p.isReady() {
 		return 0, 0, xerr.PeerNotReady
 	}
@@ -156,7 +156,7 @@ func (p *peerClient) sendToTargets(ctx context.Context, m *packet.Message, trage
 	}
 	return resp.Total, resp.Success, nil
 }
-func (p *peerClient) isOnline(ctx context.Context, targets []*protos.Target) (bool, error) {
+func (p *peerClient) isOnline(ctx context.Context, targets map[string]string) (bool, error) {
 	if !p.isReady() {
 		return false, xerr.PeerNotReady
 	}
@@ -166,7 +166,7 @@ func (p *peerClient) isOnline(ctx context.Context, targets []*protos.Target) (bo
 	}
 	return resp.Online, nil
 }
-func (p *peerClient) kickConn(ctx context.Context, targets []*protos.Target) error {
+func (p *peerClient) kickConn(ctx context.Context, targets map[string]string) error {
 	if !p.isReady() {
 		return xerr.PeerNotReady
 	}

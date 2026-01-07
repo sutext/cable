@@ -242,7 +242,7 @@ func (h *MyClientHandler) OnRequest(req *packet.Request) (*packet.Response, erro
 ### Client Configuration
 | Option | Description | Default |
 |--------|-------------|---------|
-| Transport | Connection transport | TCP |
+| Network | Connection transport | TCP |
 | Address | Broker address | None |
 | Logger | Log level and format | Info |
 | RetryInterval | Initial retry interval | 1s |

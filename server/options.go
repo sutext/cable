@@ -12,14 +12,12 @@ type ConnectHandler func(p *packet.Connect) packet.ConnectCode
 type MessageHandler func(p *packet.Message, id *packet.Identity) error
 type RequestHandler func(p *packet.Request, id *packet.Identity) (*packet.Response, error)
 
-type Transport string
-
 const (
-	TransportTCP       Transport = "tcp"
-	TransportUDP       Transport = "udp"
-	TransportQUIC      Transport = "quic"
-	TransportGRPC      Transport = "grpc"
-	TransportWebSocket Transport = "websocket"
+	NetworkTCP       string = "tcp"
+	NetworkUDP       string = "udp"
+	NetworkQUIC      string = "quic"
+	NetworkGRPC      string = "grpc"
+	NetworkWebSocket string = "websocket"
 )
 
 type Option struct {
@@ -27,7 +25,7 @@ type Option struct {
 }
 type options struct {
 	logger         *xlog.Logger
-	transport      Transport
+	network        string
 	queueCapacity  int32
 	closeHandler   ClosedHandler
 	connectHandler ConnectHandler
@@ -38,7 +36,7 @@ type options struct {
 func NewOptions(opts ...Option) *options {
 	var options = &options{
 		logger:        xlog.With("GROUP", "SERVER"),
-		transport:     TransportTCP,
+		network:       NetworkTCP,
 		queueCapacity: 1024,
 		closeHandler: func(p *packet.Identity) {
 
@@ -58,8 +56,8 @@ func NewOptions(opts ...Option) *options {
 	}
 	return options
 }
-func WithTransport(transport Transport) Option {
-	return Option{f: func(o *options) { o.transport = transport }}
+func WithNetwork(network string) Option {
+	return Option{f: func(o *options) { o.network = network }}
 }
 
 //	func WithQUIC(config *quic.Config) Option {
