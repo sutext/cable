@@ -95,6 +95,9 @@ func (s *peerServer) SendRaftMessage(ctx context.Context, req *protos.RaftMessag
 	if err := msg.Unmarshal(req.Data); err != nil {
 		return nil, err
 	}
+	if s.broker.node == nil {
+		return nil, xerr.RaftNodeNotReady
+	}
 	if err := s.broker.node.Step(ctx, msg); err != nil {
 		return nil, err
 	}

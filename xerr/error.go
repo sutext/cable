@@ -9,6 +9,7 @@ const (
 	RequestTimeout
 	MessageTimeout
 	ServerIsClosed
+	RaftNodeNotReady
 	InvalidPeerMessage
 	ConnectionIsClosed
 	SendingQueueIsFull
@@ -26,6 +27,7 @@ var errorMap = map[Error]string{
 	MessageTimeout:         "message timeout",
 	ServerIsClosed:         "server is closed",
 	InvalidChannel:         "invalid channel",
+	RaftNodeNotReady:       "raft node not ready",
 	InvalidPeerMessage:     "invalid peer message",
 	ConnectionIsClosed:     "connection is closed",
 	SendingQueueIsFull:     "sending queue is full",
