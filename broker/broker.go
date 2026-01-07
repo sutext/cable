@@ -153,7 +153,6 @@ func (b *broker) autoDiscovery() {
 	for id, addr := range m {
 		b.addPeer(id, addr)
 	}
-
 	if b.peers.Len() < b.clusterSize-1 {
 		b.logger.Warn("Auto discovery got less than cluster size", xlog.I32("clusterSize", b.clusterSize), xlog.I32("peers", b.peers.Len()))
 		time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.autoDiscovery)
@@ -296,26 +295,6 @@ func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Me
 		return true
 	})
 	return total, success, nil
-
-	// chs := b.groupedChannels(channel)
-	// for id, targets := range chs {
-	// 	if id == b.id {
-	// 		t, s := b.sendToTargets(ctx, m, targets)
-	// 		total += t
-	// 		success += s
-	// 	} else {
-	// 		if peer, ok := b.peers.Get(id); ok {
-	// 			t, s, err := peer.sendToTargets(ctx, m, targets)
-	// 			if err == nil {
-	// 				total += t
-	// 				success += s
-	// 			} else {
-	// 				b.logger.Error("send to user from peer failed", xlog.Peer(id), xlog.Channel(channel), xlog.Err(err))
-	// 			}
-	// 		}
-	// 	}
-	// }
-	// return total, success, nil
 }
 
 func (b *broker) JoinChannel(ctx context.Context, uid string, channels ...string) error {

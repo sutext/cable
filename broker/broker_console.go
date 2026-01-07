@@ -3,6 +3,7 @@ package broker
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -24,13 +25,24 @@ func (b *broker) inspect() *protos.Status {
 		channelCount += value.Len()
 		return true
 	})
+	status := b.raftNode.Status()
+	progress := make(map[uint64]string)
+	if status.Progress != nil {
+		for id, p := range status.Progress {
+			progress[id] = fmt.Sprintf("match=%d,next=%d,state=%s", p.Match, p.Next, p.State)
+		}
+	}
 	return &protos.Status{
-		Id:           b.id,
-		UserCount:    userCount,
-		ClientCount:  b.clientChannels.Len(),
-		ClusterSize:  b.clusterSize,
-		ChannelCount: channelCount,
-		RaftState:    b.raftNode.Status().String(),
+		Id:            b.id,
+		UserCount:     userCount,
+		ClientCount:   b.clientChannels.Len(),
+		ClusterSize:   b.clusterSize,
+		ChannelCount:  channelCount,
+		RaftState:     status.RaftState.String(),
+		RaftTerm:      status.Term,
+		AppliedIndex:  status.Applied,
+		LeadRansferee: status.LeadTransferee,
+		Progress:      progress,
 	}
 }
 

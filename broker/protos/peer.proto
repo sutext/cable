@@ -42,6 +42,10 @@ message Status{
  int32 cluster_size = 4;
  int32 channel_count = 5;
  string raft_state = 6;
+ uint64 raft_term = 7;
+ uint64 applied_index = 8;
+ uint64 lead_ransferee = 9;
+ map<uint64,string> progress = 10;
 }
 
 // RaftMessage represents a Raft message
