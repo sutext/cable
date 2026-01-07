@@ -13,18 +13,26 @@ import (
 )
 
 func (b *broker) status() *protos.Status {
+	s := b.raftNode.Status()
+	var rs string
+	if sdata, err := json.MarshalIndent(s, "", "  "); err != nil {
+		rs = s.String()
+	} else {
+		rs = string(sdata)
+	}
 	return &protos.Status{
 		Id:           b.id,
 		UserCount:    b.userClients.Len(),
 		ClientCount:  b.clientChannels.Len(),
 		ClusterSize:  b.clusterSize,
 		ChannelCount: b.clientChannels.Len(),
-		RaftState:    b.raftNode.Status().String(),
+		RaftState:    rs,
 	}
 }
 
 func (b *broker) Inspects(ctx context.Context) ([]*protos.Status, error) {
 	ss := make([]*protos.Status, b.clusterSize)
+	ss[0] = b.status()
 	wg := sync.WaitGroup{}
 	b.peers.Range(func(id uint64, cli *peerClient) bool {
 		wg.Go(func() {
@@ -42,12 +50,12 @@ func (b *broker) Inspects(ctx context.Context) ([]*protos.Status, error) {
 }
 
 func (b *broker) handleInspect(w http.ResponseWriter, r *http.Request) {
-	isps, err := b.Inspects(r.Context())
+	ss, err := b.Inspects(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	data, err := json.MarshalIndent(isps, "", "  ")
+	data, err := json.MarshalIndent(ss, "", "  ")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
