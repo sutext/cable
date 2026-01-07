@@ -25,7 +25,7 @@ func (b *broker) inspect() *protos.Status {
 
 func (b *broker) Inspects(ctx context.Context) ([]*protos.Status, error) {
 	ss := make([]*protos.Status, 0, b.clusterSize)
-	ss[0] = b.inspect()
+	ss = append(ss, b.inspect())
 	wg := sync.WaitGroup{}
 	b.peers.Range(func(id uint64, cli *peerClient) bool {
 		wg.Go(func() {
