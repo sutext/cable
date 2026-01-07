@@ -41,7 +41,7 @@ func (b *broker) startRaft(join bool) {
 		MaxInflightMsgs: 256,
 	}
 	if join {
-		initPeers := []raft.Peer{{ID: b.id}}
+		initPeers := make([]raft.Peer, 0, b.peers.Len())
 		b.peers.Range(func(key uint64, value *peerClient) bool {
 			initPeers = append(initPeers, raft.Peer{ID: key})
 			return true
