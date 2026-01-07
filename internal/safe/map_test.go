@@ -6,7 +6,7 @@ import (
 )
 
 func TestMap(t *testing.T) {
-	m := Map[string, string]{}
+	m := RMap[string, string]{}
 	m.Set("foo", "bar")
 	if bar, ok := m.Get("foo"); ok && bar != "bar" {
 		t.Error("Expected 'bar', got", bar)
@@ -17,8 +17,8 @@ func TestMap(t *testing.T) {
 	}
 }
 func BenchmarkMap(b *testing.B) {
-	b.Run("safe.Map.Write", func(b *testing.B) {
-		m := Map[string, string]{}
+	b.Run("safe.RMap.Write", func(b *testing.B) {
+		m := RMap[string, string]{}
 		for b.Loop() {
 			m.Set("foo", "bar")
 		}
@@ -29,8 +29,8 @@ func BenchmarkMap(b *testing.B) {
 			m.Set("foo", "bar")
 		}
 	})
-	b.Run("safe.Map.Read", func(b *testing.B) {
-		m := Map[string, string]{}
+	b.Run("safe.RMap.Read", func(b *testing.B) {
+		m := RMap[string, string]{}
 		m.Set("foo", "bar")
 		for b.Loop() {
 			m.Get("foo")

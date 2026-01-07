@@ -12,7 +12,7 @@ import (
 )
 
 type udpListener struct {
-	conns         safe.Map[string, Conn]
+	conns         safe.RMap[string, Conn]
 	logger        *xlog.Logger
 	listener      *net.UDPConn
 	closeHandler  func(c Conn)

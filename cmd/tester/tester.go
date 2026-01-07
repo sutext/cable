@@ -83,7 +83,7 @@ func (c *Client) OnRequest(req *packet.Request) (*packet.Response, error) {
 type Tester struct {
 	cond       *sync.Cond
 	paused     bool
-	clients    safe.Map[string, *Client]
+	clients    safe.RMap[string, *Client]
 	httpServer *http.Server
 }
 

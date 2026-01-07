@@ -32,14 +32,10 @@ type Broker interface {
 	HandleRequest(method string, handler server.RequestHandler)
 }
 
-type idAndNet struct {
-	id  uint64
-	net string
-}
 type broker struct {
 	id             uint64
 	ready          atomic.Bool
-	peers          safe.Map[uint64, *peerClient]
+	peers          safe.RMap[uint64, *peerClient]
 	logger         *xlog.Logger
 	handler        Handler
 	muticast       muticast.Muticast
@@ -48,11 +44,12 @@ type broker struct {
 	peerServer     *peerServer
 	httpServer     *http.Server
 	clusterSize    int32
-	userClients    safe.KeyMap[idAndNet] //map[uid]map[cid]net
-	channelClients safe.KeyMap[idAndNet] //map[channel]map[cid]net
-	clientChannels safe.KeyMap[struct{}] //map[cid]map[channel]net
-	requstHandlers safe.Map[string, server.RequestHandler]
+	userClients    safe.RMap[uint64, *safe.KeyMap[string]] //map[uid]map[cid]net
+	channelClients safe.RMap[uint64, *safe.KeyMap[string]] //map[channel]map[cid]net
+	clientChannels safe.KeyMap[struct{}]                   //map[cid]map[channel]net
+	requstHandlers safe.RMap[string, server.RequestHandler]
 	raftNode       raft.Node
+	raftLock       sync.Mutex
 	stopRaft       chan struct{}
 	raftStorage    *raft.MemoryStorage
 	raftLeader     atomic.Uint64
@@ -95,6 +92,7 @@ func NewBroker(opts ...Option) Broker {
 	mux.HandleFunc("/message", b.handleMessage)
 	mux.HandleFunc("/brodcast", b.handleBrodcast)
 	mux.HandleFunc("/health", b.handleHealth)
+	mux.HandleFunc("/removeNode", b.handleRemoveNode)
 	b.httpServer = &http.Server{Addr: options.httpPort, Handler: mux}
 	return b
 }
@@ -183,60 +181,48 @@ func (b *broker) Shutdown(ctx context.Context) (err error) {
 	}
 	return err
 }
-func (b *broker) groupedUsers(uid string) map[uint64]map[string]string {
-	grouped := make(map[uint64]map[string]string)
-	b.userClients.RangeKey(uid, func(cid string, ian idAndNet) bool {
-		ts, ok := grouped[ian.id]
-		if !ok {
-			ts = make(map[string]string)
-		}
-		ts[cid] = string(ian.net)
-		grouped[ian.id] = ts
-		return true
-	})
-	return grouped
-}
-func (b *broker) groupedChannels(channel string) map[uint64]map[string]string {
-	grouped := make(map[uint64]map[string]string)
-	b.channelClients.RangeKey(channel, func(cid string, ian idAndNet) bool {
-		ts, ok := grouped[ian.id]
-		if !ok {
-			ts = make(map[string]string)
-		}
-		grouped[ian.id] = ts
-		return true
-	})
-	return grouped
-}
+
 func (b *broker) IsOnline(ctx context.Context, uid string) (online bool) {
-	m := b.groupedUsers(uid)
-	for id, targets := range m {
+	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
 		if id == b.id {
-			if b.isActive(targets) {
-				return true
+			if cids, ok := value.Get(uid); ok {
+				if b.isActive(cids.Load()) {
+					online = true
+					return false
+				}
 			}
 		} else {
 			if peer, ok := b.peers.Get(id); ok {
-				if ok, err := peer.isOnline(ctx, targets); err == nil && ok {
-					return true
+				if cids, ok := value.Get(uid); ok {
+					if ok, err := peer.isOnline(ctx, cids.Load()); err == nil && ok {
+						online = true
+						return false
+					}
 				}
 			}
 		}
-	}
-	return false
+		return true
+	})
+	return online
 }
 
 func (b *broker) KickUser(ctx context.Context, uid string) {
-	m := b.groupedUsers(uid)
-	for id, targets := range m {
+	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
 		if id == b.id {
-			b.kickConn(targets)
+			if cids, ok := value.Get(uid); ok {
+				b.kickConn(cids.Load())
+			}
 		} else {
 			if peer, ok := b.peers.Get(id); ok {
-				peer.kickConn(ctx, targets)
+				if cids, ok := value.Get(uid); ok {
+					if err := peer.kickConn(ctx, cids.Load()); err != nil {
+						b.logger.Error("kick user from peer failed", xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
+					}
+				}
 			}
 		}
-	}
+		return true
+	})
 }
 func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (total, success int32, err error) {
 	total, success = b.sendToAll(ctx, m)
@@ -259,49 +245,77 @@ func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 	if uid == "" {
 		return 0, 0, xerr.InvalidUserID
 	}
-	chs := b.groupedUsers(uid)
-	for id, targets := range chs {
+	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
 		if id == b.id {
-			t, s := b.sendToTargets(ctx, m, targets)
-			total += t
-			success += s
+			if cids, ok := value.Get(uid); ok {
+				t, s := b.sendToTargets(ctx, m, cids.Load())
+				total += t
+				success += s
+			}
 		} else {
 			if peer, ok := b.peers.Get(id); ok {
-				t, s, err := peer.sendToTargets(ctx, m, targets)
-				if err == nil {
-					total += t
-					success += s
-				} else {
-					b.logger.Error("send to user from peer failed", xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
+				if cids, ok := value.Get(uid); ok {
+					t, s, err := peer.sendToTargets(ctx, m, cids.Load())
+					if err == nil {
+						total += t
+						success += s
+					} else {
+						b.logger.Error("send to user from peer failed", xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
+					}
 				}
 			}
 		}
-	}
+		return true
+	})
 	return total, success, nil
 }
 func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success int32, err error) {
 	if channel == "" {
 		return 0, 0, xerr.InvalidChannel
 	}
-	chs := b.groupedChannels(channel)
-	for id, targets := range chs {
+	b.channelClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
 		if id == b.id {
-			t, s := b.sendToTargets(ctx, m, targets)
-			total += t
-			success += s
+			if cids, ok := value.Get(channel); ok {
+				t, s := b.sendToTargets(ctx, m, cids.Load())
+				total += t
+				success += s
+			}
 		} else {
 			if peer, ok := b.peers.Get(id); ok {
-				t, s, err := peer.sendToTargets(ctx, m, targets)
-				if err == nil {
-					total += t
-					success += s
-				} else {
-					b.logger.Error("send to user from peer failed", xlog.Peer(id), xlog.Channel(channel), xlog.Err(err))
+				if cids, ok := value.Get(channel); ok {
+					t, s, err := peer.sendToTargets(ctx, m, cids.Load())
+					if err == nil {
+						total += t
+						success += s
+					} else {
+						b.logger.Error("send to user from peer failed", xlog.Peer(id), xlog.Channel(channel), xlog.Err(err))
+					}
 				}
 			}
 		}
-	}
+		return true
+	})
 	return total, success, nil
+
+	// chs := b.groupedChannels(channel)
+	// for id, targets := range chs {
+	// 	if id == b.id {
+	// 		t, s := b.sendToTargets(ctx, m, targets)
+	// 		total += t
+	// 		success += s
+	// 	} else {
+	// 		if peer, ok := b.peers.Get(id); ok {
+	// 			t, s, err := peer.sendToTargets(ctx, m, targets)
+	// 			if err == nil {
+	// 				total += t
+	// 				success += s
+	// 			} else {
+	// 				b.logger.Error("send to user from peer failed", xlog.Peer(id), xlog.Channel(channel), xlog.Err(err))
+	// 			}
+	// 		}
+	// 	}
+	// }
+	// return total, success, nil
 }
 
 func (b *broker) JoinChannel(ctx context.Context, uid string, channels ...string) error {
@@ -337,31 +351,33 @@ func (b *broker) onUserConnect(p *packet.Connect, net string) packet.ConnectCode
 	if code != packet.ConnectAccepted {
 		return code
 	}
-	if id, ok := b.userClients.GetKey(p.Identity.UserID, p.Identity.ClientID); ok {
-		if id.id != b.id || id.net != string(net) {
-			b.logger.Info("duplicate connection detected, kick old connection",
-				xlog.Uid(p.Identity.UserID),
-				xlog.Cid(p.Identity.ClientID),
-				xlog.Peer(id.id),
-				xlog.Str("old_net", id.net),
-				xlog.Peer(b.id),
-				xlog.Str("new_net", string(net)),
-			)
-			if id.id == b.id {
-				if l, ok := b.listeners[id.net]; ok {
-					l.KickConn(p.Identity.ClientID)
-				}
-			} else {
-				if peer, ok := b.peers.Get(id.id); ok {
-					t := map[string]string{p.Identity.ClientID: string(net)}
-					if err := peer.kickConn(context.Background(), t); err != nil {
-						b.logger.Error("kick old connection from peer failed", xlog.Peer(id.id), xlog.Err(err))
+	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
+		if cnet, ok := value.GetKey(p.Identity.UserID, p.Identity.ClientID); ok {
+			if id != b.id || net != cnet {
+				b.logger.Info("duplicate connection detected, kick old connection",
+					xlog.Uid(p.Identity.UserID),
+					xlog.Cid(p.Identity.ClientID),
+					xlog.U64("old_peer_id", id),
+					xlog.Str("old_net", cnet),
+					xlog.U64("new_peer_id", b.id),
+					xlog.Str("new_net", net),
+				)
+				if id == b.id {
+					if l, ok := b.listeners[cnet]; ok {
+						l.KickConn(p.Identity.ClientID)
+					}
+				} else {
+					if peer, ok := b.peers.Get(id); ok {
+						cids := map[string]string{p.Identity.ClientID: net}
+						if err := peer.kickConn(context.Background(), cids); err != nil {
+							b.logger.Error("kick old connection from peer failed", xlog.Peer(id), xlog.Err(err))
+						}
 					}
 				}
 			}
 		}
-	}
-
+		return true
+	})
 	op := &userOpenedOp{
 		uid:      p.Identity.UserID,
 		cid:      p.Identity.ClientID,

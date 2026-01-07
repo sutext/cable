@@ -14,7 +14,7 @@ import (
 
 type grpcListener struct {
 	pb.UnimplementedBytesServiceServer
-	conns         safe.Map[string, Conn]
+	conns         safe.RMap[string, Conn]
 	logger        *xlog.Logger
 	listener      *net.TCPListener
 	closeHandler  func(c Conn)

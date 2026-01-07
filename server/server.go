@@ -31,7 +31,7 @@ type Server interface {
 	SendRequest(ctx context.Context, cid string, p *packet.Request) (*packet.Response, error)
 }
 type server struct {
-	conns          safe.Map[string, listener.Conn]
+	conns          safe.RMap[string, listener.Conn]
 	logger         *xlog.Logger
 	closed         atomic.Bool
 	address        string

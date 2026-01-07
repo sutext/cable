@@ -4,21 +4,32 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 
 	"sutext.github.io/cable/broker/protos"
+	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
 )
 
 func (b *broker) inspect() *protos.Status {
+	var userCount, channelCount int32
+	b.userClients.Range(func(key uint64, value *safe.KeyMap[string]) bool {
+		userCount += value.Len()
+		return true
+	})
+	b.channelClients.Range(func(key uint64, value *safe.KeyMap[string]) bool {
+		channelCount += value.Len()
+		return true
+	})
 	return &protos.Status{
 		Id:           b.id,
-		UserCount:    b.userClients.Len(),
+		UserCount:    userCount,
 		ClientCount:  b.clientChannels.Len(),
 		ClusterSize:  b.clusterSize,
-		ChannelCount: b.clientChannels.Len(),
+		ChannelCount: channelCount,
 		RaftState:    b.raftNode.Status().String(),
 	}
 }
@@ -151,6 +162,25 @@ func (b *broker) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 	if !b.ready.Load() {
 		http.Error(w, "broker is not ready", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ok"))
+}
+func (b *broker) handleRemoveNode(w http.ResponseWriter, r *http.Request) {
+	str := r.URL.Query().Get("nodeId")
+	if str == "" {
+		http.Error(w, "id is required", http.StatusBadRequest)
+		return
+	}
+	id, err := strconv.ParseUint(str, 10, 64)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	err = b.removeRaftNode(r.Context(), id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.WriteHeader(http.StatusOK)

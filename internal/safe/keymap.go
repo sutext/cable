@@ -1,17 +1,19 @@
 package safe
 
+// KeyMap is a thread-safe map of maps.
+// It is a wrapper of RMap[string, *Map[string, T]]
 type KeyMap[T any] struct {
-	m Map[string, *Map[string, T]]
+	m RMap[string, *Map[string, T]]
 }
 
-func (m *KeyMap[T]) LenKey(key string) int {
+func (m *KeyMap[T]) LenKey(key string) int32 {
 	if v, ok := m.m.Get(key); ok {
-		return int(v.Len())
+		return v.Len()
 	}
 	return 0
 }
 func (m *KeyMap[T]) SetKey(key, filed string, value T) {
-	v, _ := m.m.GetOrSet(key, &Map[string, T]{})
+	v, _ := m.m.GetOrSet(key, NewMap[string, T]())
 	v.Set(filed, value)
 }
 
@@ -51,7 +53,10 @@ func (m *KeyMap[T]) Set(key string, value *Map[string, T]) {
 }
 
 func (m *KeyMap[T]) Get(key string) (value *Map[string, T], ok bool) {
-	return m.m.Get(key)
+	if v, ok := m.m.Get(key); ok {
+		return v, true
+	}
+	return nil, false
 }
 func (m *KeyMap[T]) Range(f func(string, *Map[string, T]) bool) {
 	m.m.Range(func(k string, v *Map[string, T]) bool {

@@ -2,47 +2,76 @@ package safe
 
 import (
 	"sync"
-	"sync/atomic"
 )
 
-// Map is a thread-safe map.
+// Map is a Write first thread-safe map.
+// It is safe for concurrent access by multiple goroutines.
+// It is write-first, meaning that writes take precedence over reads.
 type Map[K comparable, V any] struct {
-	m sync.Map
-	l atomic.Int32
+	m  map[K]V
+	mu sync.RWMutex
+}
+
+func NewMap[K comparable, V any](m ...map[K]V) *Map[K, V] {
+	if len(m) > 0 {
+		return &Map[K, V]{m: m[0]}
+	}
+	return &Map[K, V]{m: make(map[K]V)}
 }
 
 func (m *Map[K, V]) Len() int32 {
-	return m.l.Load()
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return int32(len(m.m))
 }
 func (m *Map[K, V]) Set(key K, value V) {
-	if _, loaded := m.m.Swap(key, value); !loaded {
-		m.l.Add(1)
-	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.m[key] = value
 }
 func (m *Map[K, V]) Get(key K) (actual V, loaded bool) {
-	if value, ok := m.m.Load(key); ok {
-		return value.(V), true
-	}
-	return actual, false
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	actual, loaded = m.m[key]
+	return actual, loaded
+}
+func (m *Map[K, V]) Load() map[K]V {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.m
+}
+func (m *Map[K, V]) Store(data map[K]V) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.m = data
 }
 
 // Swap swaps the value for a key and returns the previous value if any.
 // The loaded result reports whether the key was present.
 func (m *Map[K, V]) Swap(key K, value V) (actual V, loaded bool) {
-	if actual, loaded := m.m.Swap(key, value); loaded {
-		return actual.(V), true
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if actual, loaded = m.m[key]; loaded {
+		m.m[key] = value
+		return actual, loaded
 	}
-	m.l.Add(1)
+	m.m[key] = value
 	return actual, loaded
 }
 func (m *Map[K, V]) Range(f func(key K, value V) bool) {
-	m.m.Range(func(k, v any) bool {
-		return f(k.(K), v.(V))
-	})
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	for k, v := range m.m {
+		if !f(k, v) {
+			break
+		}
+	}
 }
 func (m *Map[K, V]) Delete(key K) bool {
-	if _, loaded := m.m.LoadAndDelete(key); loaded {
-		m.l.Add(-1)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, loaded := m.m[key]; loaded {
+		delete(m.m, key)
 		return true
 	}
 	return false
@@ -52,9 +81,11 @@ func (m *Map[K, V]) Delete(key K) bool {
 // Otherwise, it stores and returns the given value.
 // The loaded result is true if the value was loaded, false if stored.
 func (m *Map[K, V]) GetOrSet(key K, value V) (actual V, loaded bool) {
-	if actual, loaded := m.m.LoadOrStore(key, value); loaded {
-		return actual.(V), true
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if actual, loaded := m.m[key]; loaded {
+		return actual, loaded
 	}
-	m.l.Add(1)
+	m.m[key] = value
 	return value, false
 }

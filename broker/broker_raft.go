@@ -7,9 +7,18 @@ import (
 	"go.etcd.io/raft/v3"
 	"go.etcd.io/raft/v3/raftpb"
 	"sutext.github.io/cable/coder"
+	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/xlog"
 )
 
+func (b *broker) compactRaftStorage() {
+	idx, err := b.raftStorage.LastIndex()
+	if err != nil {
+		b.logger.Error("Failed to get last index", xlog.Err(err))
+		return
+	}
+	b.raftStorage.Compact(idx)
+}
 func (b *broker) startRaft(join bool) {
 	if b.raftNode != nil {
 		return
@@ -23,6 +32,7 @@ func (b *broker) startRaft(join bool) {
 		Storage:         storage,
 		MaxSizePerMsg:   4096,
 		MaxInflightMsgs: 256,
+		Logger:          nil,
 	}
 	if join {
 		b.raftNode = raft.RestartNode(c)
@@ -63,6 +73,9 @@ func (b *broker) raftLoop() {
 				if err := b.raftStorage.ApplySnapshot(rd.Snapshot); err != nil {
 					b.logger.Error("Failed to apply snapshot", xlog.Err(err))
 				}
+				if err := b.applySnapshot(rd.Snapshot); err != nil {
+					b.logger.Error("Failed to apply snapshot", xlog.Err(err))
+				}
 			}
 			for _, entry := range rd.CommittedEntries {
 				b.processRaftEntry(entry)
@@ -72,7 +85,7 @@ func (b *broker) raftLoop() {
 				if b.raftLeader.Load() != newLeader {
 					b.raftLeader.Store(newLeader)
 					b.isLeader.Store(b.id == newLeader)
-					b.logger.Info("New leader elected", xlog.Peer(newLeader))
+					b.logger.Info("New leader elected", xlog.U64("leader", newLeader))
 				}
 				b.ready.Store(true)
 			}
@@ -108,9 +121,7 @@ func (b *broker) processRaftEntry(entry raftpb.Entry) {
 		case raftpb.ConfChangeAddNode:
 			b.clusterSize = b.peers.Len() + 1
 		case raftpb.ConfChangeRemoveNode:
-			if b.peers.Delete(cc.NodeID) {
-				b.logger.Info("peer deleted", xlog.Peer(cc.NodeID))
-			}
+			b.removePeer(cc.NodeID)
 		}
 	}
 }
@@ -151,44 +162,83 @@ func (b *broker) processRaftData(data []byte) {
 		return
 	}
 }
+func (b *broker) removePeer(id uint64) {
+	b.raftLock.Lock()
+	if userClients, ok := b.userClients.Get(id); ok {
+		userClients.Range(func(uid string, m *safe.Map[string, string]) bool {
+			m.Range(func(cid string, net string) bool {
+				b.clientChannels.Delete(cid)
+				return true
+			})
+			return true
+		})
+		b.userClients.Delete(id)
+	}
+	b.channelClients.Delete(id)
+	b.raftLock.Unlock()
+	if b.peers.Delete(id) {
+		b.logger.Info("peer deleted", xlog.Peer(id))
+	}
+}
 
 func (b *broker) raftUserOpened(op *userOpenedOp) {
-	b.userClients.SetKey(op.uid, op.cid, idAndNet{
-		id:  op.brokerID,
-		net: op.net,
-	})
+	b.raftLock.Lock()
+	defer b.raftLock.Unlock()
+	userClients, _ := b.userClients.GetOrSet(op.brokerID, &safe.KeyMap[string]{})
+	userClients.SetKey(op.uid, op.cid, op.net)
+	channelClients, _ := b.channelClients.GetOrSet(op.brokerID, &safe.KeyMap[string]{})
 	if chs, err := b.handler.GetChannels(op.uid); err == nil {
 		for _, ch := range chs {
 			b.clientChannels.SetKey(op.cid, ch, struct{}{})
-			b.channelClients.SetKey(ch, op.cid, idAndNet{id: op.brokerID, net: op.net})
+			channelClients.SetKey(ch, op.cid, op.net)
 		}
 	}
 }
 
 func (b *broker) raftUserClosed(op *userClosedOp) {
-	b.userClients.DeleteKey(op.uid, op.cid)
+	b.raftLock.Lock()
+	defer b.raftLock.Unlock()
+	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
+		value.DeleteKey(op.uid, op.cid)
+		return true
+	})
 	b.clientChannels.RangeKey(op.cid, func(channel string, _ struct{}) bool {
-		b.channelClients.DeleteKey(channel, op.cid)
+		b.channelClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
+			value.DeleteKey(channel, op.cid)
+			return true
+		})
 		return true
 	})
 	b.clientChannels.Delete(op.cid)
 }
 
 func (b *broker) raftJoinChannel(op *joinChannelOp) {
-	b.userClients.RangeKey(op.uid, func(cid string, idnet idAndNet) bool {
-		for _, ch := range op.channels {
-			b.channelClients.SetKey(ch, cid, idnet)
-			b.clientChannels.SetKey(cid, ch, struct{}{})
-		}
+	b.raftLock.Lock()
+	defer b.raftLock.Unlock()
+	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
+		channelClients, _ := b.channelClients.GetOrSet(id, &safe.KeyMap[string]{})
+		value.RangeKey(op.uid, func(cid string, net string) bool {
+			for _, ch := range op.channels {
+				channelClients.SetKey(ch, cid, net)
+				b.clientChannels.SetKey(cid, ch, struct{}{})
+			}
+			return true
+		})
 		return true
 	})
 }
 func (b *broker) raftLeaveChannel(op *leaveChannelOp) {
-	b.userClients.RangeKey(op.uid, func(cid string, idnet idAndNet) bool {
-		for _, ch := range op.channels {
-			b.channelClients.DeleteKey(ch, cid)
-			b.clientChannels.DeleteKey(cid, ch)
-		}
+	b.raftLock.Lock()
+	defer b.raftLock.Unlock()
+	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
+		channelClients, _ := b.channelClients.GetOrSet(id, &safe.KeyMap[string]{})
+		value.RangeKey(op.uid, func(cid string, net string) bool {
+			for _, ch := range op.channels {
+				channelClients.DeleteKey(ch, cid)
+				b.clientChannels.DeleteKey(cid, ch)
+			}
+			return true
+		})
 		return true
 	})
 }
@@ -200,18 +250,18 @@ func (b *broker) submitRaftOp(ctx context.Context, op opdata) error {
 	b.raftNode.Propose(ctx, enc.Bytes())
 	return nil
 }
-func (b *broker) addRaftNode(ctx context.Context, id uint64) {
+func (b *broker) addRaftNode(ctx context.Context, id uint64) error {
 	cc := raftpb.ConfChange{
 		Type:   raftpb.ConfChangeAddNode,
 		NodeID: id,
 	}
-	b.raftNode.ProposeConfChange(ctx, cc)
+	return b.raftNode.ProposeConfChange(ctx, cc)
 }
 
-func (b *broker) removeRaftNode(ctx context.Context, id uint64) {
+func (b *broker) removeRaftNode(ctx context.Context, id uint64) error {
 	cc := raftpb.ConfChange{
 		Type:   raftpb.ConfChangeRemoveNode,
 		NodeID: id,
 	}
-	b.raftNode.ProposeConfChange(ctx, cc)
+	return b.raftNode.ProposeConfChange(ctx, cc)
 }
