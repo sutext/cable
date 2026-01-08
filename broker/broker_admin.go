@@ -38,6 +38,11 @@ func (b *broker) inspect() *protos.Status {
 	}
 	firstIndex, _ := b.raftStorage.FirstIndex()
 	lastIndex, _ := b.raftStorage.LastIndex()
+	var snapIndex uint64
+	snap, err := b.raftStorage.Snapshot()
+	if err == nil {
+		snapIndex = snap.Metadata.Index
+	}
 	return &protos.Status{
 		Id:                  b.id,
 		UserCount:           userCount,
@@ -48,7 +53,7 @@ func (b *broker) inspect() *protos.Status {
 		RaftTerm:            status.Term,
 		RaftApplied:         status.Applied,
 		RaftProgress:        progress,
-		RaftSnapIndex:       b.snapshotIndex,
+		RaftSnapIndex:       snapIndex,
 		RaftStoreFirstIndex: firstIndex,
 		RaftStoreLastIndex:  lastIndex,
 	}
