@@ -394,6 +394,9 @@ type snapshot struct {
 }
 
 func (b *broker) attemptSnapshot() {
+	if !b.isLeader.Load() {
+		return
+	}
 	if b.appliedIndex-b.snapshotIndex <= 1024 {
 		return
 	}
