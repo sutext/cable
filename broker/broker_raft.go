@@ -205,7 +205,7 @@ func (b *broker) raftLoop() {
 				if err := b.raftStorage.ApplySnapshot(rd.Snapshot); err != nil {
 					b.logger.Error("Failed to apply snapshot", xlog.Err(err))
 				}
-				b.applyRaftSnapshot(rd.Snapshot)
+				// b.applyRaftSnapshot(rd.Snapshot)
 			}
 			if len(rd.Entries) > 0 {
 				if err := b.raftStorage.Append(rd.Entries); err != nil {
@@ -216,33 +216,26 @@ func (b *broker) raftLoop() {
 				b.applyRafttEntries(b.entriesToApply(rd.CommittedEntries))
 			}
 			if rd.SoftState != nil {
-				newLeader := rd.SoftState.Lead
-				if b.raftLeader.Load() != newLeader {
-					b.raftLeader.Store(newLeader)
-					b.isLeader.Store(b.id == newLeader)
-					b.logger.Info("New leader elected", xlog.U64("leader", newLeader))
-				}
-				b.ready.Store(true)
+				b.applySoftState(rd.SoftState)
 			}
-			for _, msg := range rd.Messages {
-				if peer, ok := b.peers.Get(msg.To); ok {
-					if err := peer.sendRaftMessage(context.Background(), msg); err != nil {
-						b.logger.Error("Failed to send raft message to peer", xlog.Err(err))
-					}
-				}
-				if msg.Type == raftpb.MsgHeartbeat {
-					//TODO
-				}
+			if len(rd.Messages) > 0 {
+				b.sendRaftMessags(rd.Messages)
 			}
 			// b.attemptSnapshot()
 			b.raftNode.Advance()
 		}
 	}
 }
-func (b *broker) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
-	if len(ents) == 0 {
-		return ents
+func (b *broker) applySoftState(ss *raft.SoftState) {
+	newLeader := ss.Lead
+	if b.raftLeader.Load() != newLeader {
+		b.raftLeader.Store(newLeader)
+		b.isLeader.Store(b.id == newLeader)
+		b.logger.Info("New leader elected", xlog.U64("leader", newLeader))
 	}
+	b.ready.Store(true)
+}
+func (b *broker) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
 	firstIdx := ents[0].Index
 	if firstIdx > b.appliedIndex+1 {
 		panic("raft log entries are missing")
@@ -253,6 +246,7 @@ func (b *broker) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
 	return nents
 }
 func (b *broker) applyRafttEntries(entries []raftpb.Entry) {
+	entries = b.entriesToApply(entries)
 	for _, entry := range entries {
 		switch entry.Type {
 		case raftpb.EntryNormal:
@@ -378,6 +372,18 @@ func (b *broker) applyRemoveNode(id uint64) {
 	b.channelClients.Delete(id)
 	if b.peers.Delete(id) {
 		b.logger.Info("peer deleted", xlog.Peer(id))
+	}
+}
+func (b *broker) sendRaftMessags(msgs []raftpb.Message) {
+	for _, msg := range msgs {
+		if peer, ok := b.peers.Get(msg.To); ok {
+			if msg.Type == raftpb.MsgSnap {
+				msg.Snapshot.Metadata.ConfState = *b.confState
+			}
+			if err := peer.sendRaftMessage(context.Background(), msg); err != nil {
+				b.logger.Error("Failed to send raft message to peer", xlog.Err(err))
+			}
+		}
 	}
 }
 
