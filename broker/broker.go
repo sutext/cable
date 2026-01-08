@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"go.etcd.io/raft/v3"
 	"go.etcd.io/raft/v3/raftpb"
@@ -137,7 +138,7 @@ func (b *broker) Start() error {
 			panic(err)
 		}
 	}()
-	go b.autoDiscovery()
+	time.AfterFunc(time.Second, b.autoDiscovery)
 	return nil
 }
 
