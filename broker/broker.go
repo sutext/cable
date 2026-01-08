@@ -359,11 +359,16 @@ func (b *broker) onUserConnect(p *packet.Connect, net string) packet.ConnectCode
 		}
 		return true
 	})
+	chs, err := b.handler.GetChannels(p.Identity.UserID)
+	if err != nil {
+		chs = []string{}
+	}
 	op := &userOpenedOp{
 		uid:      p.Identity.UserID,
 		cid:      p.Identity.ClientID,
 		net:      string(net),
-		brokerID: b.id,
+		nodeID:   b.id,
+		channels: chs,
 	}
 	if err := b.submitRaftOp(context.Background(), op); err != nil {
 		b.logger.Error("Failed to submit user connect op", xlog.Err(err))

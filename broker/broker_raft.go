@@ -30,7 +30,8 @@ type userOpenedOp struct {
 	uid      string
 	cid      string
 	net      string
-	brokerID uint64
+	nodeID   uint64
+	channels []string
 }
 
 func (op *userOpenedOp) opt() optype {
@@ -40,7 +41,8 @@ func (op *userOpenedOp) WriteTo(e coder.Encoder) error {
 	e.WriteString(op.uid)
 	e.WriteString(op.cid)
 	e.WriteString(op.net)
-	e.WriteUInt64(op.brokerID)
+	e.WriteUInt64(op.nodeID)
+	e.WriteStrings(op.channels)
 	return nil
 }
 func (op *userOpenedOp) ReadFrom(d coder.Decoder) error {
@@ -57,7 +59,11 @@ func (op *userOpenedOp) ReadFrom(d coder.Decoder) error {
 	if err != nil {
 		return err
 	}
-	op.brokerID, err = d.ReadUInt64()
+	op.nodeID, err = d.ReadUInt64()
+	if err != nil {
+		return err
+	}
+	op.channels, err = d.ReadStrings()
 	return err
 }
 
@@ -296,14 +302,12 @@ func (b *broker) applyRaftOp(data []byte) {
 	}
 }
 func (b *broker) userOpenedOp(op *userOpenedOp) {
-	userClients, _ := b.userClients.GetOrSet(op.brokerID, &safe.KeyMap[string]{})
+	userClients, _ := b.userClients.GetOrSet(op.nodeID, &safe.KeyMap[string]{})
 	userClients.SetKey(op.uid, op.cid, op.net)
-	channelClients, _ := b.channelClients.GetOrSet(op.brokerID, &safe.KeyMap[string]{})
-	if chs, err := b.handler.GetChannels(op.uid); err == nil {
-		for _, ch := range chs {
-			b.clientChannels.SetKey(op.cid, ch, struct{}{})
-			channelClients.SetKey(ch, op.cid, op.net)
-		}
+	channelClients, _ := b.channelClients.GetOrSet(op.nodeID, &safe.KeyMap[string]{})
+	for _, ch := range op.channels {
+		b.clientChannels.SetKey(op.cid, ch, struct{}{})
+		channelClients.SetKey(ch, op.cid, op.net)
 	}
 }
 
