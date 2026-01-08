@@ -410,15 +410,15 @@ func (x *RaftProgress) GetState() string {
 type Status struct {
 	state         protoimpl.MessageState   `protogen:"open.v1"`
 	Id            uint64                   `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	UserCount     int32                    `protobuf:"varint,2,opt,name=user_count,json=userCount,proto3" json:"user_count,omitempty"`
-	ClientCount   int32                    `protobuf:"varint,3,opt,name=client_count,json=clientCount,proto3" json:"client_count,omitempty"`
-	ClusterSize   int32                    `protobuf:"varint,4,opt,name=cluster_size,json=clusterSize,proto3" json:"cluster_size,omitempty"`
-	ChannelCount  int32                    `protobuf:"varint,5,opt,name=channel_count,json=channelCount,proto3" json:"channel_count,omitempty"`
-	RaftState     string                   `protobuf:"bytes,6,opt,name=raft_state,json=raftState,proto3" json:"raft_state,omitempty"`
-	RaftTerm      uint64                   `protobuf:"varint,7,opt,name=raft_term,json=raftTerm,proto3" json:"raft_term,omitempty"`
-	AppliedIndex  uint64                   `protobuf:"varint,8,opt,name=applied_index,json=appliedIndex,proto3" json:"applied_index,omitempty"`
-	LeadRansferee uint64                   `protobuf:"varint,9,opt,name=lead_ransferee,json=leadRansferee,proto3" json:"lead_ransferee,omitempty"`
-	Progress      map[uint64]*RaftProgress `protobuf:"bytes,10,rep,name=progress,proto3" json:"progress,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	RaftState     string                   `protobuf:"bytes,2,opt,name=raft_state,json=raftState,proto3" json:"raft_state,omitempty"`
+	RaftTerm      uint64                   `protobuf:"varint,3,opt,name=raft_term,json=raftTerm,proto3" json:"raft_term,omitempty"`
+	RaftApplied   uint64                   `protobuf:"varint,4,opt,name=raft_applied,json=raftApplied,proto3" json:"raft_applied,omitempty"`
+	RaftSnapIndex uint64                   `protobuf:"varint,5,opt,name=raft_snap_index,json=raftSnapIndex,proto3" json:"raft_snap_index,omitempty"`
+	ClientCount   int32                    `protobuf:"varint,6,opt,name=client_count,json=clientCount,proto3" json:"client_count,omitempty"`
+	ClusterSize   int32                    `protobuf:"varint,7,opt,name=cluster_size,json=clusterSize,proto3" json:"cluster_size,omitempty"`
+	UserCount     map[uint64]int32         `protobuf:"bytes,8,rep,name=user_count,json=userCount,proto3" json:"user_count,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	ChannelCount  map[uint64]int32         `protobuf:"bytes,9,rep,name=channel_count,json=channelCount,proto3" json:"channel_count,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	RaftProgress  map[uint64]*RaftProgress `protobuf:"bytes,10,rep,name=raft_progress,json=raftProgress,proto3" json:"raft_progress,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -460,9 +460,30 @@ func (x *Status) GetId() uint64 {
 	return 0
 }
 
-func (x *Status) GetUserCount() int32 {
+func (x *Status) GetRaftState() string {
 	if x != nil {
-		return x.UserCount
+		return x.RaftState
+	}
+	return ""
+}
+
+func (x *Status) GetRaftTerm() uint64 {
+	if x != nil {
+		return x.RaftTerm
+	}
+	return 0
+}
+
+func (x *Status) GetRaftApplied() uint64 {
+	if x != nil {
+		return x.RaftApplied
+	}
+	return 0
+}
+
+func (x *Status) GetRaftSnapIndex() uint64 {
+	if x != nil {
+		return x.RaftSnapIndex
 	}
 	return 0
 }
@@ -481,44 +502,23 @@ func (x *Status) GetClusterSize() int32 {
 	return 0
 }
 
-func (x *Status) GetChannelCount() int32 {
+func (x *Status) GetUserCount() map[uint64]int32 {
+	if x != nil {
+		return x.UserCount
+	}
+	return nil
+}
+
+func (x *Status) GetChannelCount() map[uint64]int32 {
 	if x != nil {
 		return x.ChannelCount
 	}
-	return 0
+	return nil
 }
 
-func (x *Status) GetRaftState() string {
+func (x *Status) GetRaftProgress() map[uint64]*RaftProgress {
 	if x != nil {
-		return x.RaftState
-	}
-	return ""
-}
-
-func (x *Status) GetRaftTerm() uint64 {
-	if x != nil {
-		return x.RaftTerm
-	}
-	return 0
-}
-
-func (x *Status) GetAppliedIndex() uint64 {
-	if x != nil {
-		return x.AppliedIndex
-	}
-	return 0
-}
-
-func (x *Status) GetLeadRansferee() uint64 {
-	if x != nil {
-		return x.LeadRansferee
-	}
-	return 0
-}
-
-func (x *Status) GetProgress() map[uint64]*RaftProgress {
-	if x != nil {
-		return x.Progress
+		return x.RaftProgress
 	}
 	return nil
 }
@@ -556,22 +556,28 @@ const file_broker_protos_peer_proto_rawDesc = "" +
 	"\fRaftProgress\x12\x14\n" +
 	"\x05match\x18\x02 \x01(\x04R\x05match\x12\x12\n" +
 	"\x04next\x18\x03 \x01(\x04R\x04next\x12\x14\n" +
-	"\x05state\x18\x04 \x01(\tR\x05state\"\xb7\x03\n" +
+	"\x05state\x18\x04 \x01(\tR\x05state\"\x87\x05\n" +
 	"\x06Status\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1d\n" +
 	"\n" +
-	"user_count\x18\x02 \x01(\x05R\tuserCount\x12!\n" +
-	"\fclient_count\x18\x03 \x01(\x05R\vclientCount\x12!\n" +
-	"\fcluster_size\x18\x04 \x01(\x05R\vclusterSize\x12#\n" +
-	"\rchannel_count\x18\x05 \x01(\x05R\fchannelCount\x12\x1d\n" +
+	"raft_state\x18\x02 \x01(\tR\traftState\x12\x1b\n" +
+	"\traft_term\x18\x03 \x01(\x04R\braftTerm\x12!\n" +
+	"\fraft_applied\x18\x04 \x01(\x04R\vraftApplied\x12&\n" +
+	"\x0fraft_snap_index\x18\x05 \x01(\x04R\rraftSnapIndex\x12!\n" +
+	"\fclient_count\x18\x06 \x01(\x05R\vclientCount\x12!\n" +
+	"\fcluster_size\x18\a \x01(\x05R\vclusterSize\x12<\n" +
 	"\n" +
-	"raft_state\x18\x06 \x01(\tR\traftState\x12\x1b\n" +
-	"\traft_term\x18\a \x01(\x04R\braftTerm\x12#\n" +
-	"\rapplied_index\x18\b \x01(\x04R\fappliedIndex\x12%\n" +
-	"\x0elead_ransferee\x18\t \x01(\x04R\rleadRansferee\x128\n" +
-	"\bprogress\x18\n" +
-	" \x03(\v2\x1c.protos.Status.ProgressEntryR\bprogress\x1aQ\n" +
-	"\rProgressEntry\x12\x10\n" +
+	"user_count\x18\b \x03(\v2\x1d.protos.Status.UserCountEntryR\tuserCount\x12E\n" +
+	"\rchannel_count\x18\t \x03(\v2 .protos.Status.ChannelCountEntryR\fchannelCount\x12E\n" +
+	"\rraft_progress\x18\n" +
+	" \x03(\v2 .protos.Status.RaftProgressEntryR\fraftProgress\x1a<\n" +
+	"\x0eUserCountEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a?\n" +
+	"\x11ChannelCountEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1aU\n" +
+	"\x11RaftProgressEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12*\n" +
 	"\x05value\x18\x02 \x01(\v2\x14.protos.RaftProgressR\x05value:\x028\x012\xd1\x02\n" +
 	"\vPeerService\x12*\n" +
@@ -595,7 +601,7 @@ func file_broker_protos_peer_proto_rawDescGZIP() []byte {
 	return file_broker_protos_peer_proto_rawDescData
 }
 
-var file_broker_protos_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
+var file_broker_protos_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
 var file_broker_protos_peer_proto_goTypes = []any{
 	(*Empty)(nil),        // 0: protos.Empty
 	(*IsOnlineReq)(nil),  // 1: protos.IsOnlineReq
@@ -609,31 +615,35 @@ var file_broker_protos_peer_proto_goTypes = []any{
 	nil,                  // 9: protos.IsOnlineReq.TargetsEntry
 	nil,                  // 10: protos.MessageReq.TargetsEntry
 	nil,                  // 11: protos.KickConnReq.TargetsEntry
-	nil,                  // 12: protos.Status.ProgressEntry
+	nil,                  // 12: protos.Status.UserCountEntry
+	nil,                  // 13: protos.Status.ChannelCountEntry
+	nil,                  // 14: protos.Status.RaftProgressEntry
 }
 var file_broker_protos_peer_proto_depIdxs = []int32{
 	9,  // 0: protos.IsOnlineReq.targets:type_name -> protos.IsOnlineReq.TargetsEntry
 	10, // 1: protos.MessageReq.targets:type_name -> protos.MessageReq.TargetsEntry
 	11, // 2: protos.KickConnReq.targets:type_name -> protos.KickConnReq.TargetsEntry
-	12, // 3: protos.Status.progress:type_name -> protos.Status.ProgressEntry
-	7,  // 4: protos.Status.ProgressEntry.value:type_name -> protos.RaftProgress
-	0,  // 5: protos.PeerService.Inspect:input_type -> protos.Empty
-	1,  // 6: protos.PeerService.IsOnline:input_type -> protos.IsOnlineReq
-	5,  // 7: protos.PeerService.KickConn:input_type -> protos.KickConnReq
-	3,  // 8: protos.PeerService.SendToAll:input_type -> protos.MessageReq
-	3,  // 9: protos.PeerService.SendToTargets:input_type -> protos.MessageReq
-	6,  // 10: protos.PeerService.SendRaftMessage:input_type -> protos.RaftMessage
-	8,  // 11: protos.PeerService.Inspect:output_type -> protos.Status
-	2,  // 12: protos.PeerService.IsOnline:output_type -> protos.IsOnlineResp
-	0,  // 13: protos.PeerService.KickConn:output_type -> protos.Empty
-	4,  // 14: protos.PeerService.SendToAll:output_type -> protos.MessageResp
-	4,  // 15: protos.PeerService.SendToTargets:output_type -> protos.MessageResp
-	0,  // 16: protos.PeerService.SendRaftMessage:output_type -> protos.Empty
-	11, // [11:17] is the sub-list for method output_type
-	5,  // [5:11] is the sub-list for method input_type
-	5,  // [5:5] is the sub-list for extension type_name
-	5,  // [5:5] is the sub-list for extension extendee
-	0,  // [0:5] is the sub-list for field type_name
+	12, // 3: protos.Status.user_count:type_name -> protos.Status.UserCountEntry
+	13, // 4: protos.Status.channel_count:type_name -> protos.Status.ChannelCountEntry
+	14, // 5: protos.Status.raft_progress:type_name -> protos.Status.RaftProgressEntry
+	7,  // 6: protos.Status.RaftProgressEntry.value:type_name -> protos.RaftProgress
+	0,  // 7: protos.PeerService.Inspect:input_type -> protos.Empty
+	1,  // 8: protos.PeerService.IsOnline:input_type -> protos.IsOnlineReq
+	5,  // 9: protos.PeerService.KickConn:input_type -> protos.KickConnReq
+	3,  // 10: protos.PeerService.SendToAll:input_type -> protos.MessageReq
+	3,  // 11: protos.PeerService.SendToTargets:input_type -> protos.MessageReq
+	6,  // 12: protos.PeerService.SendRaftMessage:input_type -> protos.RaftMessage
+	8,  // 13: protos.PeerService.Inspect:output_type -> protos.Status
+	2,  // 14: protos.PeerService.IsOnline:output_type -> protos.IsOnlineResp
+	0,  // 15: protos.PeerService.KickConn:output_type -> protos.Empty
+	4,  // 16: protos.PeerService.SendToAll:output_type -> protos.MessageResp
+	4,  // 17: protos.PeerService.SendToTargets:output_type -> protos.MessageResp
+	0,  // 18: protos.PeerService.SendRaftMessage:output_type -> protos.Empty
+	13, // [13:19] is the sub-list for method output_type
+	7,  // [7:13] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_broker_protos_peer_proto_init() }
@@ -647,7 +657,7 @@ func file_broker_protos_peer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_broker_protos_peer_proto_rawDesc), len(file_broker_protos_peer_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   13,
+			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

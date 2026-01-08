@@ -15,13 +15,14 @@ import (
 )
 
 func (b *broker) inspect() *protos.Status {
-	var userCount, channelCount int32
+	userCount := make(map[uint64]int32)
 	b.userClients.Range(func(key uint64, value *safe.KeyMap[string]) bool {
-		userCount += value.Len()
+		userCount[key] = value.Len()
 		return true
 	})
+	channelCount := make(map[uint64]int32)
 	b.channelClients.Range(func(key uint64, value *safe.KeyMap[string]) bool {
-		channelCount += value.Len()
+		channelCount[key] = value.Len()
 		return true
 	})
 	status := b.raftNode.Status()
@@ -43,9 +44,9 @@ func (b *broker) inspect() *protos.Status {
 		ChannelCount:  channelCount,
 		RaftState:     status.RaftState.String(),
 		RaftTerm:      status.Term,
-		AppliedIndex:  status.Applied,
-		LeadRansferee: status.LeadTransferee,
-		Progress:      progress,
+		RaftApplied:   status.Applied,
+		RaftProgress:  progress,
+		RaftSnapIndex: b.snapshotIndex,
 	}
 }
 
