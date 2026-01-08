@@ -213,7 +213,7 @@ func (b *broker) raftLoop() {
 				}
 			}
 			if len(rd.CommittedEntries) > 0 {
-				b.applyRafttEntries(rd.CommittedEntries)
+				b.applyRafttEntries(b.entriesToApply(rd.CommittedEntries))
 			}
 			if rd.SoftState != nil {
 				newLeader := rd.SoftState.Lead
@@ -234,12 +234,24 @@ func (b *broker) raftLoop() {
 					//TODO
 				}
 			}
-			b.attemptSnapshot()
+			// b.attemptSnapshot()
 			b.raftNode.Advance()
 		}
 	}
 }
-
+func (b *broker) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
+	if len(ents) == 0 {
+		return ents
+	}
+	firstIdx := ents[0].Index
+	if firstIdx > b.appliedIndex+1 {
+		panic("raft log entries are missing")
+	}
+	if b.appliedIndex-firstIdx+1 < uint64(len(ents)) {
+		nents = ents[b.appliedIndex-firstIdx+1:]
+	}
+	return nents
+}
 func (b *broker) applyRafttEntries(entries []raftpb.Entry) {
 	for _, entry := range entries {
 		switch entry.Type {

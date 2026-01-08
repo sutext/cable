@@ -361,6 +361,7 @@ func (b *broker) onUserConnect(p *packet.Connect, net string) packet.ConnectCode
 	})
 	chs, err := b.handler.GetChannels(p.Identity.UserID)
 	if err != nil {
+		b.logger.Error("get channels failed", xlog.Err(err))
 		chs = []string{}
 	}
 	op := &userOpenedOp{
