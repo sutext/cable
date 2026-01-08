@@ -221,7 +221,7 @@ func (b *broker) raftLoop() {
 			if len(rd.Messages) > 0 {
 				b.sendRaftMessags(rd.Messages)
 			}
-			// b.attemptSnapshot()
+			b.attemptSnapshot()
 			b.raftNode.Advance()
 		}
 	}
@@ -235,18 +235,18 @@ func (b *broker) applySoftState(ss *raft.SoftState) {
 	}
 	b.ready.Store(true)
 }
-func (b *broker) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
-	firstIdx := ents[0].Index
-	if firstIdx > b.appliedIndex+1 {
-		panic("raft log entries are missing")
-	}
-	if b.appliedIndex-firstIdx+1 < uint64(len(ents)) {
-		nents = ents[b.appliedIndex-firstIdx+1:]
-	}
-	return nents
-}
+
+//	func (b *broker) entriesToApply(ents []raftpb.Entry) (nents []raftpb.Entry) {
+//		firstIdx := ents[0].Index
+//		if firstIdx > b.appliedIndex+1 {
+//			panic("raft log entries are missing")
+//		}
+//		if b.appliedIndex-firstIdx+1 < uint64(len(ents)) {
+//			nents = ents[b.appliedIndex-firstIdx+1:]
+//		}
+//		return nents
+//	}
 func (b *broker) applyRafttEntries(entries []raftpb.Entry) {
-	entries = b.entriesToApply(entries)
 	for _, entry := range entries {
 		switch entry.Type {
 		case raftpb.EntryNormal:
@@ -457,9 +457,6 @@ func (b *broker) snapshotData() ([]byte, error) {
 	return json.Marshal(snapshot)
 }
 func (b *broker) applyRaftSnapshot(snap raftpb.Snapshot) {
-	if raft.IsEmptySnap(snap) {
-		return
-	}
 	b.logger.Info("Publishing snapshot", xlog.U64("index", snap.Metadata.Index))
 	if snap.Metadata.Index <= b.appliedIndex {
 		b.logger.Info("Snapshot is older than applied index, skipping")
