@@ -23,7 +23,7 @@ func BenchmarkMap(b *testing.B) {
 			m.Set("foo", "bar")
 		}
 	})
-	b.Run("safe.XMap.Write", func(b *testing.B) {
+	b.Run("safe.Map.Write", func(b *testing.B) {
 		m := NewMap[string, string]()
 		for b.Loop() {
 			m.Set("foo", "bar")
@@ -36,7 +36,7 @@ func BenchmarkMap(b *testing.B) {
 			m.Get("foo")
 		}
 	})
-	b.Run("safe.XMap.Read", func(b *testing.B) {
+	b.Run("safe.Map.Read", func(b *testing.B) {
 		m := NewMap[string, string]()
 		m.Set("foo", "bar")
 		for b.Loop() {

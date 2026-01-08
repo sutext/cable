@@ -33,7 +33,17 @@ message MessageResp{
 message KickConnReq{
   map<string,string> targets = 1;
 }
-
+// RaftMessage represents a Raft message
+message RaftMessage {
+  // Raft message data in binary format
+  bytes data = 1;
+}
+/// Progress represents the progress of raft node.
+message RaftProgress {
+  uint64 match = 2;
+  uint64 next = 3;
+  string state = 4;
+}
 /// Inspects is the response message for Inspect RPC.
 message Status{
  uint64 id = 1;
@@ -45,13 +55,7 @@ message Status{
  uint64 raft_term = 7;
  uint64 applied_index = 8;
  uint64 lead_ransferee = 9;
- map<uint64,string> progress = 10;
-}
-
-// RaftMessage represents a Raft message
-message RaftMessage {
-  // Raft message data in binary format
-  bytes data = 1;
+ map<uint64,RaftProgress> progress = 10;
 }
 
 // The greeting service definition.

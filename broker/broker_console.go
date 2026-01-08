@@ -3,7 +3,6 @@ package broker
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -26,10 +25,14 @@ func (b *broker) inspect() *protos.Status {
 		return true
 	})
 	status := b.raftNode.Status()
-	progress := make(map[uint64]string)
+	progress := make(map[uint64]*protos.RaftProgress)
 	if status.Progress != nil {
 		for id, p := range status.Progress {
-			progress[id] = fmt.Sprintf("match=%d,next=%d,state=%s", p.Match, p.Next, p.State)
+			progress[id] = &protos.RaftProgress{
+				Match: p.Match,
+				Next:  p.Next,
+				State: p.State.String(),
+			}
 		}
 	}
 	return &protos.Status{

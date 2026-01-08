@@ -2,6 +2,7 @@ package broker
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"go.etcd.io/raft/v3"
@@ -11,13 +12,144 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
-func (b *broker) compactRaftStorage() {
-	idx, err := b.raftStorage.LastIndex()
+type optype uint8
+
+const (
+	optypeUserOpened optype = iota
+	optypeUserClosed
+	optypeJoinChannel
+	optypeLeaveChannel
+)
+
+type opdata interface {
+	coder.Codable
+	opt() optype
+}
+
+type userOpenedOp struct {
+	uid      string
+	cid      string
+	net      string
+	brokerID uint64
+}
+
+func (op *userOpenedOp) opt() optype {
+	return optypeUserOpened
+}
+func (op *userOpenedOp) WriteTo(e coder.Encoder) error {
+	e.WriteString(op.uid)
+	e.WriteString(op.cid)
+	e.WriteString(op.net)
+	e.WriteUInt64(op.brokerID)
+	return nil
+}
+func (op *userOpenedOp) ReadFrom(d coder.Decoder) error {
+	var err error
+	op.uid, err = d.ReadString()
 	if err != nil {
-		b.logger.Error("Failed to get last index", xlog.Err(err))
-		return
+		return err
 	}
-	b.raftStorage.Compact(idx)
+	op.cid, err = d.ReadString()
+	if err != nil {
+		return err
+	}
+	op.net, err = d.ReadString()
+	if err != nil {
+		return err
+	}
+	op.brokerID, err = d.ReadUInt64()
+	return err
+}
+
+type userClosedOp struct {
+	uid string
+	cid string
+}
+
+func (op *userClosedOp) opt() optype {
+	return optypeUserClosed
+}
+func (op *userClosedOp) WriteTo(e coder.Encoder) error {
+	e.WriteString(op.uid)
+	e.WriteString(op.cid)
+	return nil
+}
+func (op *userClosedOp) ReadFrom(d coder.Decoder) error {
+	var err error
+	op.uid, err = d.ReadString()
+	if err != nil {
+		return err
+	}
+	op.cid, err = d.ReadString()
+	return err
+}
+
+type joinChannelOp struct {
+	uid      string
+	channels []string
+}
+
+func (op *joinChannelOp) opt() optype {
+	return optypeJoinChannel
+}
+func (op *joinChannelOp) WriteTo(e coder.Encoder) error {
+	e.WriteString(op.uid)
+	e.WriteStrings(op.channels)
+	return nil
+}
+func (op *joinChannelOp) ReadFrom(d coder.Decoder) error {
+	var err error
+	op.uid, err = d.ReadString()
+	if err != nil {
+		return err
+	}
+	op.channels, err = d.ReadStrings()
+	return err
+}
+
+type leaveChannelOp struct {
+	uid      string
+	channels []string
+}
+
+func (op *leaveChannelOp) opt() optype {
+	return optypeLeaveChannel
+}
+func (op *leaveChannelOp) WriteTo(e coder.Encoder) error {
+	e.WriteString(op.uid)
+	e.WriteStrings(op.channels)
+	return nil
+}
+func (op *leaveChannelOp) ReadFrom(d coder.Decoder) error {
+	var err error
+	op.uid, err = d.ReadString()
+	if err != nil {
+		return err
+	}
+	op.channels, err = d.ReadStrings()
+	return err
+}
+
+func (b *broker) submitRaftOp(ctx context.Context, op opdata) error {
+	enc := coder.NewEncoder()
+	enc.WriteUInt8(uint8(op.opt()))
+	op.WriteTo(enc)
+	b.raftNode.Propose(ctx, enc.Bytes())
+	return nil
+}
+func (b *broker) addRaftNode(ctx context.Context, id uint64) error {
+	cc := raftpb.ConfChange{
+		Type:   raftpb.ConfChangeAddNode,
+		NodeID: id,
+	}
+	return b.raftNode.ProposeConfChange(ctx, cc)
+}
+func (b *broker) removeRaftNode(ctx context.Context, id uint64) error {
+	cc := raftpb.ConfChange{
+		Type:   raftpb.ConfChangeRemoveNode,
+		NodeID: id,
+	}
+	return b.raftNode.ProposeConfChange(ctx, cc)
 }
 func (b *broker) startRaft(join bool) {
 	if b.raftNode != nil {
@@ -26,13 +158,13 @@ func (b *broker) startRaft(join bool) {
 	storage := raft.NewMemoryStorage()
 	b.raftStorage = storage
 	c := &raft.Config{
-		ID:              b.id,
-		ElectionTick:    10,
-		HeartbeatTick:   1,
-		Storage:         storage,
-		MaxSizePerMsg:   4096,
-		MaxInflightMsgs: 256,
-		Logger:          nil,
+		ID:                        b.id,
+		ElectionTick:              10,
+		HeartbeatTick:             1,
+		Storage:                   storage,
+		MaxSizePerMsg:             1024 * 1024,
+		MaxInflightMsgs:           256,
+		MaxUncommittedEntriesSize: 1 << 30,
 	}
 	if join {
 		b.raftNode = raft.RestartNode(c)
@@ -49,12 +181,11 @@ func (b *broker) startRaft(join bool) {
 }
 
 func (b *broker) raftLoop() {
-	b.lastLeader = time.Now()
 	ticker := time.NewTicker(time.Millisecond * 100)
 	defer ticker.Stop()
 	for {
 		select {
-		case <-b.stopRaft:
+		case <-b.raftStop:
 			return
 		case <-ticker.C:
 			b.raftNode.Tick()
@@ -64,21 +195,19 @@ func (b *broker) raftLoop() {
 					b.logger.Error("Failed to set hard state", xlog.Err(err))
 				}
 			}
+			if !raft.IsEmptySnap(rd.Snapshot) {
+				if err := b.raftStorage.ApplySnapshot(rd.Snapshot); err != nil {
+					b.logger.Error("Failed to apply snapshot", xlog.Err(err))
+				}
+				b.applyRaftSnapshot(rd.Snapshot)
+			}
 			if len(rd.Entries) > 0 {
 				if err := b.raftStorage.Append(rd.Entries); err != nil {
 					b.logger.Error("Failed to append entries", xlog.Err(err))
 				}
 			}
-			if !raft.IsEmptySnap(rd.Snapshot) {
-				if err := b.raftStorage.ApplySnapshot(rd.Snapshot); err != nil {
-					b.logger.Error("Failed to apply snapshot", xlog.Err(err))
-				}
-				if err := b.applySnapshot(rd.Snapshot); err != nil {
-					b.logger.Error("Failed to apply snapshot", xlog.Err(err))
-				}
-			}
-			for _, entry := range rd.CommittedEntries {
-				b.processRaftEntry(entry)
+			if len(rd.CommittedEntries) > 0 {
+				b.applyRafttEntries(rd.CommittedEntries)
 			}
 			if rd.SoftState != nil {
 				newLeader := rd.SoftState.Lead
@@ -96,37 +225,41 @@ func (b *broker) raftLoop() {
 					}
 				}
 				if msg.Type == raftpb.MsgHeartbeat {
-					b.lastLeader = time.Now()
+					//TODO
 				}
 			}
+			b.attemptSnapshot()
 			b.raftNode.Advance()
 		}
 	}
 }
 
-func (b *broker) processRaftEntry(entry raftpb.Entry) {
-	switch entry.Type {
-	case raftpb.EntryNormal:
-		if len(entry.Data) > 0 {
-			b.processRaftData(entry.Data)
-		}
-	case raftpb.EntryConfChange, raftpb.EntryConfChangeV2:
-		var cc raftpb.ConfChange
-		if err := cc.Unmarshal(entry.Data); err != nil {
-			b.logger.Error("Failed to unmarshal conf change", xlog.Err(err))
-			return
-		}
-		b.raftNode.ApplyConfChange(cc)
-		switch cc.Type {
-		case raftpb.ConfChangeAddNode:
-			b.clusterSize = b.peers.Len() + 1
-		case raftpb.ConfChangeRemoveNode:
-			b.removePeer(cc.NodeID)
+func (b *broker) applyRafttEntries(entries []raftpb.Entry) {
+	for _, entry := range entries {
+		switch entry.Type {
+		case raftpb.EntryNormal:
+			if len(entry.Data) > 0 {
+				b.applyRaftOp(entry.Data)
+			}
+		case raftpb.EntryConfChange, raftpb.EntryConfChangeV2:
+			var cc raftpb.ConfChange
+			if err := cc.Unmarshal(entry.Data); err != nil {
+				b.logger.Error("Failed to unmarshal conf change", xlog.Err(err))
+				return
+			}
+			b.confState = b.raftNode.ApplyConfChange(cc)
+			switch cc.Type {
+			case raftpb.ConfChangeAddNode:
+				b.clusterSize = b.peers.Len() + 1
+			case raftpb.ConfChangeRemoveNode:
+				b.applyRemoveNode(cc.NodeID)
+			}
 		}
 	}
+	b.appliedIndex = entries[len(entries)-1].Index
 }
 
-func (b *broker) processRaftData(data []byte) {
+func (b *broker) applyRaftOp(data []byte) {
 	opt := optype(data[0])
 	switch opt {
 	case optypeUserOpened:
@@ -135,55 +268,34 @@ func (b *broker) processRaftData(data []byte) {
 			b.logger.Error("Failed to unmarshal user opened op", xlog.Err(err))
 			return
 		}
-		b.raftUserOpened(op)
+		b.userOpenedOp(op)
 	case optypeUserClosed:
 		op := &userClosedOp{}
 		if err := coder.Unmarshal(data[1:], op); err != nil {
 			b.logger.Error("Failed to unmarshal user closed op", xlog.Err(err))
 			return
 		}
-		b.raftUserClosed(op)
+		b.userClosedOp(op)
 	case optypeJoinChannel:
 		op := &joinChannelOp{}
 		if err := coder.Unmarshal(data[1:], op); err != nil {
 			b.logger.Error("Failed to unmarshal join channel op", xlog.Err(err))
 			return
 		}
-		b.raftJoinChannel(op)
+		b.joinChannelOp(op)
 	case optypeLeaveChannel:
 		op := &leaveChannelOp{}
 		if err := coder.Unmarshal(data[1:], op); err != nil {
 			b.logger.Error("Failed to unmarshal leave channel op", xlog.Err(err))
 			return
 		}
-		b.raftLeaveChannel(op)
+		b.leaveChannelOp(op)
 	default:
 		b.logger.Error("Unknown operation type", xlog.U32("type", uint32(opt)))
 		return
 	}
 }
-func (b *broker) removePeer(id uint64) {
-	b.raftLock.Lock()
-	if userClients, ok := b.userClients.Get(id); ok {
-		userClients.Range(func(uid string, m *safe.Map[string, string]) bool {
-			m.Range(func(cid string, net string) bool {
-				b.clientChannels.Delete(cid)
-				return true
-			})
-			return true
-		})
-		b.userClients.Delete(id)
-	}
-	b.channelClients.Delete(id)
-	b.raftLock.Unlock()
-	if b.peers.Delete(id) {
-		b.logger.Info("peer deleted", xlog.Peer(id))
-	}
-}
-
-func (b *broker) raftUserOpened(op *userOpenedOp) {
-	b.raftLock.Lock()
-	defer b.raftLock.Unlock()
+func (b *broker) userOpenedOp(op *userOpenedOp) {
 	userClients, _ := b.userClients.GetOrSet(op.brokerID, &safe.KeyMap[string]{})
 	userClients.SetKey(op.uid, op.cid, op.net)
 	channelClients, _ := b.channelClients.GetOrSet(op.brokerID, &safe.KeyMap[string]{})
@@ -195,9 +307,7 @@ func (b *broker) raftUserOpened(op *userOpenedOp) {
 	}
 }
 
-func (b *broker) raftUserClosed(op *userClosedOp) {
-	b.raftLock.Lock()
-	defer b.raftLock.Unlock()
+func (b *broker) userClosedOp(op *userClosedOp) {
 	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
 		value.DeleteKey(op.uid, op.cid)
 		return true
@@ -212,9 +322,7 @@ func (b *broker) raftUserClosed(op *userClosedOp) {
 	b.clientChannels.Delete(op.cid)
 }
 
-func (b *broker) raftJoinChannel(op *joinChannelOp) {
-	b.raftLock.Lock()
-	defer b.raftLock.Unlock()
+func (b *broker) joinChannelOp(op *joinChannelOp) {
 	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
 		channelClients, _ := b.channelClients.GetOrSet(id, &safe.KeyMap[string]{})
 		value.RangeKey(op.uid, func(cid string, net string) bool {
@@ -227,9 +335,7 @@ func (b *broker) raftJoinChannel(op *joinChannelOp) {
 		return true
 	})
 }
-func (b *broker) raftLeaveChannel(op *leaveChannelOp) {
-	b.raftLock.Lock()
-	defer b.raftLock.Unlock()
+func (b *broker) leaveChannelOp(op *leaveChannelOp) {
 	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
 		channelClients, _ := b.channelClients.GetOrSet(id, &safe.KeyMap[string]{})
 		value.RangeKey(op.uid, func(cid string, net string) bool {
@@ -242,26 +348,122 @@ func (b *broker) raftLeaveChannel(op *leaveChannelOp) {
 		return true
 	})
 }
-
-func (b *broker) submitRaftOp(ctx context.Context, op opdata) error {
-	enc := coder.NewEncoder()
-	enc.WriteUInt8(uint8(op.opt()))
-	op.WriteTo(enc)
-	b.raftNode.Propose(ctx, enc.Bytes())
-	return nil
-}
-func (b *broker) addRaftNode(ctx context.Context, id uint64) error {
-	cc := raftpb.ConfChange{
-		Type:   raftpb.ConfChangeAddNode,
-		NodeID: id,
+func (b *broker) applyRemoveNode(id uint64) {
+	if userClients, ok := b.userClients.Get(id); ok {
+		userClients.Range(func(uid string, m *safe.Map[string, string]) bool {
+			m.Range(func(cid string, net string) bool {
+				b.clientChannels.Delete(cid)
+				return true
+			})
+			return true
+		})
+		b.userClients.Delete(id)
 	}
-	return b.raftNode.ProposeConfChange(ctx, cc)
+	b.channelClients.Delete(id)
+	if b.peers.Delete(id) {
+		b.logger.Info("peer deleted", xlog.Peer(id))
+	}
 }
 
-func (b *broker) removeRaftNode(ctx context.Context, id uint64) error {
-	cc := raftpb.ConfChange{
-		Type:   raftpb.ConfChangeRemoveNode,
-		NodeID: id,
+type snapshot struct {
+	UserClients    map[uint64]map[string]map[string]string `json:"user_clients"`
+	ChannelClients map[uint64]map[string]map[string]string `json:"channel_clients"`
+	ClientChannels map[string]map[string]struct{}          `json:"client_channels"`
+}
+
+func (b *broker) attemptSnapshot() {
+	if b.appliedIndex-b.snapshotIndex <= 1024 {
+		return
 	}
-	return b.raftNode.ProposeConfChange(ctx, cc)
+	data, err := b.snapshotData()
+	if err != nil {
+		panic(err)
+	}
+	_, err = b.raftStorage.CreateSnapshot(b.appliedIndex, b.confState, data)
+	if err != nil {
+		panic(err)
+	}
+	b.snapshotIndex = b.appliedIndex
+	// compactIndex := uint64(1)
+	// if b.appliedIndex > 1024 {
+	// 	compactIndex = b.appliedIndex - 1024
+	// }
+	// if err := b.raftStorage.Compact(compactIndex); err != nil {
+	// 	if !errors.Is(err, raft.ErrCompacted) {
+	// 		panic(err)
+	// 	}
+	// }
+}
+
+func (b *broker) snapshotData() ([]byte, error) {
+	userClients := make(map[uint64]map[string]map[string]string)
+	b.userClients.Range(func(id uint64, v *safe.KeyMap[string]) bool {
+		ucmap, ok := userClients[id]
+		if !ok {
+			ucmap = make(map[string]map[string]string)
+			userClients[id] = ucmap
+		}
+		v.Range(func(uid string, cids *safe.Map[string, string]) bool {
+			ucmap[uid] = cids.Load()
+			return true
+		})
+		return true
+	})
+	channelClients := make(map[uint64]map[string]map[string]string)
+	b.channelClients.Range(func(id uint64, v *safe.KeyMap[string]) bool {
+		ccmap, ok := channelClients[id]
+		if !ok {
+			ccmap = make(map[string]map[string]string)
+			channelClients[id] = ccmap
+		}
+		v.Range(func(cid string, uids *safe.Map[string, string]) bool {
+			ccmap[cid] = uids.Load()
+			return true
+		})
+		return true
+	})
+	clientChannels := make(map[string]map[string]struct{})
+	b.clientChannels.Range(func(cid string, v *safe.Map[string, struct{}]) bool {
+		clientChannels[cid] = v.Load()
+		return true
+	})
+	snapshot := snapshot{
+		UserClients:    userClients,
+		ChannelClients: channelClients,
+		ClientChannels: clientChannels,
+	}
+	return json.Marshal(snapshot)
+}
+func (b *broker) applyRaftSnapshot(snap raftpb.Snapshot) {
+	if raft.IsEmptySnap(snap) {
+		return
+	}
+	b.logger.Info("Publishing snapshot", xlog.U64("index", snap.Metadata.Index))
+	if snap.Metadata.Index <= b.appliedIndex {
+		b.logger.Info("Snapshot is older than applied index, skipping")
+		return
+	}
+	var s snapshot
+	if err := json.Unmarshal(snap.Data, &s); err != nil {
+		b.logger.Error("Failed to unmarshal snapshot", xlog.Err(err))
+		return
+	}
+	for id, ucmap := range s.UserClients {
+		userClients, _ := b.userClients.GetOrSet(id, &safe.KeyMap[string]{})
+		for uid, cids := range ucmap {
+			userClients.Set(uid, safe.NewMap(cids))
+		}
+	}
+	for id, ccmap := range s.ChannelClients {
+		channelClients, _ := b.channelClients.GetOrSet(id, &safe.KeyMap[string]{})
+		for cid, uids := range ccmap {
+			channelClients.Set(cid, safe.NewMap(uids))
+		}
+	}
+	for cid, ccs := range s.ClientChannels {
+		b.clientChannels.Set(cid, safe.NewMap(ccs))
+	}
+	b.confState = &snap.Metadata.ConfState
+	b.snapshotIndex = snap.Metadata.Index
+	b.appliedIndex = snap.Metadata.Index
 }

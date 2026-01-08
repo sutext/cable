@@ -2,15 +2,14 @@ package broker
 
 import (
 	"context"
-	"math/rand/v2"
 	"net/http"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"go.etcd.io/raft/v3"
+	"go.etcd.io/raft/v3/raftpb"
 	"sutext.github.io/cable/broker/protos"
-	"sutext.github.io/cable/internal/muticast"
+	"sutext.github.io/cable/internal/discovery"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
@@ -38,36 +37,37 @@ type broker struct {
 	peers          safe.RMap[uint64, *peerClient]
 	logger         *xlog.Logger
 	handler        Handler
-	muticast       muticast.Muticast
-	listeners      map[string]server.Server
 	peerPort       string
+	discovery      discovery.Discovery
+	listeners      map[string]server.Server
 	peerServer     *peerServer
 	httpServer     *http.Server
 	clusterSize    int32
-	userClients    safe.RMap[uint64, *safe.KeyMap[string]] //map[uid]map[cid]net
-	channelClients safe.RMap[uint64, *safe.KeyMap[string]] //map[channel]map[cid]net
+	userClients    safe.RMap[uint64, *safe.KeyMap[string]] //pid map[uid]map[cid]net
+	channelClients safe.RMap[uint64, *safe.KeyMap[string]] //pid map[channel]map[cid]net
 	clientChannels safe.KeyMap[struct{}]                   //map[cid]map[channel]net
 	requstHandlers safe.RMap[string, server.RequestHandler]
 	raftNode       raft.Node
-	raftLock       sync.Mutex
-	stopRaft       chan struct{}
+	raftStop       chan struct{}
 	raftStorage    *raft.MemoryStorage
 	raftLeader     atomic.Uint64
 	isLeader       atomic.Bool
-	lastLeader     time.Time
+	confState      *raftpb.ConfState
+	appliedIndex   uint64
+	snapshotIndex  uint64
 }
 
 func NewBroker(opts ...Option) Broker {
 	options := newOptions(opts...)
 	b := &broker{
 		id:          options.brokerID,
-		stopRaft:    make(chan struct{}),
+		raftStop:    make(chan struct{}),
 		clusterSize: options.clusterSize,
 	}
 	b.logger = xlog.With("BROKER", b.id)
 	b.handler = options.handler
-	b.muticast = muticast.New(b.id, options.peerPort)
-	b.muticast.OnRequest(func(id uint64, addr string) {
+	b.discovery = discovery.New(b.id, options.peerPort)
+	b.discovery.OnRequest(func(id uint64, addr string) {
 		b.addPeer(id, addr)
 	})
 	b.listeners = make(map[string]server.Server, len(options.listeners))
@@ -123,7 +123,7 @@ func (b *broker) Start() error {
 		}()
 	}
 	go func() {
-		if err := b.muticast.Serve(); err != nil {
+		if err := b.discovery.Serve(); err != nil {
 			panic(err)
 		}
 	}()
@@ -137,25 +137,26 @@ func (b *broker) Start() error {
 			panic(err)
 		}
 	}()
-	time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.autoDiscovery)
+	go b.autoDiscovery()
 	return nil
 }
 
 func (b *broker) autoDiscovery() {
-	m, err := b.muticast.Request()
+	m, err := b.discovery.Request()
 	if err != nil {
 		b.logger.Error("failed to sync broker", xlog.Err(err))
 	}
 	if len(m) == 0 {
 		b.logger.Warn("Auto discovery got empty endpoints")
-		time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.autoDiscovery)
+		go b.autoDiscovery()
+		return
 	}
 	for id, addr := range m {
 		b.addPeer(id, addr)
 	}
 	if b.peers.Len() < b.clusterSize-1 {
 		b.logger.Warn("Auto discovery got less than cluster size", xlog.I32("clusterSize", b.clusterSize), xlog.I32("peers", b.peers.Len()))
-		time.AfterFunc(time.Second*time.Duration(1+rand.IntN(4)), b.autoDiscovery)
+		go b.autoDiscovery()
 	} else if b.peers.Len() == b.clusterSize-1 {
 		b.startRaft(false)
 	} else {
@@ -169,7 +170,7 @@ func (b *broker) Shutdown(ctx context.Context) (err error) {
 			b.logger.Error("listener shutdown", xlog.Err(err))
 		}
 	}
-	if err = b.muticast.Shutdown(); err != nil {
+	if err = b.discovery.Shutdown(); err != nil {
 		b.logger.Error("muticast shutdown", xlog.Err(err))
 	}
 	if err = b.httpServer.Shutdown(ctx); err != nil {

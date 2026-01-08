@@ -1,4 +1,4 @@
-package muticast
+package discovery
 
 import (
 	"fmt"
@@ -11,14 +11,14 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
-type Muticast interface {
+type Discovery interface {
 	Serve() error
 	Request() (map[uint64]string, error)
 	OnRequest(func(uint64, string))
 	Shutdown() error
 }
 
-type muticast struct {
+type discovery struct {
 	id       uint64
 	ipaddr   string
 	mu       sync.Mutex
@@ -30,12 +30,12 @@ type muticast struct {
 	respChan chan *packet.Response
 }
 
-func New(id uint64, port string) Muticast {
+func New(id uint64, port string) Discovery {
 	ip, err := getLocalIP()
 	if err != nil {
 		panic(err)
 	}
-	m := &muticast{
+	m := &discovery{
 		id:     id,
 		ipaddr: fmt.Sprintf("%s%s", ip, port),
 		logger: xlog.With("GROUP", "MUTICAST"),
@@ -44,7 +44,7 @@ func New(id uint64, port string) Muticast {
 	return m
 }
 
-func (m *muticast) Serve() error {
+func (m *discovery) Serve() error {
 	listener, err := net.ListenMulticastUDP("udp", nil, m.addr)
 	if err != nil {
 		return err
@@ -102,15 +102,15 @@ func (m *muticast) Serve() error {
 	}
 }
 
-func (m *muticast) Shutdown() error {
+func (m *discovery) Shutdown() error {
 	err := m.conn.Close()
 	err = m.listener.Close()
 	return err
 }
-func (m *muticast) OnRequest(f func(uint64, string)) {
+func (m *discovery) OnRequest(f func(uint64, string)) {
 	m.req = f
 }
-func (m *muticast) listen() error {
+func (m *discovery) listen() error {
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 	if err != nil {
 		return err
@@ -135,7 +135,7 @@ func (m *muticast) listen() error {
 		m.respChan <- p.(*packet.Response)
 	}
 }
-func (m *muticast) Request() (r map[uint64]string, err error) {
+func (m *discovery) Request() (r map[uint64]string, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.respChan != nil {
@@ -150,7 +150,7 @@ func (m *muticast) Request() (r map[uint64]string, err error) {
 		return r, err
 	}
 	m.respChan = make(chan *packet.Response, 8)
-	time.AfterFunc(time.Second*6, func() {
+	time.AfterFunc(time.Second*5, func() {
 		close(m.respChan)
 		m.respChan = nil
 	})

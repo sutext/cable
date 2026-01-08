@@ -1,4 +1,4 @@
-package muticast
+package discovery
 
 import (
 	"testing"
