@@ -213,7 +213,7 @@ func (b *broker) raftLoop() {
 				}
 			}
 			if len(rd.CommittedEntries) > 0 {
-				b.applyRafttEntries(b.entriesToApply(rd.CommittedEntries))
+				b.applyRafttEntries(rd.CommittedEntries)
 			}
 			if rd.SoftState != nil {
 				b.applySoftState(rd.SoftState)

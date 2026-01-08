@@ -36,17 +36,21 @@ func (b *broker) inspect() *protos.Status {
 			}
 		}
 	}
+	firstIndex, _ := b.raftStorage.FirstIndex()
+	lastIndex, _ := b.raftStorage.LastIndex()
 	return &protos.Status{
-		Id:            b.id,
-		UserCount:     userCount,
-		ClientCount:   b.clientChannels.Len(),
-		ClusterSize:   b.clusterSize,
-		ChannelCount:  channelCount,
-		RaftState:     status.RaftState.String(),
-		RaftTerm:      status.Term,
-		RaftApplied:   status.Applied,
-		RaftProgress:  progress,
-		RaftSnapIndex: b.snapshotIndex,
+		Id:                  b.id,
+		UserCount:           userCount,
+		ClientCount:         b.clientChannels.Len(),
+		ClusterSize:         b.clusterSize,
+		ChannelCount:        channelCount,
+		RaftState:           status.RaftState.String(),
+		RaftTerm:            status.Term,
+		RaftApplied:         status.Applied,
+		RaftProgress:        progress,
+		RaftSnapIndex:       b.snapshotIndex,
+		RaftStoreFirstIndex: firstIndex,
+		RaftStoreLastIndex:  lastIndex,
 	}
 }
 
