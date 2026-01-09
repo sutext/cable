@@ -408,6 +408,7 @@ func (b *broker) attemptSnapshot() {
 	if err != nil {
 		panic(err)
 	}
+	b.raftNode.ReportSnapshot(b.id, raft.SnapshotFinish)
 	b.snapshotIndex = b.appliedIndex
 	// compactIndex := uint64(1)
 	// if b.appliedIndex > 1024 {
