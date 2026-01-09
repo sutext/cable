@@ -96,6 +96,7 @@ func (s *server) ExpelAllConns() {
 		c.CloseClode(packet.CloseServerEexpected)
 		return true
 	})
+	s.conns = safe.RMap[string, listener.Conn]{}
 }
 func (s *server) Shutdown(ctx context.Context) error {
 	if !s.closed.CompareAndSwap(false, true) {

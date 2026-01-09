@@ -54,7 +54,7 @@ func (c *cluster) Start() {
 			panic(err)
 		}
 	}()
-	time.AfterFunc(time.Microsecond*100, c.autoDiscovery)
+	time.AfterFunc(time.Millisecond*100, c.autoDiscovery)
 }
 func (c *cluster) Stop() {
 	if err := c.discovery.Shutdown(); err != nil {
@@ -75,11 +75,6 @@ func (c *cluster) RaftLogSize() uint64 {
 }
 func (c *cluster) AddBroker(ctx context.Context, brokerID uint64, addr string) error {
 	c.addPeer(brokerID, addr)
-	if c.peers.Len() > c.size-1 {
-		if c.IsLeader() {
-			return c.addNode(ctx, brokerID)
-		}
-	}
 	return nil
 }
 
@@ -134,6 +129,9 @@ func (c *cluster) addPeer(id uint64, addr string) {
 	peer := newPeerClient(id, addr, c.broker.logger)
 	c.peers.Set(id, peer)
 	peer.connect()
+	if c.peers.Len() > c.size-1 && c.IsLeader() {
+		c.addNode(context.Background(), id)
+	}
 }
 func (c *cluster) autoDiscovery() {
 	m, err := c.discovery.Request()
