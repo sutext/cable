@@ -1,4 +1,4 @@
-package broker
+package cluster
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
-	"sutext.github.io/cable/broker/protos"
+	"sutext.github.io/cable/cluster/protos"
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xerr"

@@ -47,17 +47,15 @@ message RaftProgress {
 /// Inspects is the response message for Inspect RPC.
 message Status{
  uint64 id = 1;
- string raft_state = 2;
- uint64 raft_term = 3;
+ uint64 raft_term = 2;
+ string raft_state = 3;
  uint64 raft_applied = 4;
- uint64 raft_snap_index = 5;
- uint64 raft_store_first_index = 6;
- uint64 raft_store_last_index = 7;
- int32  client_count = 8;
- int32  cluster_size = 9;
- map<uint64,int32> user_count = 10;
- map<uint64,int32> channel_count = 11;
- map<uint64,RaftProgress> raft_progress = 12;
+ uint64 raft_log_size = 5;
+ int32  client_count = 6;
+ int32  cluster_size = 7;
+ map<uint64,int32> user_count = 8;
+ map<uint64,int32> channel_count = 9;
+ map<uint64,RaftProgress> raft_progress = 10;
 }
 
 // The greeting service definition.

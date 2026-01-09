@@ -408,21 +408,19 @@ func (x *RaftProgress) GetState() string {
 
 // / Inspects is the response message for Inspect RPC.
 type Status struct {
-	state               protoimpl.MessageState   `protogen:"open.v1"`
-	Id                  uint64                   `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	RaftState           string                   `protobuf:"bytes,2,opt,name=raft_state,json=raftState,proto3" json:"raft_state,omitempty"`
-	RaftTerm            uint64                   `protobuf:"varint,3,opt,name=raft_term,json=raftTerm,proto3" json:"raft_term,omitempty"`
-	RaftApplied         uint64                   `protobuf:"varint,4,opt,name=raft_applied,json=raftApplied,proto3" json:"raft_applied,omitempty"`
-	RaftSnapIndex       uint64                   `protobuf:"varint,5,opt,name=raft_snap_index,json=raftSnapIndex,proto3" json:"raft_snap_index,omitempty"`
-	RaftStoreFirstIndex uint64                   `protobuf:"varint,6,opt,name=raft_store_first_index,json=raftStoreFirstIndex,proto3" json:"raft_store_first_index,omitempty"`
-	RaftStoreLastIndex  uint64                   `protobuf:"varint,7,opt,name=raft_store_last_index,json=raftStoreLastIndex,proto3" json:"raft_store_last_index,omitempty"`
-	ClientCount         int32                    `protobuf:"varint,8,opt,name=client_count,json=clientCount,proto3" json:"client_count,omitempty"`
-	ClusterSize         int32                    `protobuf:"varint,9,opt,name=cluster_size,json=clusterSize,proto3" json:"cluster_size,omitempty"`
-	UserCount           map[uint64]int32         `protobuf:"bytes,10,rep,name=user_count,json=userCount,proto3" json:"user_count,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	ChannelCount        map[uint64]int32         `protobuf:"bytes,11,rep,name=channel_count,json=channelCount,proto3" json:"channel_count,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	RaftProgress        map[uint64]*RaftProgress `protobuf:"bytes,12,rep,name=raft_progress,json=raftProgress,proto3" json:"raft_progress,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	state         protoimpl.MessageState   `protogen:"open.v1"`
+	Id            uint64                   `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	RaftState     string                   `protobuf:"bytes,2,opt,name=raft_state,json=raftState,proto3" json:"raft_state,omitempty"`
+	RaftTerm      uint64                   `protobuf:"varint,3,opt,name=raft_term,json=raftTerm,proto3" json:"raft_term,omitempty"`
+	RaftApplied   uint64                   `protobuf:"varint,4,opt,name=raft_applied,json=raftApplied,proto3" json:"raft_applied,omitempty"`
+	RaftLogSize   uint64                   `protobuf:"varint,5,opt,name=raft_log_size,json=raftLogSize,proto3" json:"raft_log_size,omitempty"`
+	ClientCount   int32                    `protobuf:"varint,6,opt,name=client_count,json=clientCount,proto3" json:"client_count,omitempty"`
+	ClusterSize   int32                    `protobuf:"varint,7,opt,name=cluster_size,json=clusterSize,proto3" json:"cluster_size,omitempty"`
+	UserCount     map[uint64]int32         `protobuf:"bytes,8,rep,name=user_count,json=userCount,proto3" json:"user_count,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	ChannelCount  map[uint64]int32         `protobuf:"bytes,9,rep,name=channel_count,json=channelCount,proto3" json:"channel_count,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	RaftProgress  map[uint64]*RaftProgress `protobuf:"bytes,10,rep,name=raft_progress,json=raftProgress,proto3" json:"raft_progress,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Status) Reset() {
@@ -483,23 +481,9 @@ func (x *Status) GetRaftApplied() uint64 {
 	return 0
 }
 
-func (x *Status) GetRaftSnapIndex() uint64 {
+func (x *Status) GetRaftLogSize() uint64 {
 	if x != nil {
-		return x.RaftSnapIndex
-	}
-	return 0
-}
-
-func (x *Status) GetRaftStoreFirstIndex() uint64 {
-	if x != nil {
-		return x.RaftStoreFirstIndex
-	}
-	return 0
-}
-
-func (x *Status) GetRaftStoreLastIndex() uint64 {
-	if x != nil {
-		return x.RaftStoreLastIndex
+		return x.RaftLogSize
 	}
 	return 0
 }
@@ -572,23 +556,21 @@ const file_broker_protos_peer_proto_rawDesc = "" +
 	"\fRaftProgress\x12\x14\n" +
 	"\x05match\x18\x02 \x01(\x04R\x05match\x12\x12\n" +
 	"\x04next\x18\x03 \x01(\x04R\x04next\x12\x14\n" +
-	"\x05state\x18\x04 \x01(\tR\x05state\"\xef\x05\n" +
+	"\x05state\x18\x04 \x01(\tR\x05state\"\x83\x05\n" +
 	"\x06Status\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1d\n" +
 	"\n" +
 	"raft_state\x18\x02 \x01(\tR\traftState\x12\x1b\n" +
 	"\traft_term\x18\x03 \x01(\x04R\braftTerm\x12!\n" +
-	"\fraft_applied\x18\x04 \x01(\x04R\vraftApplied\x12&\n" +
-	"\x0fraft_snap_index\x18\x05 \x01(\x04R\rraftSnapIndex\x123\n" +
-	"\x16raft_store_first_index\x18\x06 \x01(\x04R\x13raftStoreFirstIndex\x121\n" +
-	"\x15raft_store_last_index\x18\a \x01(\x04R\x12raftStoreLastIndex\x12!\n" +
-	"\fclient_count\x18\b \x01(\x05R\vclientCount\x12!\n" +
-	"\fcluster_size\x18\t \x01(\x05R\vclusterSize\x12<\n" +
+	"\fraft_applied\x18\x04 \x01(\x04R\vraftApplied\x12\"\n" +
+	"\rraft_log_size\x18\x05 \x01(\x04R\vraftLogSize\x12!\n" +
+	"\fclient_count\x18\x06 \x01(\x05R\vclientCount\x12!\n" +
+	"\fcluster_size\x18\a \x01(\x05R\vclusterSize\x12<\n" +
 	"\n" +
-	"user_count\x18\n" +
-	" \x03(\v2\x1d.protos.Status.UserCountEntryR\tuserCount\x12E\n" +
-	"\rchannel_count\x18\v \x03(\v2 .protos.Status.ChannelCountEntryR\fchannelCount\x12E\n" +
-	"\rraft_progress\x18\f \x03(\v2 .protos.Status.RaftProgressEntryR\fraftProgress\x1a<\n" +
+	"user_count\x18\b \x03(\v2\x1d.protos.Status.UserCountEntryR\tuserCount\x12E\n" +
+	"\rchannel_count\x18\t \x03(\v2 .protos.Status.ChannelCountEntryR\fchannelCount\x12E\n" +
+	"\rraft_progress\x18\n" +
+	" \x03(\v2 .protos.Status.RaftProgressEntryR\fraftProgress\x1a<\n" +
 	"\x0eUserCountEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a?\n" +

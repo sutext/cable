@@ -12,13 +12,13 @@ import (
 	"syscall"
 	"time"
 
-	"sutext.github.io/cable/broker"
+	"sutext.github.io/cable/cluster"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
 )
 
 type Handler struct {
-	b broker.Broker
+	b cluster.Broker
 }
 
 const (
@@ -101,7 +101,7 @@ func main() {
 		cancel(fmt.Errorf("cable signal received"))
 	}()
 	h := &Handler{}
-	b := broker.NewBroker(broker.WithHandler(h))
+	b := cluster.NewBroker(cluster.WithHandler(h))
 	h.b = b
 	if err := b.Start(); err != nil {
 		xlog.Error("cable server start :", xlog.Err(err))

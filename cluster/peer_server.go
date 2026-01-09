@@ -1,4 +1,4 @@
-package broker
+package cluster
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"go.etcd.io/raft/v3/raftpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
-	"sutext.github.io/cable/broker/protos"
+	"sutext.github.io/cable/cluster/protos"
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xerr"
@@ -85,10 +85,7 @@ func (s *peerServer) SendRaftMessage(ctx context.Context, req *protos.RaftMessag
 	if err := msg.Unmarshal(req.Data); err != nil {
 		return nil, err
 	}
-	if s.broker.raftNode == nil {
-		return nil, xerr.RaftNodeNotReady
-	}
-	if err := s.broker.raftNode.Step(ctx, msg); err != nil {
+	if err := s.broker.cluster.Process(ctx, msg); err != nil {
 		return nil, err
 	}
 	return &protos.Empty{}, nil

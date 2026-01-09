@@ -1,16 +1,12 @@
-package broker
+package cluster
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"sync"
-	"sync/atomic"
-	"time"
 
-	"go.etcd.io/raft/v3"
-	"go.etcd.io/raft/v3/raftpb"
-	"sutext.github.io/cable/broker/protos"
-	"sutext.github.io/cable/internal/discovery"
+	"sutext.github.io/cable/cluster/protos"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
@@ -20,6 +16,7 @@ import (
 
 type Broker interface {
 	Start() error
+	Cluster() Cluster
 	Shutdown(ctx context.Context) error
 	Inspects(ctx context.Context) ([]*protos.Status, error)
 	IsOnline(ctx context.Context, uid string) (ok bool)
@@ -34,43 +31,27 @@ type Broker interface {
 
 type broker struct {
 	id             uint64
-	ready          atomic.Bool
-	peers          safe.RMap[uint64, *peerClient]
 	logger         *xlog.Logger
+	cluster        *cluster
 	handler        Handler
 	peerPort       string
-	discovery      discovery.Discovery
 	listeners      map[string]server.Server
 	peerServer     *peerServer
 	httpServer     *http.Server
-	clusterSize    int32
-	userClients    safe.RMap[uint64, *safe.KeyMap[string]] //pid map[uid]map[cid]net
-	channelClients safe.RMap[uint64, *safe.KeyMap[string]] //pid map[channel]map[cid]net
-	clientChannels safe.KeyMap[struct{}]                   //map[cid]map[channel]net
+	userClients    safe.RMap[uint64, *safe.KeyMap[string]]   //bid map[uid]map[cid]net
+	channelClients safe.RMap[uint64, *safe.KeyMap[string]]   //bid map[channel]map[cid]net
+	clientChannels safe.RMap[uint64, *safe.KeyMap[struct{}]] //bid map[cid]map[channel]null
 	requstHandlers safe.RMap[string, server.RequestHandler]
-	raftNode       raft.Node
-	raftStop       chan struct{}
-	raftStorage    *raft.MemoryStorage
-	raftLeader     atomic.Uint64
-	isLeader       atomic.Bool
-	confState      *raftpb.ConfState
-	appliedIndex   uint64
-	snapshotIndex  uint64
 }
 
 func NewBroker(opts ...Option) Broker {
 	options := newOptions(opts...)
 	b := &broker{
-		id:          options.brokerID,
-		raftStop:    make(chan struct{}),
-		clusterSize: options.clusterSize,
+		id: options.brokerID,
 	}
 	b.logger = xlog.With("BROKER", b.id)
 	b.handler = options.handler
-	b.discovery = discovery.New(b.id, options.peerPort)
-	b.discovery.OnRequest(func(id uint64, addr string) {
-		b.addPeer(id, addr)
-	})
+	b.peerPort = options.peerPort
 	b.listeners = make(map[string]server.Server, len(options.listeners))
 	for net, addr := range options.listeners {
 		b.listeners[net] = server.New(addr,
@@ -84,7 +65,7 @@ func NewBroker(opts ...Option) Broker {
 			}),
 		)
 	}
-	b.peerPort = options.peerPort
+	b.cluster = newCluster(b, options.clusterSize)
 	b.peerServer = newPeerServer(b, b.peerPort)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/join", b.handleJoin)
@@ -98,23 +79,6 @@ func NewBroker(opts ...Option) Broker {
 	return b
 }
 
-func (b *broker) addPeer(id uint64, addr string) {
-	if id == b.id {
-		return
-	}
-	if p, ok := b.peers.Get(id); ok {
-		p.updateAddr(addr)
-		return
-	}
-	peer := newPeerClient(id, addr, b.logger)
-	b.peers.Set(id, peer)
-	peer.connect()
-	if b.peers.Len() > b.clusterSize-1 {
-		if b.isLeader.Load() {
-			b.addRaftNode(context.Background(), id)
-		}
-	}
-}
 func (b *broker) Start() error {
 	for _, l := range b.listeners {
 		go func() {
@@ -123,11 +87,6 @@ func (b *broker) Start() error {
 			}
 		}()
 	}
-	go func() {
-		if err := b.discovery.Serve(); err != nil {
-			panic(err)
-		}
-	}()
 	go func() {
 		if err := b.peerServer.Serve(); err != nil {
 			panic(err)
@@ -138,31 +97,12 @@ func (b *broker) Start() error {
 			panic(err)
 		}
 	}()
-	time.AfterFunc(time.Second, b.autoDiscovery)
+	b.cluster.Start()
 	return nil
 }
 
-func (b *broker) autoDiscovery() {
-	m, err := b.discovery.Request()
-	if err != nil {
-		b.logger.Error("failed to sync broker", xlog.Err(err))
-	}
-	if len(m) == 0 {
-		b.logger.Warn("Auto discovery got empty endpoints")
-		go b.autoDiscovery()
-		return
-	}
-	for id, addr := range m {
-		b.addPeer(id, addr)
-	}
-	if b.peers.Len() < b.clusterSize-1 {
-		b.logger.Warn("Auto discovery got less than cluster size", xlog.I32("clusterSize", b.clusterSize), xlog.I32("peers", b.peers.Len()))
-		go b.autoDiscovery()
-	} else if b.peers.Len() == b.clusterSize-1 {
-		b.startRaft(false)
-	} else {
-		b.startRaft(true)
-	}
+func (b *broker) Cluster() Cluster {
+	return b.cluster
 }
 
 func (b *broker) Shutdown(ctx context.Context) (err error) {
@@ -171,18 +111,20 @@ func (b *broker) Shutdown(ctx context.Context) (err error) {
 			b.logger.Error("listener shutdown", xlog.Err(err))
 		}
 	}
-	if err = b.discovery.Shutdown(); err != nil {
-		b.logger.Error("muticast shutdown", xlog.Err(err))
-	}
 	if err = b.httpServer.Shutdown(ctx); err != nil {
 		b.logger.Error("http server shutdown", xlog.Err(err))
 	}
 	if err = b.peerServer.Shutdown(ctx); err != nil {
 		b.logger.Error("peer server shutdown", xlog.Err(err))
 	}
+	b.cluster.Stop()
 	return err
 }
-
+func (b *broker) ExpelAllConns() {
+	for _, l := range b.listeners {
+		l.ExpelAllConns()
+	}
+}
 func (b *broker) IsOnline(ctx context.Context, uid string) (online bool) {
 	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
 		if id == b.id {
@@ -193,7 +135,7 @@ func (b *broker) IsOnline(ctx context.Context, uid string) (online bool) {
 				}
 			}
 		} else {
-			if peer, ok := b.peers.Get(id); ok {
+			if peer, ok := b.cluster.GetPeer(id); ok {
 				if cids, ok := value.Get(uid); ok {
 					if ok, err := peer.isOnline(ctx, cids.Load()); err == nil && ok {
 						online = true
@@ -214,7 +156,7 @@ func (b *broker) KickUser(ctx context.Context, uid string) {
 				b.kickConn(cids.Load())
 			}
 		} else {
-			if peer, ok := b.peers.Get(id); ok {
+			if peer, ok := b.cluster.GetPeer(id); ok {
 				if cids, ok := value.Get(uid); ok {
 					if err := peer.kickConn(ctx, cids.Load()); err != nil {
 						b.logger.Error("kick user from peer failed", xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
@@ -228,7 +170,7 @@ func (b *broker) KickUser(ctx context.Context, uid string) {
 func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (total, success int32, err error) {
 	total, success = b.sendToAll(ctx, m)
 	wg := sync.WaitGroup{}
-	b.peers.Range(func(id uint64, peer *peerClient) bool {
+	b.cluster.RangePeers(func(id uint64, peer *peerClient) {
 		wg.Go(func() {
 			if t, s, err := peer.sendToAll(ctx, m); err == nil {
 				total += t
@@ -237,7 +179,6 @@ func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (total, succe
 				b.logger.Error("send to all from peer failed", xlog.Peer(id), xlog.Err(err))
 			}
 		})
-		return true
 	})
 	wg.Wait()
 	return total, success, nil
@@ -254,7 +195,7 @@ func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 				success += s
 			}
 		} else {
-			if peer, ok := b.peers.Get(id); ok {
+			if peer, ok := b.cluster.GetPeer(id); ok {
 				if cids, ok := value.Get(uid); ok {
 					t, s, err := peer.sendToTargets(ctx, m, cids.Load())
 					if err == nil {
@@ -282,7 +223,7 @@ func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Me
 				success += s
 			}
 		} else {
-			if peer, ok := b.peers.Get(id); ok {
+			if peer, ok := b.cluster.GetPeer(id); ok {
 				if cids, ok := value.Get(channel); ok {
 					t, s, err := peer.sendToTargets(ctx, m, cids.Load())
 					if err == nil {
@@ -304,7 +245,7 @@ func (b *broker) JoinChannel(ctx context.Context, uid string, channels ...string
 		uid:      uid,
 		channels: channels,
 	}
-	return b.submitRaftOp(ctx, op)
+	return b.cluster.SubmitOperation(ctx, op)
 }
 
 func (b *broker) LeaveChannel(ctx context.Context, uid string, channels ...string) error {
@@ -312,7 +253,7 @@ func (b *broker) LeaveChannel(ctx context.Context, uid string, channels ...strin
 		uid:      uid,
 		channels: channels,
 	}
-	return b.submitRaftOp(ctx, op)
+	return b.cluster.SubmitOperation(ctx, op)
 }
 func (b *broker) HandleRequest(method string, handler server.RequestHandler) {
 	b.requstHandlers.Set(method, handler)
@@ -322,7 +263,7 @@ func (b *broker) onUserClosed(id *packet.Identity) {
 		uid: id.UserID,
 		cid: id.ClientID,
 	}
-	if err := b.submitRaftOp(context.Background(), op); err != nil {
+	if err := b.cluster.SubmitOperation(context.Background(), op); err != nil {
 		b.logger.Error("Failed to submit user disconnect op", xlog.Err(err))
 	}
 	b.handler.OnClosed(id)
@@ -348,7 +289,7 @@ func (b *broker) onUserConnect(p *packet.Connect, net string) packet.ConnectCode
 						l.KickConn(p.Identity.ClientID)
 					}
 				} else {
-					if peer, ok := b.peers.Get(id); ok {
+					if peer, ok := b.cluster.GetPeer(id); ok {
 						cids := map[string]string{p.Identity.ClientID: net}
 						if err := peer.kickConn(context.Background(), cids); err != nil {
 							b.logger.Error("kick old connection from peer failed", xlog.Peer(id), xlog.Err(err))
@@ -371,7 +312,7 @@ func (b *broker) onUserConnect(p *packet.Connect, net string) packet.ConnectCode
 		nodeID:   b.id,
 		channels: chs,
 	}
-	if err := b.submitRaftOp(context.Background(), op); err != nil {
+	if err := b.cluster.SubmitOperation(context.Background(), op); err != nil {
 		b.logger.Error("Failed to submit user connect op", xlog.Err(err))
 		return packet.ConnectRejected
 	}
@@ -430,4 +371,128 @@ func (b *broker) sendToTargets(ctx context.Context, m *packet.Message, targets m
 		}
 	}
 	return total, success
+}
+func (b *broker) userOpenedOp(op *userOpenedOp) {
+	userClients, _ := b.userClients.GetOrSet(op.nodeID, &safe.KeyMap[string]{})
+	userClients.SetKey(op.uid, op.cid, op.net)
+	channelClients, _ := b.channelClients.GetOrSet(op.nodeID, &safe.KeyMap[string]{})
+	clientChannels, _ := b.clientChannels.GetOrSet(op.nodeID, &safe.KeyMap[struct{}]{})
+	for _, ch := range op.channels {
+		clientChannels.SetKey(op.cid, ch, struct{}{})
+		channelClients.SetKey(ch, op.cid, op.net)
+	}
+}
+
+func (b *broker) userClosedOp(op *userClosedOp) {
+	if userClients, ok := b.userClients.Get(op.nodeID); ok {
+		userClients.DeleteKey(op.uid, op.cid)
+	}
+	if clientChannels, ok := b.clientChannels.Get(op.nodeID); ok {
+		if channelClients, ok := b.channelClients.Get(op.nodeID); ok {
+			clientChannels.RangeKey(op.cid, func(channel string, s2 struct{}) bool {
+				channelClients.DeleteKey(channel, op.cid)
+				return true
+			})
+		}
+		clientChannels.DeleteKey(op.cid, op.uid)
+	}
+}
+
+func (b *broker) joinChannelOp(op *joinChannelOp) {
+	b.userClients.Range(func(id uint64, userClients *safe.KeyMap[string]) bool {
+		channelClients, _ := b.channelClients.GetOrSet(id, &safe.KeyMap[string]{})
+		clientChannels, _ := b.clientChannels.GetOrSet(id, &safe.KeyMap[struct{}]{})
+		userClients.RangeKey(op.uid, func(cid string, net string) bool {
+			for _, channel := range op.channels {
+				channelClients.SetKey(channel, cid, net)
+				clientChannels.SetKey(cid, channel, struct{}{})
+			}
+			return true
+		})
+		return true
+	})
+}
+func (b *broker) leaveChannelOp(op *leaveChannelOp) {
+	b.userClients.Range(func(id uint64, userClients *safe.KeyMap[string]) bool {
+		channelClients, _ := b.channelClients.GetOrSet(id, &safe.KeyMap[string]{})
+		clientChannels, _ := b.clientChannels.GetOrSet(id, &safe.KeyMap[struct{}]{})
+		userClients.RangeKey(op.uid, func(cid string, net string) bool {
+			for _, ch := range op.channels {
+				channelClients.DeleteKey(ch, cid)
+				clientChannels.DeleteKey(cid, ch)
+			}
+			return true
+		})
+		return true
+	})
+}
+func (b *broker) makeSnapshot() ([]byte, error) {
+	userClients := make(map[uint64]map[string]map[string]string)
+	b.userClients.Range(func(id uint64, v *safe.KeyMap[string]) bool {
+		ucmap, ok := userClients[id]
+		if !ok {
+			ucmap = make(map[string]map[string]string)
+			userClients[id] = ucmap
+		}
+		v.Range(func(uid string, cids *safe.Map[string, string]) bool {
+			ucmap[uid] = cids.Load()
+			return true
+		})
+		return true
+	})
+	channelClients := make(map[uint64]map[string]map[string]string)
+	b.channelClients.Range(func(id uint64, v *safe.KeyMap[string]) bool {
+		ccmap, ok := channelClients[id]
+		if !ok {
+			ccmap = make(map[string]map[string]string)
+			channelClients[id] = ccmap
+		}
+		v.Range(func(cid string, uids *safe.Map[string, string]) bool {
+			ccmap[cid] = uids.Load()
+			return true
+		})
+		return true
+	})
+	clientChannels := make(map[uint64]map[string]map[string]struct{})
+	b.clientChannels.Range(func(id uint64, v *safe.KeyMap[struct{}]) bool {
+		ccmap, ok := clientChannels[id]
+		if !ok {
+			ccmap = make(map[string]map[string]struct{})
+			clientChannels[id] = ccmap
+		}
+		v.Range(func(cid string, channels *safe.Map[string, struct{}]) bool {
+			ccmap[cid] = channels.Load()
+			return true
+		})
+		return true
+	})
+	snapshot := snapshot{
+		UserClients:    userClients,
+		ChannelClients: channelClients,
+		ClientChannels: clientChannels,
+	}
+	return json.Marshal(snapshot)
+}
+func (b *broker) recoverFromSnapshot(s snapshot) {
+	b.userClients = safe.RMap[uint64, *safe.KeyMap[string]]{}
+	b.channelClients = safe.RMap[uint64, *safe.KeyMap[string]]{}
+	b.clientChannels = safe.RMap[uint64, *safe.KeyMap[struct{}]]{}
+	for id, ucmap := range s.UserClients {
+		userClients, _ := b.userClients.GetOrSet(id, &safe.KeyMap[string]{})
+		for uid, cids := range ucmap {
+			userClients.Set(uid, safe.NewMap(cids))
+		}
+	}
+	for id, ccmap := range s.ChannelClients {
+		channelClients, _ := b.channelClients.GetOrSet(id, &safe.KeyMap[string]{})
+		for cid, uids := range ccmap {
+			channelClients.Set(cid, safe.NewMap(uids))
+		}
+	}
+	for id, ccmap := range s.ClientChannels {
+		clientChannels, _ := b.clientChannels.GetOrSet(id, &safe.KeyMap[struct{}]{})
+		for cid, channels := range ccmap {
+			clientChannels.Set(cid, safe.NewMap(channels))
+		}
+	}
 }

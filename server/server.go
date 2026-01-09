@@ -29,6 +29,8 @@ type Server interface {
 	SendMessage(ctx context.Context, cid string, p *packet.Message) error
 	// SendRequest sends a request to a client and returns the response.
 	SendRequest(ctx context.Context, cid string, p *packet.Request) (*packet.Response, error)
+	// ExpelAllConns expels all connections from the server.
+	ExpelAllConns()
 }
 type server struct {
 	conns          safe.RMap[string, listener.Conn]
@@ -88,6 +90,12 @@ func (s *server) KickConn(cid string) bool {
 		return true
 	}
 	return false
+}
+func (s *server) ExpelAllConns() {
+	s.conns.Range(func(key string, c listener.Conn) bool {
+		c.CloseClode(packet.CloseServerEexpected)
+		return true
+	})
 }
 func (s *server) Shutdown(ctx context.Context) error {
 	if !s.closed.CompareAndSwap(false, true) {

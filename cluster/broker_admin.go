@@ -1,4 +1,4 @@
-package broker
+package cluster
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"sutext.github.io/cable/broker/protos"
+	"sutext.github.io/cable/cluster/protos"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
@@ -25,7 +25,7 @@ func (b *broker) inspect() *protos.Status {
 		channelCount[key] = value.Len()
 		return true
 	})
-	status := b.raftNode.Status()
+	status := b.cluster.Status()
 	progress := make(map[uint64]*protos.RaftProgress)
 	if status.Progress != nil {
 		for id, p := range status.Progress {
@@ -36,34 +36,25 @@ func (b *broker) inspect() *protos.Status {
 			}
 		}
 	}
-	firstIndex, _ := b.raftStorage.FirstIndex()
-	lastIndex, _ := b.raftStorage.LastIndex()
-	var snapIndex uint64
-	snap, err := b.raftStorage.Snapshot()
-	if err == nil {
-		snapIndex = snap.Metadata.Index
-	}
 	return &protos.Status{
-		Id:                  b.id,
-		UserCount:           userCount,
-		ClientCount:         b.clientChannels.Len(),
-		ClusterSize:         b.clusterSize,
-		ChannelCount:        channelCount,
-		RaftState:           status.RaftState.String(),
-		RaftTerm:            status.Term,
-		RaftApplied:         status.Applied,
-		RaftProgress:        progress,
-		RaftSnapIndex:       snapIndex,
-		RaftStoreFirstIndex: firstIndex,
-		RaftStoreLastIndex:  lastIndex,
+		Id:           b.id,
+		UserCount:    userCount,
+		ClientCount:  b.clientChannels.Len(),
+		ClusterSize:  b.cluster.size,
+		ChannelCount: channelCount,
+		RaftState:    status.RaftState.String(),
+		RaftTerm:     status.Term,
+		RaftLogSize:  b.cluster.RaftLogSize(),
+		RaftApplied:  status.Applied,
+		RaftProgress: progress,
 	}
 }
 
 func (b *broker) Inspects(ctx context.Context) ([]*protos.Status, error) {
-	ss := make([]*protos.Status, 0, b.clusterSize)
+	ss := make([]*protos.Status, 0, b.cluster.size)
 	ss = append(ss, b.inspect())
 	wg := sync.WaitGroup{}
-	b.peers.Range(func(id uint64, cli *peerClient) bool {
+	b.cluster.RangePeers(func(id uint64, cli *peerClient) {
 		wg.Go(func() {
 			s, err := cli.inspect(ctx)
 			if err != nil {
@@ -72,7 +63,6 @@ func (b *broker) Inspects(ctx context.Context) ([]*protos.Status, error) {
 			}
 			ss = append(ss, s)
 		})
-		return true
 	})
 	wg.Wait()
 	return ss, nil
@@ -181,11 +171,7 @@ func (b *broker) handleBrodcast(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 func (b *broker) handleHealth(w http.ResponseWriter, r *http.Request) {
-	if b.raftNode == nil {
-		http.Error(w, "node is nil", http.StatusInternalServerError)
-		return
-	}
-	if !b.ready.Load() {
+	if !b.cluster.IsReady() {
 		http.Error(w, "broker is not ready", http.StatusInternalServerError)
 		return
 	}
@@ -203,7 +189,7 @@ func (b *broker) handleRemoveNode(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	err = b.removeRaftNode(r.Context(), id)
+	err = b.cluster.RemoveBroker(r.Context(), id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
