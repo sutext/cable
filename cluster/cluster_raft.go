@@ -163,12 +163,11 @@ func (c *cluster) addNode(ctx context.Context, id uint64) error {
 	if c.raft == nil {
 		return xerr.RaftNodeNotReady
 	}
-	cc := raftpb.ConfChangeV2{
-		Transition: raftpb.ConfChangeTransitionAuto,
-		Changes: []raftpb.ConfChangeSingle{{
-			Type:   raftpb.ConfChangeAddNode,
-			NodeID: id,
-		}},
+	c.confChangeCount++
+	cc := raftpb.ConfChange{
+		Type:   raftpb.ConfChangeAddNode,
+		NodeID: id,
+		ID:     c.confChangeCount,
 	}
 	return c.raft.ProposeConfChange(ctx, cc)
 }
@@ -176,12 +175,11 @@ func (c *cluster) removeNode(ctx context.Context, id uint64) error {
 	if c.raft == nil {
 		return xerr.RaftNodeNotReady
 	}
-	cc := raftpb.ConfChangeV2{
-		Transition: raftpb.ConfChangeTransitionAuto,
-		Changes: []raftpb.ConfChangeSingle{{
-			Type:   raftpb.ConfChangeRemoveNode,
-			NodeID: id,
-		}},
+	c.confChangeCount++
+	cc := raftpb.ConfChange{
+		Type:   raftpb.ConfChangeRemoveNode,
+		NodeID: id,
+		ID:     c.confChangeCount,
 	}
 	return c.raft.ProposeConfChange(ctx, cc)
 }
@@ -282,25 +280,14 @@ func (c *cluster) applySoftState(ss *raft.SoftState) {
 	}
 	c.ready.Store(true)
 }
-func (c *cluster) ensureEntries(ents []raftpb.Entry) (nents []raftpb.Entry) {
-	firstIdx := ents[0].Index
-	if firstIdx > c.appliedIndex+1 {
-		panic(fmt.Sprintf("raft entries out of order, first index: %d, applied index: %d", firstIdx, c.appliedIndex))
-	}
-	if c.appliedIndex-firstIdx+1 < uint64(len(ents)) {
-		nents = ents[c.appliedIndex-firstIdx+1:]
-	}
-	return nents
-}
 func (c *cluster) applyEntries(entries []raftpb.Entry) {
-	entries = c.ensureEntries(entries)
 	for _, entry := range entries {
 		switch entry.Type {
 		case raftpb.EntryNormal:
 			if len(entry.Data) > 0 {
 				c.applyRaftOp(entry.Data)
 			}
-		case raftpb.EntryConfChange, raftpb.EntryConfChangeV2:
+		case raftpb.EntryConfChange:
 			var cc raftpb.ConfChange
 			if err := cc.Unmarshal(entry.Data); err != nil {
 				c.logger.Error("Failed to unmarshal conf change", xlog.Err(err))

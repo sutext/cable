@@ -19,19 +19,20 @@ type Cluster interface {
 }
 
 type cluster struct {
-	raft          raft.Node
-	size          int32
-	ready         atomic.Bool
-	peers         safe.RMap[uint64, *peerClient]
-	broker        *broker
-	logger        *xlog.Logger
-	stoped        chan struct{}
-	leader        atomic.Uint64
-	storage       *raft.MemoryStorage
-	discovery     discovery.Discovery
-	confState     *raftpb.ConfState
-	appliedIndex  uint64
-	snapshotIndex uint64
+	raft            raft.Node
+	size            int32
+	ready           atomic.Bool
+	peers           safe.RMap[uint64, *peerClient]
+	broker          *broker
+	logger          *xlog.Logger
+	stoped          chan struct{}
+	leader          atomic.Uint64
+	storage         *raft.MemoryStorage
+	discovery       discovery.Discovery
+	confState       *raftpb.ConfState
+	appliedIndex    uint64
+	snapshotIndex   uint64
+	confChangeCount uint64
 }
 
 func newCluster(broker *broker, initSize int32) *cluster {
