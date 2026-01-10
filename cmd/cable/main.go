@@ -101,7 +101,10 @@ func main() {
 		cancel(fmt.Errorf("cable signal received"))
 	}()
 	h := &Handler{}
-	b := cluster.NewBroker(cluster.WithHandler(h))
+	b := cluster.NewBroker(
+		cluster.WithHandler(h),
+		cluster.WithInitSize(1),
+	)
 	h.b = b
 	if err := b.Start(); err != nil {
 		xlog.Error("cable server start :", xlog.Err(err))

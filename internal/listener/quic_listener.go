@@ -60,28 +60,28 @@ func (l *quicListener) Listen(address string) error {
 		go l.handleConn(ss)
 	}
 }
-func (l *quicListener) handleConn(conn *quic.Stream) {
+func (l *quicListener) handleConn(stream *quic.Stream) {
 	timer := time.AfterFunc(time.Second*10, func() {
 		l.logger.Warn("waite conn packet timeout")
-		packet.WriteTo(conn, packet.NewClose(packet.CloseAuthTimeout))
-		conn.Close()
+		packet.WriteTo(stream, packet.NewClose(packet.CloseAuthTimeout))
+		stream.Close()
 	})
-	p, err := packet.ReadFrom(conn)
+	p, err := packet.ReadFrom(stream)
 	timer.Stop()
 	if err != nil {
 		l.logger.Error("failed to read packet", xlog.Err(err))
-		packet.WriteTo(conn, packet.NewClose(packet.AsCloseCode(err)))
-		conn.Close()
+		packet.WriteTo(stream, packet.NewClose(packet.AsCloseCode(err)))
+		stream.Close()
 		return
 	}
 	if p.Type() != packet.CONNECT {
 		l.logger.Error("first packet is not connect packet", xlog.Str("packetType", p.Type().String()))
-		packet.WriteTo(conn, packet.NewClose(packet.AsCloseCode(err)))
-		conn.Close()
+		packet.WriteTo(stream, packet.NewClose(packet.AsCloseCode(err)))
+		stream.Close()
 		return
 	}
 	connPacket := p.(*packet.Connect)
-	c := newQUICConn(connPacket.Identity, conn, l.logger, l.queueCapacity)
+	c := newQUICConn(connPacket.Identity, stream, l.logger, l.queueCapacity)
 	c.OnClose(func() {
 		l.closeHandler(c)
 	})
@@ -93,7 +93,7 @@ func (l *quicListener) handleConn(conn *quic.Stream) {
 	}
 	c.ConnackCode(packet.ConnectAccepted, "")
 	for {
-		p, err := packet.ReadFrom(conn)
+		p, err := packet.ReadFrom(stream)
 		if err != nil {
 			c.CloseClode(packet.AsCloseCode(err))
 			return

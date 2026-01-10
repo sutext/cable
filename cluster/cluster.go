@@ -44,18 +44,10 @@ func newCluster(broker *broker, initSize int32) *cluster {
 		discovery: discovery.New(broker.id, broker.peerPort),
 	}
 	c.discovery.OnRequest(func(id uint64, addr string) {
-		c.addPeer(id, addr)
+		c.AddBroker(context.Background(), id, addr)
 	})
 	return c
 
-}
-func (c *cluster) Start() {
-	go func() {
-		if err := c.discovery.Serve(); err != nil {
-			panic(err)
-		}
-	}()
-	time.AfterFunc(time.Millisecond*100, c.autoDiscovery)
 }
 func (c *cluster) Stop() {
 	if err := c.discovery.Shutdown(); err != nil {
@@ -65,6 +57,14 @@ func (c *cluster) Stop() {
 		c.raft.Stop()
 		close(c.stoped)
 	}
+}
+func (c *cluster) Start() {
+	go func() {
+		if err := c.discovery.Serve(); err != nil {
+			panic(err)
+		}
+	}()
+	time.AfterFunc(time.Millisecond*100, c.autoDiscovery)
 }
 func (c *cluster) Status() (raft.Status, error) {
 	if c.raft == nil {
@@ -78,11 +78,29 @@ func (c *cluster) RaftLogSize() uint64 {
 	return lastIndex - firstIndex + 1
 }
 func (c *cluster) AddBroker(ctx context.Context, brokerID uint64, addr string) error {
-	c.addPeer(brokerID, addr)
-	return nil
+	if brokerID == c.broker.id {
+		return nil
+	}
+	if p, ok := c.peers.Get(brokerID); ok {
+		p.updateAddr(addr)
+		return nil
+	}
+	peer := newPeerClient(brokerID, addr, c.broker.logger)
+	c.peers.Set(brokerID, peer)
+	peer.connect()
+	if c.peers.Len() == c.size-1 {
+		return nil
+	}
+	if !c.IsLeader() {
+		return nil
+	}
+	return c.addNode(ctx, brokerID)
 }
 
 func (c *cluster) RemoveBroker(ctx context.Context, brokerID uint64) error {
+	if brokerID == c.broker.id {
+		c.ready.Store(false)
+	}
 	return c.removeNode(ctx, brokerID)
 }
 func (c *cluster) GetPeer(id uint64) (*peerClient, bool) {
@@ -122,21 +140,7 @@ func (c *cluster) ReportUnreachable(id uint64) {
 func (c *cluster) ReportSnapshot(id uint64, status raft.SnapshotStatus) {
 	c.raft.ReportSnapshot(id, status)
 }
-func (c *cluster) addPeer(id uint64, addr string) {
-	if id == c.broker.id {
-		return
-	}
-	if p, ok := c.peers.Get(id); ok {
-		p.updateAddr(addr)
-		return
-	}
-	peer := newPeerClient(id, addr, c.broker.logger)
-	c.peers.Set(id, peer)
-	peer.connect()
-	if c.peers.Len() > c.size-1 && c.IsLeader() {
-		c.addNode(context.Background(), id)
-	}
-}
+
 func (c *cluster) autoDiscovery() {
 	m, err := c.discovery.Request()
 	if err != nil {
@@ -148,7 +152,7 @@ func (c *cluster) autoDiscovery() {
 		return
 	}
 	for id, addr := range m {
-		c.addPeer(id, addr)
+		c.AddBroker(context.Background(), id, addr)
 	}
 	if c.peers.Len() < c.size-1 {
 		c.logger.Warn("Auto discovery got less than cluster size", xlog.I32("clusterSize", c.size), xlog.I32("peers", c.peers.Len()))

@@ -137,18 +137,22 @@ func statefulSetEndpoint() string {
 func (t *Tester) addClient() *Client {
 	endpoint := os.Getenv("ENDPOINT")
 	if endpoint == "" {
-		endpoint = statefulSetEndpoint()
-		// endpoint = "tcp://localhost:1883"
-		// endpoint = "tcp://190.92.211.227:1883"
-		// endpoint = "udp://190.92.211.227:1884"
+		// endpoint = statefulSetEndpoint()
+		// endpoint = "tcp://localhost:1683"
+		endpoint = "ws://localhost:1688"
 	}
 	strs := strings.Split(endpoint, "://")
 	if len(strs) != 2 {
 		panic("invalid endpoint")
 	}
+	network := strs[0]
+	addr := strs[1]
+	if network == "ws" {
+		addr = endpoint
+	}
 	result := &Client{}
-	result.cli = client.New(strs[1],
-		client.WithNetwork(strs[0]),
+	result.cli = client.New(addr,
+		client.WithNetwork(network),
 		client.WithKeepAlive(time.Second*5, time.Second*60),
 		client.WithHandler(result),
 	)

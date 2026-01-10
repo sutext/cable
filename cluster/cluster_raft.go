@@ -183,14 +183,14 @@ func (c *cluster) removeNode(ctx context.Context, id uint64) error {
 	}
 	return c.raft.ProposeConfChange(ctx, cc)
 }
-func (b *cluster) startRaft(join bool) {
-	if b.raft != nil {
+func (c *cluster) startRaft(join bool) {
+	if c.raft != nil {
 		return
 	}
 	storage := raft.NewMemoryStorage()
-	b.storage = storage
-	c := &raft.Config{
-		ID:                        b.broker.id,
+	c.storage = storage
+	conf := &raft.Config{
+		ID:                        c.broker.id,
 		ElectionTick:              10,
 		HeartbeatTick:             1,
 		Storage:                   storage,
@@ -199,17 +199,17 @@ func (b *cluster) startRaft(join bool) {
 		MaxUncommittedEntriesSize: 1 << 30,
 	}
 	if join {
-		b.raft = raft.RestartNode(c)
+		c.raft = raft.RestartNode(conf)
 	} else {
-		initPeers := make([]raft.Peer, b.size)
-		initPeers[0] = raft.Peer{ID: b.broker.id}
-		b.peers.Range(func(key uint64, value *peerClient) bool {
+		initPeers := make([]raft.Peer, c.size)
+		initPeers[0] = raft.Peer{ID: c.broker.id}
+		c.peers.Range(func(key uint64, value *peerClient) bool {
 			initPeers = append(initPeers, raft.Peer{ID: key})
 			return true
 		})
-		b.raft = raft.StartNode(c, initPeers)
+		c.raft = raft.StartNode(conf, initPeers)
 	}
-	go b.raftLoop()
+	go c.raftLoop()
 }
 
 func (c *cluster) raftLoop() {

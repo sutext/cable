@@ -41,7 +41,6 @@ func (l *wsListener) OnPacket(handler func(p packet.Packet, c Conn)) {
 
 func (l *wsListener) Listen(address string) error {
 	ws := websocket.Server{
-		Config: websocket.Config{},
 		Handler: func(conn *websocket.Conn) {
 			l.handleConn(conn)
 		},
@@ -50,7 +49,10 @@ func (l *wsListener) Listen(address string) error {
 			if err == nil && c.Origin == nil {
 				return fmt.Errorf("null origin")
 			}
-			return err
+			if c.Protocol[0] != "cable" {
+				return fmt.Errorf("invalid protocol")
+			}
+			return nil
 		},
 	}
 	return http.ListenAndServe(address, ws)
@@ -118,5 +120,6 @@ func newWSConn(id *packet.Identity, raw *websocket.Conn, logger *xlog.Logger, qu
 		id:  id,
 		raw: raw,
 	}
+	t.raw.PayloadType = websocket.BinaryFrame
 	return newConn(t, logger, queueCapacity)
 }

@@ -122,24 +122,15 @@ type wsConn struct {
 	conn *websocket.Conn
 }
 
-func newWSConn(url string) Conn {
-	return &wsConn{url: url}
+func newWSConn(addr string) Conn {
+	return &wsConn{url: addr}
 }
 
 func (c *wsConn) WritePacket(p packet.Packet) error {
-	w, err := c.conn.NewFrameWriter(websocket.BinaryFrame)
-	if err != nil {
-		return err
-	}
-	return packet.WriteTo(w, p)
+	return packet.WriteTo(c.conn, p)
 }
 func (c *wsConn) ReadPacket() (packet.Packet, error) {
-	r, err := c.conn.NewFrameReader()
-	if err != nil {
-		return nil, err
-	}
-	p, err := packet.ReadFrom(r)
-	return p, nil
+	return packet.ReadFrom(c.conn)
 }
 
 func (c *wsConn) Dail() error {
@@ -147,10 +138,11 @@ func (c *wsConn) Dail() error {
 		c.conn.Close()
 		c.conn = nil
 	}
-	ws, err := websocket.Dial(c.url, "", "")
+	ws, err := websocket.Dial(c.url, "cable", "https://localhost")
 	if err != nil {
 		return err
 	}
+	ws.PayloadType = websocket.BinaryFrame
 	c.conn = ws
 	return nil
 }
