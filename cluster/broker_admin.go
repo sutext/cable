@@ -8,13 +8,13 @@ import (
 	"strings"
 	"sync"
 
-	"sutext.github.io/cable/cluster/protos"
+	"sutext.github.io/cable/cluster/pb"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
 )
 
-func (b *broker) inspect() *protos.Status {
+func (b *broker) inspect() *pb.Status {
 	userCount := make(map[uint64]int32)
 	b.userClients.Range(func(key uint64, value *safe.KeyMap[string]) bool {
 		userCount[key] = value.Len()
@@ -26,17 +26,17 @@ func (b *broker) inspect() *protos.Status {
 		return true
 	})
 	status := b.cluster.Status()
-	progress := make(map[uint64]*protos.RaftProgress)
+	progress := make(map[uint64]*pb.RaftProgress)
 	if status.Progress != nil {
 		for id, p := range status.Progress {
-			progress[id] = &protos.RaftProgress{
+			progress[id] = &pb.RaftProgress{
 				Match: p.Match,
 				Next:  p.Next,
 				State: p.State.String(),
 			}
 		}
 	}
-	return &protos.Status{
+	return &pb.Status{
 		Id:           b.id,
 		UserCount:    userCount,
 		ClientCount:  b.clientChannels.Len(),
@@ -50,8 +50,8 @@ func (b *broker) inspect() *protos.Status {
 	}
 }
 
-func (b *broker) Inspects(ctx context.Context) ([]*protos.Status, error) {
-	ss := make([]*protos.Status, 0, b.cluster.size)
+func (b *broker) Inspects(ctx context.Context) ([]*pb.Status, error) {
+	ss := make([]*pb.Status, 0, b.cluster.size)
 	ss = append(ss, b.inspect())
 	wg := sync.WaitGroup{}
 	b.cluster.RangePeers(func(id uint64, cli *peerClient) {

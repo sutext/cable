@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/net/quic"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
 )
@@ -35,25 +36,27 @@ func (h *emptyHandler) GetChannels(uid string) (channels []string, err error) {
 }
 
 type options struct {
-	handler     Handler
-	brokerID    uint64
-	httpPort    string
-	peerPort    string
-	clusterSize int32
-	listeners   map[string]string
+	handler    Handler
+	brokerID   uint64
+	httpPort   string
+	peerPort   string
+	initSize   int32
+	listeners  map[string]string
+	quicConfig *quic.Config
 }
 
 func newOptions(opts ...Option) *options {
 	options := &options{
-		handler:     &emptyHandler{},
-		httpPort:    ":8888",
-		peerPort:    ":4567",
-		brokerID:    getBrokerID() + 10000,
-		clusterSize: 3,
+		handler:  &emptyHandler{},
+		httpPort: ":8888",
+		peerPort: ":4567",
+		brokerID: getBrokerID() + 10000,
+		initSize: 3,
 		listeners: map[string]string{
-			server.NetworkTCP:  ":1883",
-			server.NetworkUDP:  ":1884",
-			server.NetworkGRPC: ":1885",
+			server.NetworkTCP:       ":1683",
+			server.NetworkUDP:       ":1684",
+			server.NetworkQUIC:      ":1685",
+			server.NetworkWebSocket: ":1688",
 		},
 	}
 	for _, opt := range opts {
@@ -95,11 +98,20 @@ func WithBrokerID(id uint64) Option {
 		o.brokerID = id
 	}}
 }
-func WithClusterSize(size int32) Option {
+func WithInitSize(size int32) Option {
 	return Option{func(o *options) {
-		o.clusterSize = size
+		o.initSize = size
 	}}
 }
+
+// WithQuicConfig sets the QUIC configuration for the broker.
+func WithQuicConfig(config *quic.Config) Option {
+	return Option{func(o *options) {
+		o.quicConfig = config
+	}}
+}
+
+// getBrokerID returns a unique ID for the broker.
 func getBrokerID() uint64 {
 	if str := os.Getenv("BROKER_ID"); str != "" {
 		if id, err := strconv.ParseUint(str, 10, 64); err == nil {

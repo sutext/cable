@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"sync"
 
-	"sutext.github.io/cable/cluster/protos"
+	"sutext.github.io/cable/cluster/pb"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
@@ -18,7 +18,7 @@ type Broker interface {
 	Start() error
 	Cluster() Cluster
 	Shutdown(ctx context.Context) error
-	Inspects(ctx context.Context) ([]*protos.Status, error)
+	Inspects(ctx context.Context) ([]*pb.Status, error)
 	IsOnline(ctx context.Context, uid string) (ok bool)
 	KickUser(ctx context.Context, uid string)
 	SendToAll(ctx context.Context, m *packet.Message) (total, success int32, err error)
@@ -63,9 +63,10 @@ func NewBroker(opts ...Option) Broker {
 			server.WithConnect(func(p *packet.Connect) packet.ConnectCode {
 				return b.onUserConnect(p, net)
 			}),
+			server.WithQUICConfig(options.quicConfig),
 		)
 	}
-	b.cluster = newCluster(b, options.clusterSize)
+	b.cluster = newCluster(b, options.initSize)
 	b.peerServer = newPeerServer(b, b.peerPort)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/join", b.handleJoin)

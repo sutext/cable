@@ -3,15 +3,17 @@ package client
 import (
 	"time"
 
+	"golang.org/x/net/quic"
 	"sutext.github.io/cable/backoff"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
 )
 
 const (
-	NetworkTCP  string = "tcp"
-	NetworkUDP  string = "udp"
-	NetworkGRPC string = "grpc"
+	NetworkTCP       string = "tcp"
+	NetworkUDP       string = "udp"
+	NetworkQUIC      string = "quic"
+	NetworkWebSocket string = "ws"
 )
 
 type Handler interface {
@@ -35,6 +37,7 @@ type Options struct {
 	handler           Handler
 	retrier           *Retrier
 	network           string
+	quicConfig        *quic.Config
 	pingTimeout       time.Duration
 	pingInterval      time.Duration
 	writeTimeout      time.Duration
@@ -84,6 +87,11 @@ func WithNetwork(network string) Option {
 func WithRetrier(retrier *Retrier) Option {
 	return Option{f: func(o *Options) {
 		o.retrier = retrier
+	}}
+}
+func WithQuicConfig(config *quic.Config) Option {
+	return Option{f: func(o *Options) {
+		o.quicConfig = config
 	}}
 }
 func WithKeepAlive(timeout, interval time.Duration) Option {

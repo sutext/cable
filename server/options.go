@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 
+	"golang.org/x/net/quic"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
 )
@@ -16,8 +17,7 @@ const (
 	NetworkTCP       string = "tcp"
 	NetworkUDP       string = "udp"
 	NetworkQUIC      string = "quic"
-	NetworkGRPC      string = "grpc"
-	NetworkWebSocket string = "websocket"
+	NetworkWebSocket string = "ws"
 )
 
 type Option struct {
@@ -26,6 +26,7 @@ type Option struct {
 type options struct {
 	logger         *xlog.Logger
 	network        string
+	quicConfig     *quic.Config
 	queueCapacity  int32
 	closeHandler   ClosedHandler
 	connectHandler ConnectHandler
@@ -59,14 +60,9 @@ func NewOptions(opts ...Option) *options {
 func WithNetwork(network string) Option {
 	return Option{f: func(o *options) { o.network = network }}
 }
-
-//	func WithQUIC(config *quic.Config) Option {
-//		return Option{f: func(o *Options) {
-//			o.Network = NetworkQUIC
-//			o.QuicConfig = config
-//		}}
-//	}
-
+func WithQUICConfig(config *quic.Config) Option {
+	return Option{f: func(o *options) { o.quicConfig = config }}
+}
 func WithLogger(logger *xlog.Logger) Option {
 	return Option{f: func(o *options) { o.logger = logger }}
 }

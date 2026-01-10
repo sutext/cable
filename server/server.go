@@ -58,20 +58,23 @@ func New(address string, opts ...Option) Server {
 		messageHandler: options.messageHandler,
 		requestHandler: options.requestHandler,
 	}
-	return s
-}
-
-func (s *server) Serve() error {
 	switch s.network {
 	case NetworkTCP:
 		s.listener = listener.NewTCP(s.logger, s.queueCapacity)
 	case NetworkUDP:
 		s.listener = listener.NewUDP(s.logger, s.queueCapacity)
-	case NetworkGRPC:
-		s.listener = listener.NewGRPC(s.logger, s.queueCapacity)
+	case NetworkQUIC:
+		s.listener = listener.NewQUIC(s.logger, s.queueCapacity, options.quicConfig)
+	case NetworkWebSocket:
+		s.listener = listener.NewWS(s.logger, s.queueCapacity)
 	default:
-		return xerr.NetworkNotSupported
+		panic(xerr.NetworkNotSupported)
 	}
+	return s
+}
+
+func (s *server) Serve() error {
+
 	s.listener.OnClose(s.onClose)
 	s.listener.OnAccept(s.onConnect)
 	s.listener.OnPacket(s.onPacket)

@@ -61,21 +61,25 @@ spec:
   ports:
     - protocol: TCP
       name: endpoint-tcp
-      port: 1883
-      targetPort: 1883
+      port: 1683
+      targetPort: 1683
     - protocol: UDP
       name: endpoint-udp
-      port: 1884
-      targetPort: 1884
-    - protocol: TCP
-      name: endpoint-grpc
-      port: 1885
-      targetPort: 1885
+      port: 1684
+      targetPort: 1684
+    - protocol: UDP
+      name: endpoint-quic
+      port: 1685
+      targetPort: 1685
+    - protocol: UDP
+      name: endpoint-ws
+      port: 1688
+      targetPort: 1688
     - protocol: TCP
       name: pprof
       port: 6060
       targetPort: 6060
     - protocol: TCP
-      name: inspect
+      name: admin
       port: 8888
       targetPort: 8888

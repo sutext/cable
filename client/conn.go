@@ -1,8 +1,11 @@
 package client
 
 import (
+	"context"
 	"net"
 
+	"golang.org/x/net/quic"
+	"golang.org/x/net/websocket"
 	"sutext.github.io/cable/packet"
 )
 
@@ -11,19 +14,6 @@ type Conn interface {
 	Close() error
 	ReadPacket() (packet.Packet, error)
 	WritePacket(p packet.Packet) error
-}
-
-func NewConn(network string, addr string) Conn {
-	switch network {
-	case NetworkTCP:
-		return newTCPConn(addr)
-	case NetworkUDP:
-		return newUDPConn(addr)
-	case NetworkGRPC:
-		return newGRPCConn(addr)
-	default:
-		panic("unknown network")
-	}
 }
 
 type tcpConn struct {
@@ -115,7 +105,7 @@ func (c *udpConn) Dail() error {
 		c.conn.Close()
 		c.conn = nil
 	}
-	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 	if err != nil {
 		return err
 	}
@@ -125,4 +115,94 @@ func (c *udpConn) Dail() error {
 
 func (c *udpConn) Close() error {
 	return c.conn.Close()
+}
+
+type wsConn struct {
+	url  string
+	conn *websocket.Conn
+}
+
+func newWSConn(url string) Conn {
+	return &wsConn{url: url}
+}
+
+func (c *wsConn) WritePacket(p packet.Packet) error {
+	w, err := c.conn.NewFrameWriter(websocket.BinaryFrame)
+	if err != nil {
+		return err
+	}
+	return packet.WriteTo(w, p)
+}
+func (c *wsConn) ReadPacket() (packet.Packet, error) {
+	r, err := c.conn.NewFrameReader()
+	if err != nil {
+		return nil, err
+	}
+	p, err := packet.ReadFrom(r)
+	return p, nil
+}
+
+func (c *wsConn) Dail() error {
+	if c.conn != nil {
+		c.conn.Close()
+		c.conn = nil
+	}
+	ws, err := websocket.Dial(c.url, "", "")
+	if err != nil {
+		return err
+	}
+	c.conn = ws
+	return nil
+}
+
+func (c *wsConn) Close() error {
+	return c.conn.Close()
+}
+
+type quicConn struct {
+	addr     string
+	sess     *quic.Stream
+	config   *quic.Config
+	endpoint *quic.Endpoint
+}
+
+func newQUICConn(addr string, config *quic.Config) Conn {
+	if config == nil {
+		panic("quic config is nil")
+	}
+	return &quicConn{addr: addr, config: config}
+}
+
+func (c *quicConn) WritePacket(p packet.Packet) error {
+	return packet.WriteTo(c.sess, p)
+}
+
+func (c *quicConn) ReadPacket() (packet.Packet, error) {
+	return packet.ReadFrom(c.sess)
+}
+
+func (c *quicConn) Dail() error {
+	pkgConn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+	if err != nil {
+		return err
+	}
+	e, err := quic.NewEndpoint(pkgConn, c.config)
+	if err != nil {
+		return err
+	}
+	conn, err := e.Dial(context.Background(), "udp", c.addr, c.config)
+	if err != nil {
+		return err
+	}
+	sess, err := conn.NewStream(context.Background())
+	if err != nil {
+		return err
+	}
+	c.sess = sess
+	c.endpoint = e
+	return nil
+}
+
+func (c *quicConn) Close() error {
+	return c.endpoint.Close(context.Background())
 }

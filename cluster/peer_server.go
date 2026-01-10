@@ -8,14 +8,14 @@ import (
 	"go.etcd.io/raft/v3/raftpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
-	"sutext.github.io/cable/cluster/protos"
+	"sutext.github.io/cable/cluster/pb"
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xerr"
 )
 
 type peerServer struct {
-	protos.UnimplementedPeerServiceServer
+	pb.UnimplementedPeerServiceServer
 	broker   *broker
 	address  string
 	listener net.Listener
@@ -37,7 +37,7 @@ func (s *peerServer) Serve() error {
 			PermitWithoutStream: true,
 		}),
 	)
-	protos.RegisterPeerServiceServer(gs, s)
+	pb.RegisterPeerServiceServer(gs, s)
 	return gs.Serve(lis)
 }
 func (s *peerServer) Shutdown(ctx context.Context) error {
@@ -46,41 +46,41 @@ func (s *peerServer) Shutdown(ctx context.Context) error {
 	}
 	return s.listener.Close()
 }
-func (s *peerServer) Inspect(ctx context.Context, req *protos.Empty) (*protos.Status, error) {
+func (s *peerServer) Inspect(ctx context.Context, req *pb.Empty) (*pb.Status, error) {
 	return s.broker.inspect(), nil
 }
-func (s *peerServer) IsOnline(ctx context.Context, req *protos.IsOnlineReq) (*protos.IsOnlineResp, error) {
+func (s *peerServer) IsOnline(ctx context.Context, req *pb.IsOnlineReq) (*pb.IsOnlineResp, error) {
 	ok := s.broker.isActive(req.Targets)
-	return &protos.IsOnlineResp{Online: ok}, nil
+	return &pb.IsOnlineResp{Online: ok}, nil
 }
 
-func (s *peerServer) KickConn(ctx context.Context, req *protos.KickConnReq) (*protos.Empty, error) {
+func (s *peerServer) KickConn(ctx context.Context, req *pb.KickConnReq) (*pb.Empty, error) {
 	s.broker.kickConn(req.Targets)
-	return &protos.Empty{}, nil
+	return &pb.Empty{}, nil
 }
-func (s *peerServer) SendToAll(ctx context.Context, req *protos.MessageReq) (*protos.MessageResp, error) {
+func (s *peerServer) SendToAll(ctx context.Context, req *pb.MessageReq) (*pb.MessageResp, error) {
 	msg := &packet.Message{}
 	if err := coder.Unmarshal(req.Message, msg); err != nil {
 		return nil, xerr.InvalidPeerMessage
 	}
 	total, success := s.broker.sendToAll(ctx, msg)
-	return &protos.MessageResp{
+	return &pb.MessageResp{
 		Total:   total,
 		Success: success,
 	}, nil
 }
-func (s *peerServer) SendToTargets(ctx context.Context, req *protos.MessageReq) (*protos.MessageResp, error) {
+func (s *peerServer) SendToTargets(ctx context.Context, req *pb.MessageReq) (*pb.MessageResp, error) {
 	msg := &packet.Message{}
 	if err := coder.Unmarshal(req.Message, msg); err != nil {
 		return nil, xerr.InvalidPeerMessage
 	}
 	total, success := s.broker.sendToTargets(ctx, msg, req.Targets)
-	return &protos.MessageResp{
+	return &pb.MessageResp{
 		Total:   total,
 		Success: success,
 	}, nil
 }
-func (s *peerServer) SendRaftMessage(ctx context.Context, req *protos.RaftMessage) (*protos.Empty, error) {
+func (s *peerServer) SendRaftMessage(ctx context.Context, req *pb.RaftMessage) (*pb.Empty, error) {
 	var msg raftpb.Message
 	if err := msg.Unmarshal(req.Data); err != nil {
 		return nil, err
@@ -88,5 +88,5 @@ func (s *peerServer) SendRaftMessage(ctx context.Context, req *protos.RaftMessag
 	if err := s.broker.cluster.Process(ctx, msg); err != nil {
 		return nil, err
 	}
-	return &protos.Empty{}, nil
+	return &pb.Empty{}, nil
 }

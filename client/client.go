@@ -75,8 +75,21 @@ type client struct {
 
 func New(address string, options ...Option) Client {
 	opts := newOptions(options...)
+	var conn Conn
+	switch opts.network {
+	case NetworkTCP:
+		conn = newTCPConn(address)
+	case NetworkUDP:
+		conn = newUDPConn(address)
+	case NetworkQUIC:
+		conn = newQUICConn(address, opts.quicConfig)
+	case NetworkWebSocket:
+		conn = newWSConn(address)
+	default:
+		panic("unknown network")
+	}
 	c := &client{
-		conn:           NewConn(opts.network, address),
+		conn:           conn,
 		status:         StatusUnknown,
 		logger:         opts.logger,
 		retrier:        opts.retrier,

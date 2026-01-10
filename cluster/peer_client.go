@@ -11,7 +11,7 @@ import (
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
-	"sutext.github.io/cable/cluster/protos"
+	"sutext.github.io/cable/cluster/pb"
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xerr"
@@ -21,7 +21,7 @@ import (
 type peerClient struct {
 	id     uint64
 	mu     sync.Mutex
-	rpc    protos.PeerServiceClient
+	rpc    pb.PeerServiceClient
 	addr   string
 	port   string
 	conn   *grpc.ClientConn
@@ -96,7 +96,7 @@ func (p *peerClient) reconnnect() error {
 		p.conn.Close()
 	}
 	p.conn = conn
-	p.rpc = protos.NewPeerServiceClient(conn)
+	p.rpc = pb.NewPeerServiceClient(conn)
 	return nil
 }
 func (p *peerClient) Close() {
@@ -129,7 +129,7 @@ func (p *peerClient) sendToAll(ctx context.Context, m *packet.Message) (total, s
 	if err != nil {
 		return 0, 0, err
 	}
-	req := &protos.MessageReq{
+	req := &pb.MessageReq{
 		Message: data,
 	}
 	resp, err := p.rpc.SendToAll(ctx, req)
@@ -146,7 +146,7 @@ func (p *peerClient) sendToTargets(ctx context.Context, m *packet.Message, trage
 	if err != nil {
 		return 0, 0, err
 	}
-	req := &protos.MessageReq{
+	req := &pb.MessageReq{
 		Message: data,
 		Targets: tragets,
 	}
@@ -160,7 +160,7 @@ func (p *peerClient) isOnline(ctx context.Context, targets map[string]string) (b
 	if !p.isReady() {
 		return false, xerr.PeerNotReady
 	}
-	resp, err := p.rpc.IsOnline(ctx, &protos.IsOnlineReq{Targets: targets})
+	resp, err := p.rpc.IsOnline(ctx, &pb.IsOnlineReq{Targets: targets})
 	if err != nil {
 		return false, err
 	}
@@ -170,14 +170,14 @@ func (p *peerClient) kickConn(ctx context.Context, targets map[string]string) er
 	if !p.isReady() {
 		return xerr.PeerNotReady
 	}
-	_, err := p.rpc.KickConn(ctx, &protos.KickConnReq{Targets: targets})
+	_, err := p.rpc.KickConn(ctx, &pb.KickConnReq{Targets: targets})
 	return err
 }
-func (p *peerClient) inspect(ctx context.Context) (*protos.Status, error) {
+func (p *peerClient) inspect(ctx context.Context) (*pb.Status, error) {
 	if !p.isReady() {
 		return nil, xerr.PeerNotReady
 	}
-	return p.rpc.Inspect(ctx, &protos.Empty{})
+	return p.rpc.Inspect(ctx, &pb.Empty{})
 }
 
 // sendRaftMessage 发送Raft消息到远程节点
@@ -189,7 +189,7 @@ func (p *peerClient) sendRaftMessage(ctx context.Context, msg raftpb.Message) er
 	if err != nil {
 		return err
 	}
-	req := &protos.RaftMessage{
+	req := &pb.RaftMessage{
 		Data: data,
 	}
 	_, err = p.rpc.SendRaftMessage(ctx, req)
