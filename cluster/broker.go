@@ -34,7 +34,6 @@ type broker struct {
 	logger         *xlog.Logger
 	cluster        *cluster
 	handler        Handler
-	peerPort       string
 	listeners      map[string]server.Server
 	peerServer     *peerServer
 	httpServer     *http.Server
@@ -51,7 +50,6 @@ func NewBroker(opts ...Option) Broker {
 	}
 	b.logger = xlog.With("BROKER", b.id)
 	b.handler = options.handler
-	b.peerPort = options.peerPort
 	b.listeners = make(map[string]server.Server, len(options.listeners))
 	for net, addr := range options.listeners {
 		b.listeners[net] = server.New(addr,
@@ -66,8 +64,8 @@ func NewBroker(opts ...Option) Broker {
 			server.WithQUICConfig(options.quicConfig),
 		)
 	}
-	b.cluster = newCluster(b, options.initSize)
-	b.peerServer = newPeerServer(b, b.peerPort)
+	b.cluster = newCluster(b, options.initSize, options.peerPort)
+	b.peerServer = newPeerServer(b, options.peerPort)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/join", b.handleJoin)
 	mux.HandleFunc("/inspect", b.handleInspect)

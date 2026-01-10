@@ -1,63 +1,62 @@
-package listener
+package network
 
 import (
 	"context"
-	"fmt"
-	"net/http"
+	"net"
 	"time"
 
-	"golang.org/x/net/websocket"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
 )
 
-type wsListener struct {
+type transportTCP struct {
 	logger        *xlog.Logger
-	httpServer    *http.Server
+	listener      *net.TCPListener
 	closeHandler  func(c Conn)
 	packetHandler func(p packet.Packet, c Conn)
 	acceptHandler func(p *packet.Connect, c Conn) packet.ConnectCode
 	queueCapacity int32
 }
 
-func NewWS(logger *xlog.Logger, queueCapacity int32) Listener {
-	return &wsListener{
+func NewTCP(logger *xlog.Logger, queueCapacity int32) Transport {
+	return &transportTCP{
 		logger:        logger,
 		queueCapacity: queueCapacity,
 	}
 }
-func (l *wsListener) Close(ctx context.Context) error {
-	return l.httpServer.Close()
+func (l *transportTCP) Close(ctx context.Context) error {
+	return l.listener.Close()
 }
-func (l *wsListener) OnClose(handler func(c Conn)) {
+func (l *transportTCP) OnClose(handler func(c Conn)) {
 	l.closeHandler = handler
 }
-func (l *wsListener) OnAccept(handler func(p *packet.Connect, c Conn) packet.ConnectCode) {
+func (l *transportTCP) OnAccept(handler func(p *packet.Connect, c Conn) packet.ConnectCode) {
 	l.acceptHandler = handler
 }
-func (l *wsListener) OnPacket(handler func(p packet.Packet, c Conn)) {
+func (l *transportTCP) OnPacket(handler func(p packet.Packet, c Conn)) {
 	l.packetHandler = handler
 }
 
-func (l *wsListener) Listen(address string) error {
-	ws := websocket.Server{
-		Handler: func(conn *websocket.Conn) {
-			l.handleConn(conn)
-		},
-		Handshake: func(c *websocket.Config, r *http.Request) (err error) {
-			c.Origin, err = websocket.Origin(c, r)
-			if err == nil && c.Origin == nil {
-				return fmt.Errorf("null origin")
-			}
-			if c.Protocol[0] != "cable" {
-				return fmt.Errorf("invalid protocol")
-			}
-			return nil
-		},
+func (l *transportTCP) Listen(address string) error {
+	addr, err := net.ResolveTCPAddr("tcp", address)
+	if err != nil {
+		return err
 	}
-	return http.ListenAndServe(address, ws)
+	listener, err := net.ListenTCP("tcp", addr)
+	if err != nil {
+		return err
+	}
+	l.listener = listener
+	defer listener.Close()
+	for {
+		conn, err := listener.AcceptTCP()
+		if err != nil {
+			return err
+		}
+		go l.handleConn(conn)
+	}
 }
-func (l *wsListener) handleConn(conn *websocket.Conn) {
+func (l *transportTCP) handleConn(conn *net.TCPConn) {
 	timer := time.AfterFunc(time.Second*10, func() {
 		l.logger.Warn("waite conn packet timeout")
 		packet.WriteTo(conn, packet.NewClose(packet.CloseAuthTimeout))
@@ -78,7 +77,7 @@ func (l *wsListener) handleConn(conn *websocket.Conn) {
 		return
 	}
 	connPacket := p.(*packet.Connect)
-	c := newWSConn(connPacket.Identity, conn, l.logger, l.queueCapacity)
+	c := newTCPConn(connPacket.Identity, conn.RemoteAddr().String(), conn, l.logger, l.queueCapacity)
 	c.OnClose(func() {
 		l.closeHandler(c)
 	})
@@ -99,27 +98,31 @@ func (l *wsListener) handleConn(conn *websocket.Conn) {
 	}
 }
 
-type wsConn struct {
-	raw *websocket.Conn
+type tcpConn struct {
 	id  *packet.Identity
+	ip  string
+	raw *net.TCPConn
 }
 
-func (c *wsConn) ID() *packet.Identity {
+func (c *tcpConn) ID() *packet.Identity {
 	return c.id
 }
-func (c *wsConn) Close() error {
+func (c *tcpConn) IP() string {
+	return c.ip
+}
+func (c *tcpConn) Close() error {
 	return c.raw.Close()
 }
 
-func (c *wsConn) WriteData(data []byte) error {
+func (c *tcpConn) WriteData(data []byte) error {
 	_, err := c.raw.Write(data)
 	return err
 }
-func newWSConn(id *packet.Identity, raw *websocket.Conn, logger *xlog.Logger, queueCapacity int32) Conn {
-	t := &wsConn{
+func newTCPConn(id *packet.Identity, ip string, raw *net.TCPConn, logger *xlog.Logger, queueCapacity int32) Conn {
+	t := &tcpConn{
 		id:  id,
+		ip:  ip,
 		raw: raw,
 	}
-	t.raw.PayloadType = websocket.BinaryFrame
 	return newConn(t, logger, queueCapacity)
 }

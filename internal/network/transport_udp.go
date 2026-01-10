@@ -1,4 +1,4 @@
-package listener
+package network
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
-type udpListener struct {
+type transportUDP struct {
 	conns         safe.RMap[string, Conn]
 	logger        *xlog.Logger
 	listener      *net.UDPConn
@@ -21,26 +21,26 @@ type udpListener struct {
 	queueCapacity int32
 }
 
-func NewUDP(looger *xlog.Logger, queueCapacity int32) Listener {
-	return &udpListener{
+func NewUDP(looger *xlog.Logger, queueCapacity int32) Transport {
+	return &transportUDP{
 		logger:        looger,
 		queueCapacity: queueCapacity,
 	}
 }
-func (l *udpListener) Close(ctx context.Context) error {
+func (l *transportUDP) Close(ctx context.Context) error {
 	return l.listener.Close()
 }
-func (l *udpListener) OnClose(handler func(Conn)) {
+func (l *transportUDP) OnClose(handler func(Conn)) {
 	l.closeHandler = handler
 }
-func (l *udpListener) OnAccept(handler func(p *packet.Connect, c Conn) packet.ConnectCode) {
+func (l *transportUDP) OnAccept(handler func(p *packet.Connect, c Conn) packet.ConnectCode) {
 	l.acceptHandler = handler
 }
-func (l *udpListener) OnPacket(handler func(p packet.Packet, c Conn)) {
+func (l *transportUDP) OnPacket(handler func(p packet.Packet, c Conn)) {
 	l.packetHandler = handler
 }
 
-func (l *udpListener) Listen(address string) error {
+func (l *transportUDP) Listen(address string) error {
 	udpAddr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
 		return err
@@ -65,7 +65,7 @@ func (l *udpListener) Listen(address string) error {
 	}
 }
 
-func (l *udpListener) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.Packet) {
+func (l *transportUDP) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet.Packet) {
 	if p.Type() != packet.CONNECT {
 		connID, ok := p.Get(packet.PropertyConnID)
 		if !ok {
@@ -114,6 +114,9 @@ type udpConn struct {
 
 func (c *udpConn) ID() *packet.Identity {
 	return c.id
+}
+func (c *udpConn) IP() string {
+	return c.addr.Load().IP.String()
 }
 func (c *udpConn) Close() error {
 	return nil

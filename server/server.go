@@ -5,13 +5,18 @@ import (
 	"sync/atomic"
 	"time"
 
-	"sutext.github.io/cable/internal/listener"
+	"sutext.github.io/cable/internal/network"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xerr"
 	"sutext.github.io/cable/xlog"
 )
 
+type ConnInfo struct {
+	IP  string
+	UID string
+	CID string
+}
 type Server interface {
 	// Serve starts the server and listens for incoming connections.
 	Serve() error
@@ -19,6 +24,8 @@ type Server interface {
 	Network() string
 	/// IsActive returns true if the client is active.
 	IsActive(cid string) bool
+	// ConnInfo returns the connection information of a client.
+	ConnInfo(cid string) (*ConnInfo, bool)
 	// KickConn kicks a client out of the server.
 	KickConn(cid string) bool
 	// Shutdown shuts down the server and closes all connections.
@@ -33,12 +40,12 @@ type Server interface {
 	ExpelAllConns()
 }
 type server struct {
-	conns          safe.RMap[string, listener.Conn]
+	conns          safe.RMap[string, network.Conn]
 	logger         *xlog.Logger
 	closed         atomic.Bool
 	address        string
 	network        string
-	listener       listener.Listener
+	transport      network.Transport
 	queueCapacity  int32
 	closeHandler   ClosedHandler
 	connectHandler ConnectHandler
@@ -60,13 +67,13 @@ func New(address string, opts ...Option) Server {
 	}
 	switch s.network {
 	case NetworkTCP:
-		s.listener = listener.NewTCP(s.logger, s.queueCapacity)
+		s.transport = network.NewTCP(s.logger, s.queueCapacity)
 	case NetworkUDP:
-		s.listener = listener.NewUDP(s.logger, s.queueCapacity)
+		s.transport = network.NewUDP(s.logger, s.queueCapacity)
 	case NetworkQUIC:
-		s.listener = listener.NewQUIC(s.logger, s.queueCapacity, options.quicConfig)
+		s.transport = network.NewQUIC(s.logger, s.queueCapacity, options.quicConfig)
 	case NetworkWebSocket:
-		s.listener = listener.NewWS(s.logger, s.queueCapacity)
+		s.transport = network.NewWebSocket(s.logger, s.queueCapacity)
 	default:
 		panic(xerr.NetworkNotSupported)
 	}
@@ -75,17 +82,30 @@ func New(address string, opts ...Option) Server {
 
 func (s *server) Serve() error {
 
-	s.listener.OnClose(s.onClose)
-	s.listener.OnAccept(s.onConnect)
-	s.listener.OnPacket(s.onPacket)
+	s.transport.OnClose(s.onClose)
+	s.transport.OnAccept(s.onConnect)
+	s.transport.OnPacket(s.onPacket)
 	s.logger.Info("server listening", xlog.Str("address", s.address), xlog.Str("network", string(s.network)))
-	return s.listener.Listen(s.address)
+	return s.transport.Listen(s.address)
 }
 func (s *server) IsActive(cid string) bool {
 	if c, ok := s.conns.Get(cid); ok {
 		return !c.IsClosed()
 	}
 	return false
+}
+func (s *server) Network() string {
+	return s.network
+}
+func (s *server) ConnInfo(cid string) (*ConnInfo, bool) {
+	if c, ok := s.conns.Get(cid); ok {
+		return &ConnInfo{
+			IP:  c.IP(),
+			UID: c.ID().UserID,
+			CID: c.ID().ClientID,
+		}, true
+	}
+	return nil, false
 }
 func (s *server) KickConn(cid string) bool {
 	if c, ok := s.conns.Get(cid); ok {
@@ -95,20 +115,20 @@ func (s *server) KickConn(cid string) bool {
 	return false
 }
 func (s *server) ExpelAllConns() {
-	s.conns.Range(func(key string, c listener.Conn) bool {
+	s.conns.Range(func(key string, c network.Conn) bool {
 		c.CloseClode(packet.CloseServerEexpected)
 		return true
 	})
-	s.conns = safe.RMap[string, listener.Conn]{}
+	s.conns = safe.RMap[string, network.Conn]{}
 }
 func (s *server) Shutdown(ctx context.Context) error {
 	if !s.closed.CompareAndSwap(false, true) {
 		return xerr.ServerAlreadyClosed
 	}
-	err := s.listener.Close(ctx)
+	err := s.transport.Close(ctx)
 	for {
 		activeConn := 0
-		s.conns.Range(func(key string, conn listener.Conn) bool {
+		s.conns.Range(func(key string, conn network.Conn) bool {
 			if conn.IsIdle() {
 				conn.Close()
 			} else {
@@ -138,7 +158,7 @@ func (s *server) Brodcast(ctx context.Context, p *packet.Message) (int32, int32,
 		return 0, 0, xerr.ServerIsClosed
 	}
 	var total, success int32
-	s.conns.Range(func(cid string, conn listener.Conn) bool {
+	s.conns.Range(func(cid string, conn network.Conn) bool {
 		total++
 		if err := conn.SendMessage(ctx, p); err == nil {
 			success++
@@ -147,9 +167,7 @@ func (s *server) Brodcast(ctx context.Context, p *packet.Message) (int32, int32,
 	})
 	return total, success, nil
 }
-func (s *server) Network() string {
-	return s.network
-}
+
 func (s *server) SendMessage(ctx context.Context, cid string, p *packet.Message) error {
 	if s.closed.Load() {
 		return xerr.ServerIsClosed
@@ -170,7 +188,7 @@ func (s *server) SendRequest(ctx context.Context, cid string, p *packet.Request)
 }
 
 // Below is the code of /Users/vidar/github/cable/server/conn.go
-func (s *server) onPacket(p packet.Packet, c listener.Conn) {
+func (s *server) onPacket(p packet.Packet, c network.Conn) {
 	if s.closed.Load() {
 		return
 	}
@@ -193,9 +211,7 @@ func (s *server) onPacket(p packet.Packet, c listener.Conn) {
 		break
 	}
 }
-
-// Below is the code of
-func (s *server) onConnect(p *packet.Connect, c listener.Conn) packet.ConnectCode {
+func (s *server) onConnect(p *packet.Connect, c network.Conn) packet.ConnectCode {
 	code := s.connectHandler(p)
 	if code == packet.ConnectAccepted {
 		if old, loaded := s.conns.Swap(p.Identity.ClientID, c); loaded {
@@ -204,7 +220,7 @@ func (s *server) onConnect(p *packet.Connect, c listener.Conn) packet.ConnectCod
 	}
 	return code
 }
-func (s *server) onMessage(c listener.Conn, p *packet.Message) {
+func (s *server) onMessage(c network.Conn, p *packet.Message) {
 	err := s.messageHandler(p, c.ID())
 	if err != nil {
 		s.logger.Error("failed to handle message", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
@@ -216,7 +232,7 @@ func (s *server) onMessage(c listener.Conn, p *packet.Message) {
 		}
 	}
 }
-func (s *server) onRequest(c listener.Conn, p *packet.Request) {
+func (s *server) onRequest(c network.Conn, p *packet.Request) {
 	res, err := s.requestHandler(p, c.ID())
 	if err != nil {
 		s.logger.Error("failed to handle request", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
@@ -226,7 +242,7 @@ func (s *server) onRequest(c listener.Conn, p *packet.Request) {
 		s.logger.Error("failed to send response", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 	}
 }
-func (s *server) onClose(c listener.Conn) {
+func (s *server) onClose(c network.Conn) {
 	id := c.ID()
 	if id == nil {
 		return

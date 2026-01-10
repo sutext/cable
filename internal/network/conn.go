@@ -1,4 +1,4 @@
-package listener
+package network
 
 import (
 	"context"
@@ -17,10 +17,11 @@ import (
 
 type rawconn interface {
 	ID() *packet.Identity
+	IP() string
 	Close() error
 	WriteData(data []byte) error
 }
-type Listener interface {
+type Transport interface {
 	Close(ctx context.Context) error
 	Listen(addr string) error
 	OnClose(handler func(c Conn))
@@ -29,6 +30,7 @@ type Listener interface {
 }
 type Conn interface {
 	ID() *packet.Identity
+	IP() string
 	Close() error
 	IsIdle() bool
 	OnClose(handler func())
@@ -70,7 +72,9 @@ func newConn(raw rawconn, logger *xlog.Logger, queueCapacity int32) Conn {
 func (c *conn) ID() *packet.Identity {
 	return c.raw.ID()
 }
-
+func (c *conn) IP() string {
+	return c.raw.IP()
+}
 func (c *conn) IsIdle() bool {
 	return c.sendQueue.IsIdle()
 }

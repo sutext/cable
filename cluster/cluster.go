@@ -35,13 +35,13 @@ type cluster struct {
 	confChangeCount uint64
 }
 
-func newCluster(broker *broker, initSize int32) *cluster {
+func newCluster(broker *broker, initSize int32, peerPort string) *cluster {
 	c := &cluster{
 		size:      initSize,
 		broker:    broker,
 		stoped:    make(chan struct{}),
 		logger:    broker.logger,
-		discovery: discovery.New(broker.id, broker.peerPort),
+		discovery: discovery.New(broker.id, peerPort),
 	}
 	c.discovery.OnRequest(func(id uint64, addr string) {
 		c.AddBroker(context.Background(), id, addr)
