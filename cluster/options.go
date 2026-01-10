@@ -58,6 +58,7 @@ func newOptions(opts ...Option) *options {
 			server.NetworkQUIC:      ":1685",
 			server.NetworkWebSocket: ":1688",
 		},
+		quicConfig: &quic.Config{},
 	}
 	for _, opt := range opts {
 		opt.f(options)

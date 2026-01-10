@@ -66,8 +66,11 @@ func (c *cluster) Stop() {
 		close(c.stoped)
 	}
 }
-func (c *cluster) Status() raft.Status {
-	return c.raft.Status()
+func (c *cluster) Status() (raft.Status, error) {
+	if c.raft == nil {
+		return raft.Status{}, xerr.RaftNodeNotReady
+	}
+	return c.raft.Status(), nil
 }
 func (c *cluster) RaftLogSize() uint64 {
 	firstIndex, _ := c.storage.FirstIndex()

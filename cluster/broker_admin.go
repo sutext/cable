@@ -25,7 +25,7 @@ func (b *broker) inspect() *pb.Status {
 		channelCount[key] = value.Len()
 		return true
 	})
-	status := b.cluster.Status()
+	status, _ := b.cluster.Status()
 	progress := make(map[uint64]*pb.RaftProgress)
 	if status.Progress != nil {
 		for id, p := range status.Progress {
