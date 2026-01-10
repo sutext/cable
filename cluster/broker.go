@@ -68,12 +68,11 @@ func NewBroker(opts ...Option) Broker {
 	b.peerServer = newPeerServer(b, options.peerPort)
 	mux := http.NewServeMux()
 	mux.HandleFunc("/join", b.handleJoin)
-	mux.HandleFunc("/inspect", b.handleInspect)
-	mux.HandleFunc("/kickout", b.handleKickout)
-	mux.HandleFunc("/message", b.handleMessage)
-	mux.HandleFunc("/brodcast", b.handleBrodcast)
+	mux.HandleFunc("/send", b.handleSendMessage)
 	mux.HandleFunc("/health", b.handleHealth)
-	mux.HandleFunc("/removeNode", b.handleRemoveNode)
+	mux.HandleFunc("/inspect", b.handleInspect)
+	mux.HandleFunc("/kickUser", b.handleKickUser)
+	mux.HandleFunc("/kickNode", b.handleKickNode)
 	b.httpServer = &http.Server{Addr: options.httpPort, Handler: mux}
 	return b
 }

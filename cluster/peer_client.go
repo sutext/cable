@@ -58,7 +58,7 @@ func (p *peerClient) reconnnect() error {
 	config := `{
   		"loadBalancingPolicy": "round_robin",
  		"methodConfig": [{
-    		"name": [{"service": "protos.PeerService"}],
+    		"name": [{"service": "pb.PeerService"}],
     		"waitForReady": true,
     		"timeout": "3s",
     		"retryPolicy": {
