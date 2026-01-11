@@ -28,20 +28,20 @@ type cluster struct {
 	stoped          chan struct{}
 	leader          atomic.Uint64
 	storage         *raft.MemoryStorage
-	discovery       discovery.Discovery
 	confState       *raftpb.ConfState
+	discovery       discovery.Discovery
 	appliedIndex    uint64
 	snapshotIndex   uint64
 	confChangeCount uint64
 }
 
-func newCluster(broker *broker, initSize int32, peerPort string) *cluster {
+func newCluster(broker *broker, size int32, port string) *cluster {
 	c := &cluster{
-		size:      initSize,
+		size:      size,
 		broker:    broker,
-		stoped:    make(chan struct{}),
 		logger:    broker.logger,
-		discovery: discovery.New(broker.id, peerPort),
+		stoped:    make(chan struct{}),
+		discovery: discovery.New(broker.id, port),
 	}
 	c.discovery.OnRequest(func(id uint64, addr string) {
 		c.AddBroker(context.Background(), id, addr)

@@ -272,27 +272,22 @@ func (b *broker) onUserConnect(p *packet.Connect, net string) packet.ConnectCode
 		return code
 	}
 	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
+		if id == b.id {
+			return true
+		}
 		if cnet, ok := value.GetKey(p.Identity.UserID, p.Identity.ClientID); ok {
-			if id != b.id || net != cnet {
-				b.logger.Info("duplicate connection detected, kick old connection",
-					xlog.Uid(p.Identity.UserID),
-					xlog.Cid(p.Identity.ClientID),
-					xlog.U64("old_peer_id", id),
-					xlog.Str("old_net", cnet),
-					xlog.U64("new_peer_id", b.id),
-					xlog.Str("new_net", net),
-				)
-				if id == b.id {
-					if l, ok := b.listeners[cnet]; ok {
-						l.KickConn(p.Identity.ClientID)
-					}
-				} else {
-					if peer, ok := b.cluster.GetPeer(id); ok {
-						cids := map[string]string{p.Identity.ClientID: net}
-						if err := peer.kickConn(context.Background(), cids); err != nil {
-							b.logger.Error("kick old connection from peer failed", xlog.Peer(id), xlog.Err(err))
-						}
-					}
+			b.logger.Info("duplicate connection detected, kick old connection",
+				xlog.Uid(p.Identity.UserID),
+				xlog.Cid(p.Identity.ClientID),
+				xlog.U64("old_peer_id", id),
+				xlog.Str("old_net", cnet),
+				xlog.U64("new_peer_id", b.id),
+				xlog.Str("new_net", net),
+			)
+			if peer, ok := b.cluster.GetPeer(id); ok {
+				cids := map[string]string{p.Identity.ClientID: net}
+				if err := peer.kickConn(context.Background(), cids); err != nil {
+					b.logger.Error("kick old connection from peer failed", xlog.Peer(id), xlog.Err(err))
 				}
 			}
 		}
@@ -306,7 +301,7 @@ func (b *broker) onUserConnect(p *packet.Connect, net string) packet.ConnectCode
 	op := &userOpenedOp{
 		uid:      p.Identity.UserID,
 		cid:      p.Identity.ClientID,
-		net:      string(net),
+		net:      net,
 		nodeID:   b.id,
 		channels: chs,
 	}
@@ -335,7 +330,6 @@ func (b *broker) isActive(targets map[string]string) bool {
 			}
 		}
 	}
-
 	return false
 }
 func (b *broker) kickConn(targets map[string]string) {
