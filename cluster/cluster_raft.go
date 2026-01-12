@@ -153,10 +153,10 @@ func (c *cluster) SubmitOperation(ctx context.Context, op opdata) error {
 	if c.raft == nil {
 		return xerr.RaftNodeNotReady
 	}
-	enc := coder.NewEncoder()
-	enc.WriteUInt8(uint8(op.opt()))
-	op.WriteTo(enc)
-	c.raft.Propose(ctx, enc.Bytes())
+	ec := coder.NewEncoder()
+	ec.WriteUInt8(uint8(op.opt()))
+	op.WriteTo(ec)
+	c.raft.Propose(ctx, ec.Bytes())
 	return nil
 }
 func (c *cluster) addNode(ctx context.Context, id uint64) error {

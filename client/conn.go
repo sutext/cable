@@ -153,7 +153,7 @@ func (c *wsConn) Close() error {
 
 type quicConn struct {
 	addr     string
-	sess     *quic.Stream
+	stream   *quic.Stream
 	config   *quic.Config
 	endpoint *quic.Endpoint
 }
@@ -166,11 +166,11 @@ func newQUICConn(addr string, config *quic.Config) Conn {
 }
 
 func (c *quicConn) WritePacket(p packet.Packet) error {
-	return packet.WriteTo(c.sess, p)
+	return packet.WriteTo(c.stream, p)
 }
 
 func (c *quicConn) ReadPacket() (packet.Packet, error) {
-	return packet.ReadFrom(c.sess)
+	return packet.ReadFrom(c.stream)
 }
 
 func (c *quicConn) Dail() error {
@@ -186,11 +186,11 @@ func (c *quicConn) Dail() error {
 	if err != nil {
 		return err
 	}
-	sess, err := conn.NewStream(context.Background())
+	s, err := conn.NewStream(context.Background())
 	if err != nil {
 		return err
 	}
-	c.sess = sess
+	c.stream = s
 	c.endpoint = e
 	return nil
 }

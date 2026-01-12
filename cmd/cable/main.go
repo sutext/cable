@@ -39,7 +39,7 @@ func (h *Handler) OnMessage(m *packet.Message, id *packet.Identity) error {
 		if !ok {
 			return fmt.Errorf("no user id in message")
 		}
-		totla, success, err := h.b.SendToUser(context.Background(), toUserID, packet.NewMessage(m.Payload))
+		totla, success, err := h.b.SendToUser(context.Background(), toUserID, packet.NewMessage(rand.Int64(), m.Payload))
 		if err != nil {
 			xlog.Error("Failed to send message to ", xlog.Str("toId", toUserID), xlog.Err(err))
 		} else {
@@ -50,7 +50,7 @@ func (h *Handler) OnMessage(m *packet.Message, id *packet.Identity) error {
 		if !ok {
 			return fmt.Errorf("no user id in message")
 		}
-		totla, success, err := h.b.SendToChannel(context.Background(), channel, packet.NewMessage(m.Payload))
+		totla, success, err := h.b.SendToChannel(context.Background(), channel, packet.NewMessage(rand.Int64(), m.Payload))
 		if err != nil {
 			xlog.Error("Failed to send message to ", xlog.Channel(channel), xlog.Err(err))
 		} else {

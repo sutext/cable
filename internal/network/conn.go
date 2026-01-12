@@ -138,11 +138,11 @@ func (c *conn) sendInflightMessage(ctx context.Context, p *packet.Message) (*pac
 	}
 	c.messageLock.Lock()
 	ackCh := make(chan *packet.Messack)
-	c.messageTasks[p.ID] = ackCh
+	c.messageTasks[p.ID()] = ackCh
 	c.messageLock.Unlock()
 	defer func() {
 		c.messageLock.Lock()
-		delete(c.messageTasks, p.ID)
+		delete(c.messageTasks, p.ID())
 		close(ackCh)
 		c.messageLock.Unlock()
 	}()
@@ -162,11 +162,11 @@ func (c *conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Resp
 	}
 	c.requestLock.Lock()
 	resp := make(chan *packet.Response)
-	c.requestTasks[p.ID] = resp
+	c.requestTasks[p.ID()] = resp
 	c.requestLock.Unlock()
 	defer func() {
 		c.requestLock.Lock()
-		delete(c.requestTasks, p.ID)
+		delete(c.requestTasks, p.ID())
 		close(resp)
 		c.requestLock.Unlock()
 	}()
@@ -189,24 +189,24 @@ func (c *conn) RecvPong() {
 }
 func (c *conn) RecvMessack(p *packet.Messack) {
 	c.messageLock.Lock()
-	ch, ok := c.messageTasks[p.ID]
+	ch, ok := c.messageTasks[p.ID()]
 	if ok {
 		ch <- p
 	}
 	c.messageLock.Unlock()
 	if !ok {
-		c.logger.Error("response task not found", xlog.I64("id", p.ID))
+		c.logger.Error("response task not found", xlog.I64("id", p.ID()))
 	}
 }
 func (c *conn) RecvResponse(p *packet.Response) {
 	c.requestLock.Lock()
-	ch, ok := c.requestTasks[p.ID]
+	ch, ok := c.requestTasks[p.ID()]
 	if ok {
 		ch <- p
 	}
 	c.requestLock.Unlock()
 	if !ok {
-		c.logger.Error("response task not found", xlog.I64("id", p.ID))
+		c.logger.Error("response task not found", xlog.I64("id", p.ID()))
 	}
 }
 func (c *conn) Close() error {

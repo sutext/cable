@@ -19,10 +19,9 @@ const (
 
 type Response struct {
 	packet
-	ID      int64
-	Code    ResponseCode
-	Headers map[string]string
-	Content []byte
+	id   int64
+	Code ResponseCode
+	Body []byte
 }
 
 func NewResponse(id int64, content ...[]byte) *Response {
@@ -31,9 +30,12 @@ func NewResponse(id int64, content ...[]byte) *Response {
 		b = content[0]
 	}
 	return &Response{
-		ID:      id,
-		Content: b,
+		id:   id,
+		Body: b,
 	}
+}
+func (p *Response) ID() int64 {
+	return p.id
 }
 func (p *Response) Type() PacketType {
 	return RESPONSE
@@ -47,22 +49,20 @@ func (p *Response) Equal(other Packet) bool {
 	}
 	o := other.(*Response)
 	return maps.Equal(p.props, o.props) &&
-		p.ID == o.ID &&
+		p.id == o.id &&
 		p.Code == o.Code &&
-		maps.Equal(p.Headers, o.Headers) &&
-		bytes.Equal(p.Content, o.Content)
+		bytes.Equal(p.Body, o.Body)
 }
 func (p *Response) String() string {
-	return fmt.Sprintf("RESPONSE(ID=%d, Code=%d, Headers=%v, Props=%v, Content=%d)", p.ID, p.Code, p.Headers, p.props, len(p.Content))
+	return fmt.Sprintf("RESPONSE(ID=%d, Code=%d,  Props=%v, Content=%d)", p.id, p.Code, p.props, len(p.Body))
 }
 func (p *Response) WriteTo(w coder.Encoder) error {
-	w.WriteInt64(p.ID)
+	w.WriteInt64(p.id)
 	w.WriteUInt8(uint8(p.Code))
-	w.WriteStrMap(p.Headers)
 	if err := p.packet.WriteTo(w); err != nil {
 		return err
 	}
-	w.WriteBytes(p.Content)
+	w.WriteBytes(p.Body)
 	return nil
 }
 func (p *Response) ReadFrom(r coder.Decoder) error {
@@ -74,10 +74,6 @@ func (p *Response) ReadFrom(r coder.Decoder) error {
 	if err != nil {
 		return err
 	}
-	headers, err := r.ReadStrMap()
-	if err != nil {
-		return err
-	}
 	if err := p.packet.ReadFrom(r); err != nil {
 		return err
 	}
@@ -85,9 +81,8 @@ func (p *Response) ReadFrom(r coder.Decoder) error {
 	if err != nil {
 		return err
 	}
-	p.ID = id
+	p.id = id
 	p.Code = ResponseCode(code)
-	p.Headers = headers
-	p.Content = b
+	p.Body = b
 	return nil
 }

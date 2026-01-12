@@ -251,6 +251,10 @@ func (c *client) retryInflightMessage(ctx context.Context, p *packet.Message, at
 	if attempts > 5 {
 		return ErrRequestTimeout
 	}
+	if attempts > 0 {
+		p.Dup = true
+		c.logger.Warn("retry inflight message", xlog.I64("id", p.ID()), xlog.Int("attempts", attempts))
+	}
 	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
 	defer cancel()
 	_, err := c.sendInflightMessage(ctx, p)
@@ -268,11 +272,11 @@ func (c *client) sendInflightMessage(ctx context.Context, p *packet.Message) (*p
 	}
 	c.messageLock.Lock()
 	ackCh := make(chan *packet.Messack)
-	c.messageTasks[p.ID] = ackCh
+	c.messageTasks[p.ID()] = ackCh
 	c.messageLock.Unlock()
 	defer func() {
 		c.messageLock.Lock()
-		delete(c.messageTasks, p.ID)
+		delete(c.messageTasks, p.ID())
 		close(ackCh)
 		c.messageLock.Unlock()
 	}()
@@ -292,11 +296,11 @@ func (c *client) SendRequest(ctx context.Context, p *packet.Request) (*packet.Re
 	}
 	c.requestLock.Lock()
 	resp := make(chan *packet.Response)
-	c.requestTasks[p.ID] = resp
+	c.requestTasks[p.ID()] = resp
 	c.requestLock.Unlock()
 	defer func() {
 		c.requestLock.Lock()
-		delete(c.requestTasks, p.ID)
+		delete(c.requestTasks, p.ID())
 		close(resp)
 		c.requestLock.Unlock()
 	}()
@@ -381,20 +385,20 @@ func (c *client) handlePacket(p packet.Packet) {
 			return
 		}
 		if msg.Qos == packet.MessageQos1 {
-			if err := c.sendPacket(context.Background(), true, packet.NewMessack(msg.ID)); err != nil {
+			if err := c.sendPacket(context.Background(), true, msg.Ack()); err != nil {
 				c.logger.Error("send messack packet error", xlog.Err(err))
 			}
 		}
 	case packet.MESSACK:
 		p := p.(*packet.Messack)
 		c.messageLock.Lock()
-		ch, ok := c.messageTasks[p.ID]
+		ch, ok := c.messageTasks[p.ID()]
 		if ok {
 			ch <- p
 		}
 		c.messageLock.Unlock()
 		if !ok {
-			c.logger.Error("response task not found", xlog.I64("id", p.ID))
+			c.logger.Error("response task not found", xlog.I64("id", p.ID()))
 		}
 	case packet.REQUEST:
 		res, err := c.handler.OnRequest(p.(*packet.Request))
@@ -410,13 +414,13 @@ func (c *client) handlePacket(p packet.Packet) {
 	case packet.RESPONSE:
 		p := p.(*packet.Response)
 		c.requestLock.Lock()
-		ch, ok := c.requestTasks[p.ID]
+		ch, ok := c.requestTasks[p.ID()]
 		if ok {
 			ch <- p
 		}
 		c.requestLock.Unlock()
 		if !ok {
-			c.logger.Error("response task not found", xlog.I64("id", p.ID))
+			c.logger.Error("response task not found", xlog.I64("id", p.ID()))
 		}
 	case packet.PING:
 		if err := c.sendPong(); err != nil {

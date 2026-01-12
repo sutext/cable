@@ -23,9 +23,9 @@ type Broker interface {
 	KickUser(ctx context.Context, uid string)
 	SendToAll(ctx context.Context, m *packet.Message) (total, success int32, err error)
 	SendToUser(ctx context.Context, uid string, m *packet.Message) (total, success int32, err error)
-	SendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success int32, err error)
 	JoinChannel(ctx context.Context, uid string, channels ...string) error
 	LeaveChannel(ctx context.Context, uid string, channels ...string) error
+	SendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success int32, err error)
 	HandleRequest(method string, handler server.RequestHandler)
 }
 

@@ -23,11 +23,11 @@ func TestPacket(t *testing.T) {
 	testp(t, NewResponse(1))
 }
 func SmallMessage() Packet {
-	return NewMessage([]byte("hello world"))
+	return NewMessage(0, []byte("hello world"))
 }
 func BigMessage() Packet {
 	data := "eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3NjM1MDA1NTgsImV4cCI6MTc2MzUzNjg1OCwiand0X3VzZXIiOnsiZ3VpZCI6IjM2MjlmZDQwMzVlNDQzMjI5MDVjOTk5NmQ2Y2QyMWM3IiwidXNlcklkIjoyMDU0MjQ2LCJpZGVudGlmaWVyIjoiKzg2LTEyMjAwMDAwMDAwIiwibmlja25hbWUiOiIxMTLnlLXor53pg73lvojlpb3nmoQiLCJhdmF0YXIiOiJodHRwczovL2Nkbi50ZXN0LnV0b3duLmlvL2kvMjAyNDA5MDcvMi83LzkvMjc5ZmQ4N2I5ZDg2NGM0NmEwNGU2MGQyMDNkMTEzYTZfVzEwODBfSDEwODAuanBlZyIsImxhbmciOiJlbiIsInJlZ2lvbiI6IkVOIiwidXNlclR5cGUiOjAsImNvdW50cnkiOiJDTiJ9LCJ1c2VySWQiOiIyMDU0MjQ2In0.x57EFrgc29tk-sv7MJCiwD2988jzeHUenbV9LvCDogQ"
-	msg := NewMessage([]byte(data))
+	msg := NewMessage(0, []byte(data))
 	msg.Qos = 1
 	msg.Dup = true
 	msg.Kind = MessageKind(2)

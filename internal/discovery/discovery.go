@@ -76,7 +76,7 @@ func (m *discovery) Serve() error {
 			m.logger.Error("request method is not discovery")
 			continue
 		}
-		dec := coder.NewDecoder(req.Content)
+		dec := coder.NewDecoder(req.Body)
 		id, err := dec.ReadUInt64()
 		if err != nil {
 			m.logger.Error("decode request error", xlog.Err(err))
@@ -88,10 +88,10 @@ func (m *discovery) Serve() error {
 			continue
 		}
 		m.req(id, ipaddr)
-		enc := coder.NewEncoder()
-		enc.WriteUInt64(m.id)
-		enc.WriteString(m.ipaddr)
-		resp := packet.NewResponse(req.ID, enc.Bytes())
+		ec := coder.NewEncoder()
+		ec.WriteUInt64(m.id)
+		ec.WriteString(m.ipaddr)
+		resp := req.Response(ec.Bytes())
 		bytes, err := packet.Marshal(resp)
 		if err != nil {
 			m.logger.Error("marshal response error", xlog.Err(err))
@@ -141,10 +141,10 @@ func (m *discovery) Request() (r map[uint64]string, err error) {
 	if m.respChan != nil {
 		return nil, fmt.Errorf("Muticast request is already in progress")
 	}
-	enc := coder.NewEncoder()
-	enc.WriteUInt64(m.id)
-	enc.WriteString(m.ipaddr)
-	req := packet.NewRequest("discovery", enc.Bytes())
+	ec := coder.NewEncoder()
+	ec.WriteUInt64(m.id)
+	ec.WriteString(m.ipaddr)
+	req := packet.NewRequest("discovery", ec.Bytes())
 	reqdata, err := packet.Marshal(req)
 	if err != nil {
 		return r, err
@@ -160,13 +160,13 @@ func (m *discovery) Request() (r map[uint64]string, err error) {
 	}
 	r = make(map[uint64]string)
 	for resp := range m.respChan {
-		dec := coder.NewDecoder(resp.Content)
-		id, err := dec.ReadUInt64()
+		dc := coder.NewDecoder(resp.Body)
+		id, err := dc.ReadUInt64()
 		if err != nil {
 			m.logger.Error("decode request error", xlog.Err(err))
 			continue
 		}
-		ipaddr, err := dec.ReadString()
+		ipaddr, err := dc.ReadString()
 		if err != nil {
 			m.logger.Error("decode request error", xlog.Err(err))
 			continue

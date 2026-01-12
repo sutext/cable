@@ -81,7 +81,6 @@ func New(address string, opts ...Option) Server {
 }
 
 func (s *server) Serve() error {
-
 	s.transport.OnClose(s.onClose)
 	s.transport.OnAccept(s.onConnect)
 	s.transport.OnPacket(s.onPacket)
@@ -187,7 +186,6 @@ func (s *server) SendRequest(ctx context.Context, cid string, p *packet.Request)
 	return nil, xerr.ConnectionNotFound
 }
 
-// Below is the code of /Users/vidar/github/cable/server/conn.go
 func (s *server) onPacket(p packet.Packet, c network.Conn) {
 	if s.closed.Load() {
 		return
@@ -227,7 +225,7 @@ func (s *server) onMessage(c network.Conn, p *packet.Message) {
 		return
 	}
 	if p.Qos == packet.MessageQos1 {
-		if err := c.SendPacket(context.Background(), packet.NewMessack(p.ID)); err != nil {
+		if err := c.SendPacket(context.Background(), p.Ack()); err != nil {
 			s.logger.Error("failed to send messack", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 		}
 	}
