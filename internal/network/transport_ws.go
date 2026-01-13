@@ -43,6 +43,7 @@ func (l *transportWebSocket) Listen(address string) error {
 		Addr: address,
 		Handler: websocket.Server{
 			Handler: func(conn *websocket.Conn) {
+				conn.PayloadType = websocket.BinaryFrame
 				l.handleConn(conn)
 			},
 			Handshake: func(c *websocket.Config, r *http.Request) (err error) {
@@ -76,11 +77,7 @@ func (l *transportWebSocket) handleConn(conn *websocket.Conn) {
 		return
 	}
 	connPacket := p.(*packet.Connect)
-	realIp := conn.Request().Header.Get("X-Real-IP")
-	if realIp == "" {
-		realIp = conn.Request().RemoteAddr
-	}
-	l.logger.Info("new conn", xlog.Str("userID", connPacket.Identity.UserID), xlog.Str("clientID", connPacket.Identity.ClientID), xlog.Str("ip", realIp))
+	realIp := getRealIP(conn.Request())
 	c := newWSConn(connPacket.Identity, realIp, conn, l.logger, l.queueCapacity)
 	c.OnClose(func() {
 		l.closeHandler(c)
@@ -128,6 +125,5 @@ func newWSConn(id *packet.Identity, ip string, raw *websocket.Conn, logger *xlog
 		ip:  ip,
 		raw: raw,
 	}
-	t.raw.PayloadType = websocket.BinaryFrame
 	return newConn(t, logger, queueCapacity)
 }

@@ -77,7 +77,7 @@ func (l *transportTCP) handleConn(conn *net.TCPConn) {
 		return
 	}
 	connPacket := p.(*packet.Connect)
-	c := newTCPConn(connPacket.Identity, conn.RemoteAddr().String(), conn, l.logger, l.queueCapacity)
+	c := newTCPConn(connPacket.Identity, getAddrIp(conn.RemoteAddr().String()), conn, l.logger, l.queueCapacity)
 	c.OnClose(func() {
 		l.closeHandler(c)
 	})

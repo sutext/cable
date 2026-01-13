@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/hex"
 	"hash/crc32"
+	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -265,6 +267,17 @@ func genConnId(s string) string {
 	h := crc32.NewIEEE()
 	h.Write([]byte(s))
 	return hex.EncodeToString(h.Sum(nil))
+}
+func getAddrIp(addr string) string {
+	strs := strings.Split(addr, ":")
+	return strs[0]
+}
+func getRealIP(r *http.Request) string {
+	realIP := r.Header.Get("X-Real-IP")
+	if realIP == "" {
+		realIP = getAddrIp(r.RemoteAddr)
+	}
+	return realIP
 }
 
 type pinger struct {
