@@ -91,7 +91,7 @@ func (m *discovery) Serve() error {
 		ec := coder.NewEncoder()
 		ec.WriteUInt64(m.id)
 		ec.WriteString(m.ipaddr)
-		resp := req.Response(ec.Bytes())
+		resp := req.Response(packet.StatusOK, ec.Bytes())
 		bytes, err := packet.Marshal(resp)
 		if err != nil {
 			m.logger.Error("marshal response error", xlog.Err(err))

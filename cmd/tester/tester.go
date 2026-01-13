@@ -139,7 +139,7 @@ func (t *Tester) addClient() *Client {
 	if endpoint == "" {
 		endpoint = statefulSetEndpoint()
 		// endpoint = "tcp://localhost:1683"
-		// endpoint = "ws://localhost:1688"
+		endpoint = "ws://localhost:1688"
 	}
 	strs := strings.Split(endpoint, "://")
 	if len(strs) != 2 {

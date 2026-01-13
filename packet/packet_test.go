@@ -20,7 +20,7 @@ func TestPacket(t *testing.T) {
 	testp(t, pong)
 	testp(t, NewClose(0))
 	testp(t, NewRequest("test"))
-	testp(t, NewResponse(1))
+	testp(t, NewRequest("test").Response(StatusOK))
 }
 func SmallMessage() Packet {
 	return NewMessage(0, []byte("hello world"))

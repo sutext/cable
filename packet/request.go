@@ -49,10 +49,15 @@ func (p *Request) Equal(other Packet) bool {
 func (p *Request) String() string {
 	return fmt.Sprintf("REQUEST(ID=%d, Method=%s, Props=%v, Content=%d)", p.id, p.Method, p.props, len(p.Body))
 }
-func (p *Request) Response(content []byte) *Response {
+func (p *Request) Response(code StatusCode, content ...[]byte) *Response {
+	var b []byte
+	if len(content) > 0 {
+		b = content[0]
+	}
 	return &Response{
 		id:   p.id,
-		Body: content,
+		Code: code,
+		Body: b,
 	}
 }
 func (p *Request) WriteTo(w coder.Encoder) error {

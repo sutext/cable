@@ -46,10 +46,6 @@ func (l *transportWebSocket) Listen(address string) error {
 				l.handleConn(conn)
 			},
 			Handshake: func(c *websocket.Config, r *http.Request) (err error) {
-				c.Origin, err = websocket.Origin(c, r)
-				if err == nil && c.Origin == nil {
-					return fmt.Errorf("null origin")
-				}
 				if c.Protocol[0] != "cable" {
 					return fmt.Errorf("invalid protocol")
 				}
@@ -80,7 +76,12 @@ func (l *transportWebSocket) handleConn(conn *websocket.Conn) {
 		return
 	}
 	connPacket := p.(*packet.Connect)
-	c := newWSConn(connPacket.Identity, conn.RemoteAddr().String(), conn, l.logger, l.queueCapacity)
+	realIp := conn.Request().Header.Get("X-Real-IP")
+	if realIp == "" {
+		realIp = conn.Request().RemoteAddr
+	}
+	l.logger.Info("new conn", xlog.Str("userID", connPacket.Identity.UserID), xlog.Str("clientID", connPacket.Identity.ClientID), xlog.Str("ip", realIp))
+	c := newWSConn(connPacket.Identity, realIp, conn, l.logger, l.queueCapacity)
 	c.OnClose(func() {
 		l.closeHandler(c)
 	})

@@ -115,7 +115,7 @@ func (s *server) KickConn(cid string) bool {
 }
 func (s *server) ExpelAllConns() {
 	s.conns.Range(func(key string, c network.Conn) bool {
-		c.CloseClode(packet.CloseServerEexpected)
+		c.CloseClode(packet.CloseServerExpeled)
 		return true
 	})
 	s.conns = safe.RMap[string, network.Conn]{}
@@ -234,7 +234,7 @@ func (s *server) onRequest(c network.Conn, p *packet.Request) {
 	res, err := s.requestHandler(p, c.ID())
 	if err != nil {
 		s.logger.Error("failed to handle request", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
-		return
+		res = p.Response(packet.StatusNotFound)
 	}
 	if err := c.SendPacket(context.Background(), res); err != nil {
 		s.logger.Error("failed to send response", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))

@@ -8,32 +8,25 @@ import (
 	"sutext.github.io/cable/coder"
 )
 
-type ResponseCode uint8
+type StatusCode uint8
 
 const (
-	RequestOK        ResponseCode = 0
-	RequestNotFound  ResponseCode = 100
-	RequestForbidden ResponseCode = 101
-	BadRequest       ResponseCode = 255
+	StatusOK            StatusCode = 0
+	StatusNotFound      StatusCode = 100
+	StatusUnauthorized  StatusCode = 101
+	StatusInternalError StatusCode = 102
+	StatusInvalidParams StatusCode = 103
+	StatusForbidden     StatusCode = 201
+	StatusBadRequest    StatusCode = 255
 )
 
 type Response struct {
 	packet
 	id   int64
-	Code ResponseCode
+	Code StatusCode
 	Body []byte
 }
 
-func NewResponse(id int64, content ...[]byte) *Response {
-	var b []byte
-	if len(content) > 0 {
-		b = content[0]
-	}
-	return &Response{
-		id:   id,
-		Body: b,
-	}
-}
 func (p *Response) ID() int64 {
 	return p.id
 }
@@ -82,7 +75,7 @@ func (p *Response) ReadFrom(r coder.Decoder) error {
 		return err
 	}
 	p.id = id
-	p.Code = ResponseCode(code)
+	p.Code = StatusCode(code)
 	p.Body = b
 	return nil
 }

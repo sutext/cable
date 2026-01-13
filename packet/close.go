@@ -20,21 +20,21 @@ const (
 	CloseInternalError
 	CloseDuplicateLogin
 	CloseServerShutdown
-	CloseServerEexpected
+	CloseServerExpeled
 )
 
 var closeCodeMap = map[CloseCode]string{
-	CloseNormal:          "Normal",
-	CloseKickedOut:       "Kicked Out",
-	CloseNoHeartbeat:     "No Heartbeat",
-	ClosePingTimeOut:     "Ping Time Out",
-	CloseAuthFailure:     "Authentication Failure",
-	CloseAuthTimeout:     "Authentication Timeout",
-	CloseInvalidPacket:   "Invalid Packet",
-	CloseInternalError:   "Internal Error",
-	CloseDuplicateLogin:  "Duplicate Login",
-	CloseServerShutdown:  "Server Shutdown",
-	CloseServerEexpected: "Server Expected",
+	CloseNormal:         "Normal",
+	CloseKickedOut:      "Kicked Out",
+	CloseNoHeartbeat:    "No Heartbeat",
+	ClosePingTimeOut:    "Ping Time Out",
+	CloseAuthFailure:    "Authentication Failure",
+	CloseAuthTimeout:    "Authentication Timeout",
+	CloseInvalidPacket:  "Invalid Packet",
+	CloseInternalError:  "Internal Error",
+	CloseDuplicateLogin: "Duplicate Login",
+	CloseServerShutdown: "Server Shutdown",
+	CloseServerExpeled:  "Server Expeled",
 }
 
 func (c CloseCode) String() string {

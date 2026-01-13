@@ -48,10 +48,6 @@ func (i *Identity) String() string {
 	return fmt.Sprintf("uid=%s, cid=%s", i.UserID, i.ClientID)
 }
 
-const (
-	versionMask uint8 = 0x3f
-)
-
 type Connect struct {
 	packet
 	Version  uint8
@@ -82,9 +78,7 @@ func (p *Connect) Equal(other Packet) bool {
 	return maps.Equal(p.props, o.props) && p.Version == o.Version && p.Identity.Equal(o.Identity)
 }
 func (p *Connect) WriteTo(w coder.Encoder) error {
-	flags := uint8(0)
-	flags |= p.Version & versionMask
-	w.WriteUInt8(flags)
+	w.WriteUInt8(p.Version)
 	err := p.Identity.WriteTo(w)
 	if err != nil {
 		return err
@@ -93,7 +87,7 @@ func (p *Connect) WriteTo(w coder.Encoder) error {
 }
 
 func (p *Connect) ReadFrom(r coder.Decoder) error {
-	flags, err := r.ReadUInt8()
+	version, err := r.ReadUInt8()
 	if err != nil {
 		return err
 	}
@@ -102,7 +96,7 @@ func (p *Connect) ReadFrom(r coder.Decoder) error {
 	if err != nil {
 		return err
 	}
-	p.Version = flags & versionMask
+	p.Version = version
 	p.Identity = identity
 	return p.packet.ReadFrom(r)
 }

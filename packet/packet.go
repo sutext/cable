@@ -88,7 +88,7 @@ const (
 	PropertyUserID   Property = 2
 	PropertyChannel  Property = 3
 	PropertyClientID Property = 4
-	PropertyPassword Property = 6
+	PropertyPassword Property = 5
 )
 
 type Properties interface {
