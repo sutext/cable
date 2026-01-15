@@ -34,7 +34,7 @@ type cluster struct {
 	confChangeCount uint64
 }
 
-func newCluster(broker *broker, size int32, port string) *cluster {
+func newCluster(broker *broker, size int32, port uint16) *cluster {
 	c := &cluster{
 		size:      size,
 		broker:    broker,
@@ -60,7 +60,7 @@ func (c *cluster) Stop() {
 func (c *cluster) Start() {
 	go func() {
 		if err := c.discovery.Serve(); err != nil {
-			panic(err)
+			c.logger.Info("discovery serve stoped", xlog.Err(err))
 		}
 	}()
 	time.AfterFunc(time.Millisecond*100, c.autoDiscovery)

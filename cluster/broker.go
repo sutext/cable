@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sync"
 
@@ -45,8 +46,11 @@ type broker struct {
 
 func NewBroker(opts ...Option) Broker {
 	options := newOptions(opts...)
-	b := &broker{
-		id: options.brokerID,
+	b := &broker{}
+	if options.brokerID > 0 {
+		b.id = options.brokerID
+	} else {
+		b.id = getBrokerID()
 	}
 	b.logger = xlog.With("BROKER", b.id)
 	b.handler = options.handler
@@ -64,7 +68,7 @@ func NewBroker(opts ...Option) Broker {
 		b.listeners[l.network] = l
 	}
 	b.cluster = newCluster(b, options.initSize, options.peerPort)
-	b.peerServer = newPeerServer(b, options.peerPort)
+	b.peerServer = newPeerServer(b, fmt.Sprintf(":%d", options.peerPort))
 	mux := http.NewServeMux()
 	mux.HandleFunc("/join", b.handleJoin)
 	mux.HandleFunc("/send", b.handleSendMessage)
@@ -72,7 +76,7 @@ func NewBroker(opts ...Option) Broker {
 	mux.HandleFunc("/inspect", b.handleInspect)
 	mux.HandleFunc("/kickUser", b.handleKickUser)
 	mux.HandleFunc("/kickNode", b.handleKickNode)
-	b.httpServer = &http.Server{Addr: options.httpPort, Handler: mux}
+	b.httpServer = &http.Server{Addr: fmt.Sprintf(":%d", options.httpPort), Handler: mux}
 	return b
 }
 
@@ -84,12 +88,12 @@ func (b *broker) Start() error {
 	}
 	go func() {
 		if err := b.peerServer.Serve(); err != nil {
-			panic(err)
+			b.logger.Info("peer server stoped", xlog.Err(err))
 		}
 	}()
 	go func() {
 		if err := b.httpServer.ListenAndServe(); err != nil {
-			panic(err)
+			b.logger.Info("http server stoped", xlog.Err(err))
 		}
 	}()
 	b.cluster.Start()

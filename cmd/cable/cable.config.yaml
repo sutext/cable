@@ -1,0 +1,71 @@
+# Cable Server Configuration
+
+# Redis Configuration
+redis:
+  db: 0
+  address: "localhost:6379"
+  password: ""
+
+# Kafka Configuration
+kafka:
+  brokers:
+    - "localhost:9092"
+  userUpTopic: "cable-upstream-user"
+  groupUpTopic: "cable-upstream-group"
+  userDownTopic: "cable-downstream-user"
+  groupDownTopic: "cable-downstream-group"
+
+# Pprof Debugging
+pprof: false
+
+# Broker ID for cluster, default is 0 for auto mode
+brokerid: 0
+
+# Initial size of cluster
+initSize: 1
+
+# HTTP Server Port for Admin API
+httpPort: 8888
+
+# Peer Port for Cluster Communication
+peerPort: 4567
+
+# Log Level: debug, info, warn, error
+logLevel: "info"
+
+# Listeners Configuration
+listeners:
+  - network: "ws"
+    port: 1881
+    queueSize: 1024
+    autoStart: true
+  - network: "wss"
+    port: 1882
+    queueSize: 1024
+    autoStart: false
+    tls:
+      certFile: "cert.pem"
+      keyFile: "key.pem"
+  - network: "tcp"
+    port: 1883
+    queueSize: 1024
+    autoStart: true
+  - network: "tls"
+    port: 1884
+    queueSize: 1024
+    autoStart: false
+    tls:
+      certFile: "cert.pem"
+      keyFile: "key.pem"
+  - network: "udp"
+    port: 1885
+    queueSize: 1024
+    autoStart: true
+  - network: "quic"
+    port: 1886
+    queueSize: 1024
+    autoStart: false
+    tls:
+      certFile: "cert.pem"
+      keyFile: "key.pem"  
+  

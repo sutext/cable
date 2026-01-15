@@ -1,10 +1,14 @@
 
 FROM golang:latest AS builder
 WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
+# copy all files to working directory
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o main cmd/cable/*.go
+# go to cmd/cable directory
+WORKDIR /app/cmd/cable
+# download dependencies
+RUN go mod download
+# build program
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o ../../main
 
 FROM alpine:latest
 COPY --from=builder /app/main /

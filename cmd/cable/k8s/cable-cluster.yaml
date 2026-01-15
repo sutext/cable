@@ -1,0 +1,177 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cable-config
+  namespace: default
+  labels:
+    app: cable-cluster
+data:
+  cable.config.yaml: |
+    # Cable Server Configuration
+
+    # Redis Configuration
+    redis:
+      db: 0
+      address: "localhost:6379"
+      password: ""
+
+    # Kafka Configuration
+    kafka:
+      brokers:
+        - "localhost:9092"
+      userUpTopic: "cable-upstream-user"
+      groupUpTopic: "cable-upstream-group"
+      userDownTopic: "cable-downstream-user"
+      groupDownTopic: "cable-downstream-group"
+
+    # Pprof Debugging
+    pprof: false
+
+    # Broker ID for cluster, default is 0 for auto mode
+    brokerid: 0
+
+    # Initial size of cluster
+    initSize: 1
+
+    # HTTP Server Port for Admin API
+    httpPort: 8888
+
+    # Peer Port for Cluster Communication
+    peerPort: 4567
+
+    # Log Level: debug, info, warn, error
+    logLevel: "info"
+
+    # Listeners Configuration
+    listeners:
+      - network: "ws"
+        port: 1881
+        queueSize: 1024
+        autoStart: true
+      - network: "wss"
+        port: 1882
+        queueSize: 1024
+        autoStart: false
+        tls:
+          certFile: "cert.pem"
+          keyFile: "key.pem"
+      - network: "tcp"
+        port: 1883
+        queueSize: 1024
+        autoStart: true
+      - network: "tls"
+        port: 1884
+        queueSize: 1024
+        autoStart: false
+        tls:
+          certFile: "cert.pem"
+          keyFile: "key.pem"
+      - network: "udp"
+        port: 1885
+        queueSize: 1024
+        autoStart: true
+      - network: "quic"
+        port: 1886
+        queueSize: 1024
+        autoStart: false
+        tls:
+          certFile: "cert.pem"
+          keyFile: "key.pem"
+
+---
+kind: StatefulSet
+apiVersion: apps/v1
+metadata:
+  name: cable-cluster
+  namespace: default
+  labels:
+    app: cable-cluster
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: cable-cluster
+  serviceName: cable-cluster
+  template:
+    metadata:
+      labels:
+        app: cable-cluster
+    spec:
+      containers:
+        - name: cable
+          image: sutext/cable:latest
+          imagePullPolicy: Never
+          volumeMounts:
+            - name: cable-config-volume
+              mountPath: /app/cable.config.yaml
+              subPath: cable.config.yaml
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8888
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 1
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8888
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 1
+            failureThreshold: 3
+      volumes:
+        - name: cable-config-volume
+          configMap:
+            name: cable-config
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
+---
+apiVersion: v1
+kind: Service
+
+metadata:
+  namespace: default
+  name: cable-cluster
+  labels:
+    app: cable-cluster
+spec:
+  type: LoadBalancer
+  selector:
+    app: cable-cluster
+  ports:
+    - protocol: TCP
+      name: ws
+      port: 1881
+      targetPort: 1881
+    - protocol: TCP
+      name: wss
+      port: 1882
+      targetPort: 1882
+    - protocol: TCP
+      name: tcp
+      port: 1883
+      targetPort: 1883
+    - protocol: TCP
+      name: tls
+      port: 1884
+      targetPort: 1884
+    - protocol: UDP
+      name: udp
+      port: 1885
+      targetPort: 1885
+    - protocol: UDP
+      name: quic
+      port: 1886
+      targetPort: 1886
+    - protocol: TCP
+      name: pprof
+      port: 6060
+      targetPort: 6060
+    - protocol: TCP
+      name: admin
+      port: 8888
+      targetPort: 8888

@@ -30,15 +30,15 @@ type discovery struct {
 	respChan chan *packet.Response
 }
 
-func New(id uint64, port string) Discovery {
+func New(id uint64, port uint16) Discovery {
 	ip, err := getLocalIP()
 	if err != nil {
 		panic(err)
 	}
 	m := &discovery{
 		id:     id,
-		ipaddr: fmt.Sprintf("%s%s", ip, port),
-		logger: xlog.With("GROUP", "MUTICAST"),
+		ipaddr: fmt.Sprintf("%s:%d", ip, port),
+		logger: xlog.With("GROUP", "DISCOVERY"),
 		addr:   &net.UDPAddr{IP: net.IPv4(224, 0, 0, 9), Port: 9999},
 	}
 	return m
@@ -52,7 +52,7 @@ func (m *discovery) Serve() error {
 	m.listener = listener
 	go func() {
 		if err := m.listen(); err != nil {
-			m.logger.Error("listen error", xlog.Err(err))
+			m.logger.Info("discovery listen stoped", xlog.Err(err))
 		}
 	}()
 	defer listener.Close()
