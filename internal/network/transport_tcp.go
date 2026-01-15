@@ -2,6 +2,7 @@ package network
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 	"time"
 
@@ -11,7 +12,8 @@ import (
 
 type transportTCP struct {
 	logger        *xlog.Logger
-	listener      *net.TCPListener
+	listener      net.Listener
+	tlsConfig     *tls.Config
 	closeHandler  func(c Conn)
 	packetHandler func(p packet.Packet, c Conn)
 	acceptHandler func(p *packet.Connect, c Conn) packet.ConnectCode
@@ -21,6 +23,14 @@ type transportTCP struct {
 func NewTCP(logger *xlog.Logger, queueCapacity int32) Transport {
 	return &transportTCP{
 		logger:        logger,
+		queueCapacity: queueCapacity,
+	}
+}
+func NewTLS(config *tls.Config, logger *xlog.Logger, queueCapacity int32) Transport {
+	assertTLS(config)
+	return &transportTCP{
+		logger:        logger,
+		tlsConfig:     config,
 		queueCapacity: queueCapacity,
 	}
 }
@@ -46,17 +56,21 @@ func (l *transportTCP) Listen(address string) error {
 	if err != nil {
 		return err
 	}
-	l.listener = listener
+	if l.tlsConfig != nil {
+		l.listener = tls.NewListener(listener, l.tlsConfig)
+	} else {
+		l.listener = listener
+	}
 	defer listener.Close()
 	for {
-		conn, err := listener.AcceptTCP()
+		conn, err := listener.Accept()
 		if err != nil {
 			return err
 		}
 		go l.handleConn(conn)
 	}
 }
-func (l *transportTCP) handleConn(conn *net.TCPConn) {
+func (l *transportTCP) handleConn(conn net.Conn) {
 	timer := time.AfterFunc(time.Second*10, func() {
 		l.logger.Warn("waite conn packet timeout")
 		packet.WriteTo(conn, packet.NewClose(packet.CloseAuthTimeout))
@@ -101,7 +115,7 @@ func (l *transportTCP) handleConn(conn *net.TCPConn) {
 type tcpConn struct {
 	id  *packet.Identity
 	ip  string
-	raw *net.TCPConn
+	raw net.Conn
 }
 
 func (c *tcpConn) ID() *packet.Identity {
@@ -118,7 +132,7 @@ func (c *tcpConn) WriteData(data []byte) error {
 	_, err := c.raw.Write(data)
 	return err
 }
-func newTCPConn(id *packet.Identity, ip string, raw *net.TCPConn, logger *xlog.Logger, queueCapacity int32) Conn {
+func newTCPConn(id *packet.Identity, ip string, raw net.Conn, logger *xlog.Logger, queueCapacity int32) Conn {
 	t := &tcpConn{
 		id:  id,
 		ip:  ip,

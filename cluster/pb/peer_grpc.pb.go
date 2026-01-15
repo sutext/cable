@@ -2,13 +2,12 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v5.29.3
-// source: broker/protos/peer.proto
+// source: cluster/pb/peer.proto
 
 package pb
 
 import (
 	context "context"
-
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -20,12 +19,12 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PeerService_Inspect_FullMethodName         = "/protos.PeerService/Inspect"
-	PeerService_IsOnline_FullMethodName        = "/protos.PeerService/IsOnline"
-	PeerService_KickConn_FullMethodName        = "/protos.PeerService/KickConn"
-	PeerService_SendToAll_FullMethodName       = "/protos.PeerService/SendToAll"
-	PeerService_SendToTargets_FullMethodName   = "/protos.PeerService/SendToTargets"
-	PeerService_SendRaftMessage_FullMethodName = "/protos.PeerService/SendRaftMessage"
+	PeerService_Inspect_FullMethodName         = "/pb.PeerService/Inspect"
+	PeerService_IsOnline_FullMethodName        = "/pb.PeerService/IsOnline"
+	PeerService_KickConn_FullMethodName        = "/pb.PeerService/KickConn"
+	PeerService_SendToAll_FullMethodName       = "/pb.PeerService/SendToAll"
+	PeerService_SendToTargets_FullMethodName   = "/pb.PeerService/SendToTargets"
+	PeerService_SendRaftMessage_FullMethodName = "/pb.PeerService/SendRaftMessage"
 )
 
 // PeerServiceClient is the client API for PeerService service.
@@ -299,7 +298,7 @@ func _PeerService_SendRaftMessage_Handler(srv interface{}, ctx context.Context, 
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var PeerService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "protos.PeerService",
+	ServiceName: "pb.PeerService",
 	HandlerType: (*PeerServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
@@ -328,5 +327,5 @@ var PeerService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "broker/protos/peer.proto",
+	Metadata: "cluster/pb/peer.proto",
 }

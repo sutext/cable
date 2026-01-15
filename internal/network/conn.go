@@ -2,6 +2,7 @@ package network
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/hex"
 	"hash/crc32"
 	"net/http"
@@ -278,6 +279,15 @@ func getRealIP(r *http.Request) string {
 		realIP = getAddrIp(r.RemoteAddr)
 	}
 	return realIP
+}
+func assertTLS(config *tls.Config) {
+	if config == nil {
+		panic("tls config is nil")
+	}
+	configHasCert := len(config.Certificates) > 0 || config.GetCertificate != nil || config.GetConfigForClient != nil
+	if !configHasCert {
+		panic("tls config has no certificate")
+	}
 }
 
 type pinger struct {

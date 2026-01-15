@@ -10,10 +10,12 @@ import (
 )
 
 const (
-	NetworkTCP       string = "tcp"
-	NetworkUDP       string = "udp"
-	NetworkQUIC      string = "quic"
-	NetworkWebSocket string = "ws"
+	NetworkWS   string = "ws"
+	NetworkWSS  string = "wss"
+	NetworkTCP  string = "tcp"
+	NetworkTLS  string = "tls"
+	NetworkUDP  string = "udp"
+	NetworkQUIC string = "quic"
 )
 
 type Handler interface {

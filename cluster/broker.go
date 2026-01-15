@@ -34,7 +34,7 @@ type broker struct {
 	logger         *xlog.Logger
 	cluster        *cluster
 	handler        Handler
-	listeners      map[string]server.Server
+	listeners      map[string]*Listener
 	peerServer     *peerServer
 	httpServer     *http.Server
 	userClients    safe.RMap[uint64, *safe.KeyMap[string]]   //bid map[uid]map[cid]net
@@ -50,19 +50,18 @@ func NewBroker(opts ...Option) Broker {
 	}
 	b.logger = xlog.With("BROKER", b.id)
 	b.handler = options.handler
-	b.listeners = make(map[string]server.Server, len(options.listeners))
-	for net, addr := range options.listeners {
-		b.listeners[net] = server.New(addr,
+	b.listeners = make(map[string]*Listener)
+	for _, l := range options.listeners {
+		l.AddOptions(
 			server.WithClose(b.onUserClosed),
 			server.WithLogger(b.logger),
-			server.WithNetwork(net),
 			server.WithMessage(b.onUserMessage),
 			server.WithRequest(b.onUserRequest),
 			server.WithConnect(func(p *packet.Connect) packet.ConnectCode {
-				return b.onUserConnect(p, net)
+				return b.onUserConnect(p, l.network)
 			}),
-			server.WithQUICConfig(options.quicConfig),
 		)
+		b.listeners[l.network] = l
 	}
 	b.cluster = newCluster(b, options.initSize, options.peerPort)
 	b.peerServer = newPeerServer(b, options.peerPort)
@@ -79,11 +78,9 @@ func NewBroker(opts ...Option) Broker {
 
 func (b *broker) Start() error {
 	for _, l := range b.listeners {
-		go func() {
-			if err := l.Serve(); err != nil {
-				panic(err)
-			}
-		}()
+		if l.autoStart {
+			l.Start()
+		}
 	}
 	go func() {
 		if err := b.peerServer.Serve(); err != nil {
@@ -98,11 +95,9 @@ func (b *broker) Start() error {
 	b.cluster.Start()
 	return nil
 }
-
 func (b *broker) Cluster() Cluster {
 	return b.cluster
 }
-
 func (b *broker) Shutdown(ctx context.Context) (err error) {
 	for _, l := range b.listeners {
 		if err = l.Shutdown(ctx); err != nil {
@@ -324,7 +319,7 @@ func (b *broker) onUserRequest(p *packet.Request, id *packet.Identity) (*packet.
 
 func (b *broker) isActive(targets map[string]string) bool {
 	for cid, net := range targets {
-		if l, ok := b.listeners[net]; ok {
+		if l, ok := b.listeners[net]; ok && l.ISStarted() {
 			if l.IsActive(cid) {
 				return true
 			}
@@ -334,7 +329,7 @@ func (b *broker) isActive(targets map[string]string) bool {
 }
 func (b *broker) kickConn(targets map[string]string) {
 	for cid, net := range targets {
-		if l, ok := b.listeners[net]; ok {
+		if l, ok := b.listeners[net]; ok && l.ISStarted() {
 			l.KickConn(cid)
 		}
 	}
@@ -342,11 +337,13 @@ func (b *broker) kickConn(targets map[string]string) {
 
 func (b *broker) sendToAll(ctx context.Context, m *packet.Message) (total, success int32) {
 	for _, l := range b.listeners {
-		t, s, err := l.Brodcast(ctx, m)
-		total += t
-		success += s
-		if err != nil {
-			b.logger.Error("send message to all failed", xlog.Err(err))
+		if l.ISStarted() {
+			t, s, err := l.Brodcast(ctx, m)
+			total += t
+			success += s
+			if err != nil {
+				b.logger.Error("send message to all failed", xlog.Err(err))
+			}
 		}
 	}
 	return total, success
@@ -354,7 +351,7 @@ func (b *broker) sendToAll(ctx context.Context, m *packet.Message) (total, succe
 func (b *broker) sendToTargets(ctx context.Context, m *packet.Message, targets map[string]string) (total, success int32) {
 	for cid, net := range targets {
 		total++
-		if l, ok := b.listeners[net]; ok {
+		if l, ok := b.listeners[net]; ok && l.ISStarted() {
 			if err := l.SendMessage(ctx, cid, m); err != nil {
 				b.logger.Error("send message to cid failed", xlog.Cid(cid), xlog.Err(err))
 			} else {

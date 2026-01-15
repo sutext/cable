@@ -1,26 +1,43 @@
 package packet
 
 import (
-	"fmt"
 	"io"
 	"testing"
 )
 
 func TestPacket(t *testing.T) {
-	identity := Identity{"1", "2", "tok"}
-	testp(t, NewConnect(&identity))
-	testp(t, NewConnack(0))
-	testp(t, SmallMessage())
-	testp(t, BigMessage())
-	ping := NewPing()
-	ping.Set(PropertyConnID, "pingping")
-	pong := NewPong()
-	pong.Set(PropertyConnID, "pongpong")
-	testp(t, ping)
-	testp(t, pong)
-	testp(t, NewClose(0))
-	testp(t, NewRequest("test"))
-	testp(t, NewRequest("test").Response(StatusOK))
+	t.Run("Connect", func(t *testing.T) {
+		identity := Identity{"1", "2", "tok"}
+		testPacket(t, NewConnect(&identity))
+	})
+	t.Run("Connack", func(t *testing.T) {
+		testPacket(t, NewConnack(0))
+	})
+	t.Run("Message", func(t *testing.T) {
+		testPacket(t, SmallMessage())
+	})
+	t.Run("BigMessage", func(t *testing.T) {
+		testPacket(t, BigMessage())
+	})
+	t.Run("Ping", func(t *testing.T) {
+		ping := NewPing()
+		ping.Set(PropertyConnID, "pingping")
+		testPacket(t, ping)
+	})
+	t.Run("Pong", func(t *testing.T) {
+		pong := NewPong()
+		pong.Set(PropertyConnID, "pongpong")
+		testPacket(t, pong)
+	})
+	t.Run("Close", func(t *testing.T) {
+		testPacket(t, NewClose(0))
+	})
+	t.Run("Request", func(t *testing.T) {
+		testPacket(t, NewRequest("test"))
+	})
+	t.Run("Response", func(t *testing.T) {
+		testPacket(t, NewRequest("test").Response(StatusOK))
+	})
 }
 func SmallMessage() Packet {
 	return NewMessage(0, []byte("hello world"))
@@ -34,22 +51,18 @@ func BigMessage() Packet {
 	msg.Set(PropertyConnID, "xxxxxx")
 	return msg
 }
-func testp(t *testing.T, p Packet) {
+func testPacket(t *testing.T, p Packet) {
 	rw := &ReadWriter{}
 	p.Set(PropertyConnID, "test")
 	err := WriteTo(rw, p)
 	if err != nil {
 		t.Error(err)
 	}
-	fmt.Printf("packet: %v\n", p)
-	fmt.Printf("data: %v\n", rw.data)
 	newp, err := ReadFrom(rw)
 	if err != nil {
 		t.Error(err)
 	}
 	if !p.Equal(newp) {
-		fmt.Printf("old packet: %v\n", p)
-		fmt.Printf("new packet: %v\n", newp)
 		t.Error("data packet not equal")
 	}
 }

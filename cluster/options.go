@@ -1,6 +1,7 @@
 package cluster
 
 import (
+	"crypto/tls"
 	"math/rand/v2"
 	"os"
 	"strconv"
@@ -11,10 +12,6 @@ import (
 	"sutext.github.io/cable/server"
 )
 
-type Listener struct {
-	Address string
-	Network string
-}
 type Handler interface {
 	OnClosed(id *packet.Identity)
 	OnConnect(p *packet.Connect) (code packet.ConnectCode)
@@ -36,13 +33,12 @@ func (h *emptyHandler) GetChannels(uid string) (channels []string, err error) {
 }
 
 type options struct {
-	handler    Handler
-	brokerID   uint64
-	httpPort   string
-	peerPort   string
-	initSize   int32
-	listeners  map[string]string
-	quicConfig *quic.Config
+	handler   Handler
+	brokerID  uint64
+	httpPort  string
+	peerPort  string
+	initSize  int32
+	listeners []*Listener
 }
 
 func newOptions(opts ...Option) *options {
@@ -52,13 +48,14 @@ func newOptions(opts ...Option) *options {
 		peerPort: ":4567",
 		brokerID: getBrokerID() + 10000,
 		initSize: 3,
-		listeners: map[string]string{
-			server.NetworkTCP:       ":1683",
-			server.NetworkUDP:       ":1684",
-			server.NetworkQUIC:      ":1685",
-			server.NetworkWebSocket: ":1688",
+		listeners: []*Listener{
+			NewListener(server.NetworkWS, ":1881", true),
+			NewListener(server.NetworkWSS, ":1882", false, server.WithTLSConfig(&tls.Config{})),
+			NewListener(server.NetworkTCP, ":1883", true),
+			NewListener(server.NetworkTLS, ":1884", false, server.WithTLSConfig(&tls.Config{})),
+			NewListener(server.NetworkUDP, ":1885", true),
+			NewListener(server.NetworkQUIC, ":1886", false, server.WithQUICConfig(&quic.Config{})),
 		},
-		quicConfig: &quic.Config{},
 	}
 	for _, opt := range opts {
 		opt.f(options)
@@ -87,10 +84,9 @@ func WithPeerPort(port string) Option {
 	}}
 }
 
-// WithListener sets the listener for the broker.
-func WithListener(net string, addr string) Option {
+func WithListeners(listerners ...*Listener) Option {
 	return Option{func(o *options) {
-		o.listeners[net] = addr
+		o.listeners = listerners
 	}}
 }
 
@@ -102,13 +98,6 @@ func WithBrokerID(id uint64) Option {
 func WithInitSize(size int32) Option {
 	return Option{func(o *options) {
 		o.initSize = size
-	}}
-}
-
-// WithQuicConfig sets the QUIC configuration for the broker.
-func WithQuicConfig(config *quic.Config) Option {
-	return Option{func(o *options) {
-		o.quicConfig = config
 	}}
 }
 

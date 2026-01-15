@@ -46,7 +46,6 @@ type server struct {
 	address        string
 	network        string
 	transport      network.Transport
-	queueCapacity  int32
 	closeHandler   ClosedHandler
 	connectHandler ConnectHandler
 	messageHandler MessageHandler
@@ -59,21 +58,25 @@ func New(address string, opts ...Option) Server {
 		logger:         options.logger,
 		address:        address,
 		network:        options.network,
-		queueCapacity:  options.queueCapacity,
 		closeHandler:   options.closeHandler,
 		connectHandler: options.connectHandler,
 		messageHandler: options.messageHandler,
 		requestHandler: options.requestHandler,
 	}
 	switch s.network {
+	case NetworkWS:
+		s.transport = network.NewWS(s.logger, options.queueCapacity)
+	case NetworkWSS:
+		s.transport = network.NewWSS(options.tlsConfig, s.logger, options.queueCapacity)
 	case NetworkTCP:
-		s.transport = network.NewTCP(s.logger, s.queueCapacity)
+		s.transport = network.NewTCP(s.logger, options.queueCapacity)
+	case NetworkTLS:
+		s.transport = network.NewTLS(options.tlsConfig, s.logger, options.queueCapacity)
 	case NetworkUDP:
-		s.transport = network.NewUDP(s.logger, s.queueCapacity)
+		s.transport = network.NewUDP(s.logger, options.queueCapacity)
 	case NetworkQUIC:
-		s.transport = network.NewQUIC(s.logger, s.queueCapacity, options.quicConfig)
-	case NetworkWebSocket:
-		s.transport = network.NewWebSocket(s.logger, s.queueCapacity)
+		s.transport = network.NewQUIC(options.quicConfig, s.logger, options.queueCapacity)
+
 	default:
 		panic(xerr.NetworkNotSupported)
 	}

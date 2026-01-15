@@ -167,7 +167,7 @@ func (b *broker) handleKickNode(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	err = b.cluster.RemoveBroker(r.Context(), id)
+	err = b.cluster.KickBroker(r.Context(), id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

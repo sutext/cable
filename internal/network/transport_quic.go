@@ -19,10 +19,11 @@ type transportQUIC struct {
 	queueCapacity int32
 }
 
-func NewQUIC(logger *xlog.Logger, queueCapacity int32, config *quic.Config) Transport {
+func NewQUIC(config *quic.Config, logger *xlog.Logger, queueCapacity int32) Transport {
 	if config == nil {
 		panic("quic config is nil")
 	}
+	assertTLS(config.TLSConfig)
 	return &transportQUIC{
 		logger:        logger,
 		queueCapacity: queueCapacity,

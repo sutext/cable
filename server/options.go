@@ -1,6 +1,7 @@
 package server
 
 import (
+	"crypto/tls"
 	"fmt"
 
 	"golang.org/x/net/quic"
@@ -14,10 +15,12 @@ type MessageHandler func(p *packet.Message, id *packet.Identity) error
 type RequestHandler func(p *packet.Request, id *packet.Identity) (*packet.Response, error)
 
 const (
-	NetworkTCP       string = "tcp"
-	NetworkUDP       string = "udp"
-	NetworkQUIC      string = "quic"
-	NetworkWebSocket string = "ws"
+	NetworkWS   string = "ws"
+	NetworkWSS  string = "wss"
+	NetworkTCP  string = "tcp"
+	NetworkTLS  string = "tls"
+	NetworkUDP  string = "udp"
+	NetworkQUIC string = "quic"
 )
 
 type Option struct {
@@ -26,6 +29,7 @@ type Option struct {
 type options struct {
 	logger         *xlog.Logger
 	network        string
+	tlsConfig      *tls.Config
 	quicConfig     *quic.Config
 	queueCapacity  int32
 	closeHandler   ClosedHandler
@@ -59,6 +63,9 @@ func NewOptions(opts ...Option) *options {
 }
 func WithNetwork(network string) Option {
 	return Option{f: func(o *options) { o.network = network }}
+}
+func WithTLSConfig(config *tls.Config) Option {
+	return Option{f: func(o *options) { o.tlsConfig = config }}
 }
 func WithQUICConfig(config *quic.Config) Option {
 	return Option{f: func(o *options) { o.quicConfig = config }}

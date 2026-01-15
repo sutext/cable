@@ -2,17 +2,16 @@
 // versions:
 // 	protoc-gen-go v1.36.6
 // 	protoc        v5.29.3
-// source: broker/protos/peer.proto
+// source: cluster/pb/peer.proto
 
 package pb
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -31,7 +30,7 @@ type Empty struct {
 
 func (x *Empty) Reset() {
 	*x = Empty{}
-	mi := &file_broker_protos_peer_proto_msgTypes[0]
+	mi := &file_cluster_pb_peer_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -43,7 +42,7 @@ func (x *Empty) String() string {
 func (*Empty) ProtoMessage() {}
 
 func (x *Empty) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[0]
+	mi := &file_cluster_pb_peer_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -56,7 +55,7 @@ func (x *Empty) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Empty.ProtoReflect.Descriptor instead.
 func (*Empty) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{0}
+	return file_cluster_pb_peer_proto_rawDescGZIP(), []int{0}
 }
 
 // / IsOnlineReq is the request message for IsOnline RPC.
@@ -69,7 +68,7 @@ type IsOnlineReq struct {
 
 func (x *IsOnlineReq) Reset() {
 	*x = IsOnlineReq{}
-	mi := &file_broker_protos_peer_proto_msgTypes[1]
+	mi := &file_cluster_pb_peer_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -81,7 +80,7 @@ func (x *IsOnlineReq) String() string {
 func (*IsOnlineReq) ProtoMessage() {}
 
 func (x *IsOnlineReq) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[1]
+	mi := &file_cluster_pb_peer_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -94,7 +93,7 @@ func (x *IsOnlineReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IsOnlineReq.ProtoReflect.Descriptor instead.
 func (*IsOnlineReq) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{1}
+	return file_cluster_pb_peer_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *IsOnlineReq) GetTargets() map[string]string {
@@ -114,7 +113,7 @@ type IsOnlineResp struct {
 
 func (x *IsOnlineResp) Reset() {
 	*x = IsOnlineResp{}
-	mi := &file_broker_protos_peer_proto_msgTypes[2]
+	mi := &file_cluster_pb_peer_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -126,7 +125,7 @@ func (x *IsOnlineResp) String() string {
 func (*IsOnlineResp) ProtoMessage() {}
 
 func (x *IsOnlineResp) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[2]
+	mi := &file_cluster_pb_peer_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -139,7 +138,7 @@ func (x *IsOnlineResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IsOnlineResp.ProtoReflect.Descriptor instead.
 func (*IsOnlineResp) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{2}
+	return file_cluster_pb_peer_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *IsOnlineResp) GetOnline() bool {
@@ -160,7 +159,7 @@ type MessageReq struct {
 
 func (x *MessageReq) Reset() {
 	*x = MessageReq{}
-	mi := &file_broker_protos_peer_proto_msgTypes[3]
+	mi := &file_cluster_pb_peer_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -172,7 +171,7 @@ func (x *MessageReq) String() string {
 func (*MessageReq) ProtoMessage() {}
 
 func (x *MessageReq) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[3]
+	mi := &file_cluster_pb_peer_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -185,7 +184,7 @@ func (x *MessageReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageReq.ProtoReflect.Descriptor instead.
 func (*MessageReq) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{3}
+	return file_cluster_pb_peer_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *MessageReq) GetMessage() []byte {
@@ -213,7 +212,7 @@ type MessageResp struct {
 
 func (x *MessageResp) Reset() {
 	*x = MessageResp{}
-	mi := &file_broker_protos_peer_proto_msgTypes[4]
+	mi := &file_cluster_pb_peer_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -225,7 +224,7 @@ func (x *MessageResp) String() string {
 func (*MessageResp) ProtoMessage() {}
 
 func (x *MessageResp) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[4]
+	mi := &file_cluster_pb_peer_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -238,7 +237,7 @@ func (x *MessageResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MessageResp.ProtoReflect.Descriptor instead.
 func (*MessageResp) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{4}
+	return file_cluster_pb_peer_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *MessageResp) GetTotal() int32 {
@@ -265,7 +264,7 @@ type KickConnReq struct {
 
 func (x *KickConnReq) Reset() {
 	*x = KickConnReq{}
-	mi := &file_broker_protos_peer_proto_msgTypes[5]
+	mi := &file_cluster_pb_peer_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -277,7 +276,7 @@ func (x *KickConnReq) String() string {
 func (*KickConnReq) ProtoMessage() {}
 
 func (x *KickConnReq) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[5]
+	mi := &file_cluster_pb_peer_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -290,7 +289,7 @@ func (x *KickConnReq) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KickConnReq.ProtoReflect.Descriptor instead.
 func (*KickConnReq) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{5}
+	return file_cluster_pb_peer_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *KickConnReq) GetTargets() map[string]string {
@@ -311,7 +310,7 @@ type RaftMessage struct {
 
 func (x *RaftMessage) Reset() {
 	*x = RaftMessage{}
-	mi := &file_broker_protos_peer_proto_msgTypes[6]
+	mi := &file_cluster_pb_peer_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -323,7 +322,7 @@ func (x *RaftMessage) String() string {
 func (*RaftMessage) ProtoMessage() {}
 
 func (x *RaftMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[6]
+	mi := &file_cluster_pb_peer_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -336,7 +335,7 @@ func (x *RaftMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RaftMessage.ProtoReflect.Descriptor instead.
 func (*RaftMessage) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{6}
+	return file_cluster_pb_peer_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *RaftMessage) GetData() []byte {
@@ -349,16 +348,16 @@ func (x *RaftMessage) GetData() []byte {
 // / Progress represents the progress of raft node.
 type RaftProgress struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Match         uint64                 `protobuf:"varint,2,opt,name=match,proto3" json:"match,omitempty"`
-	Next          uint64                 `protobuf:"varint,3,opt,name=next,proto3" json:"next,omitempty"`
-	State         string                 `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`
+	Match         uint64                 `protobuf:"varint,1,opt,name=match,proto3" json:"match,omitempty"`
+	Next          uint64                 `protobuf:"varint,2,opt,name=next,proto3" json:"next,omitempty"`
+	State         string                 `protobuf:"bytes,3,opt,name=state,proto3" json:"state,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *RaftProgress) Reset() {
 	*x = RaftProgress{}
-	mi := &file_broker_protos_peer_proto_msgTypes[7]
+	mi := &file_cluster_pb_peer_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -370,7 +369,7 @@ func (x *RaftProgress) String() string {
 func (*RaftProgress) ProtoMessage() {}
 
 func (x *RaftProgress) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[7]
+	mi := &file_cluster_pb_peer_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -383,7 +382,7 @@ func (x *RaftProgress) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RaftProgress.ProtoReflect.Descriptor instead.
 func (*RaftProgress) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{7}
+	return file_cluster_pb_peer_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *RaftProgress) GetMatch() uint64 {
@@ -411,8 +410,8 @@ func (x *RaftProgress) GetState() string {
 type Status struct {
 	state         protoimpl.MessageState   `protogen:"open.v1"`
 	Id            uint64                   `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	RaftState     string                   `protobuf:"bytes,2,opt,name=raft_state,json=raftState,proto3" json:"raft_state,omitempty"`
-	RaftTerm      uint64                   `protobuf:"varint,3,opt,name=raft_term,json=raftTerm,proto3" json:"raft_term,omitempty"`
+	RaftTerm      uint64                   `protobuf:"varint,2,opt,name=raft_term,json=raftTerm,proto3" json:"raft_term,omitempty"`
+	RaftState     string                   `protobuf:"bytes,3,opt,name=raft_state,json=raftState,proto3" json:"raft_state,omitempty"`
 	RaftApplied   uint64                   `protobuf:"varint,4,opt,name=raft_applied,json=raftApplied,proto3" json:"raft_applied,omitempty"`
 	RaftLogSize   uint64                   `protobuf:"varint,5,opt,name=raft_log_size,json=raftLogSize,proto3" json:"raft_log_size,omitempty"`
 	ClientCount   int32                    `protobuf:"varint,6,opt,name=client_count,json=clientCount,proto3" json:"client_count,omitempty"`
@@ -426,7 +425,7 @@ type Status struct {
 
 func (x *Status) Reset() {
 	*x = Status{}
-	mi := &file_broker_protos_peer_proto_msgTypes[8]
+	mi := &file_cluster_pb_peer_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -438,7 +437,7 @@ func (x *Status) String() string {
 func (*Status) ProtoMessage() {}
 
 func (x *Status) ProtoReflect() protoreflect.Message {
-	mi := &file_broker_protos_peer_proto_msgTypes[8]
+	mi := &file_cluster_pb_peer_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -451,7 +450,7 @@ func (x *Status) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Status.ProtoReflect.Descriptor instead.
 func (*Status) Descriptor() ([]byte, []int) {
-	return file_broker_protos_peer_proto_rawDescGZIP(), []int{8}
+	return file_cluster_pb_peer_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *Status) GetId() uint64 {
@@ -461,18 +460,18 @@ func (x *Status) GetId() uint64 {
 	return 0
 }
 
-func (x *Status) GetRaftState() string {
-	if x != nil {
-		return x.RaftState
-	}
-	return ""
-}
-
 func (x *Status) GetRaftTerm() uint64 {
 	if x != nil {
 		return x.RaftTerm
 	}
 	return 0
+}
+
+func (x *Status) GetRaftState() string {
+	if x != nil {
+		return x.RaftState
+	}
+	return ""
 }
 
 func (x *Status) GetRaftApplied() uint64 {
@@ -524,122 +523,122 @@ func (x *Status) GetRaftProgress() map[uint64]*RaftProgress {
 	return nil
 }
 
-var File_broker_protos_peer_proto protoreflect.FileDescriptor
+var File_cluster_pb_peer_proto protoreflect.FileDescriptor
 
-const file_broker_protos_peer_proto_rawDesc = "" +
+const file_cluster_pb_peer_proto_rawDesc = "" +
 	"\n" +
-	"\x18broker/protos/peer.proto\x12\x06protos\"\a\n" +
-	"\x05Empty\"\x85\x01\n" +
-	"\vIsOnlineReq\x12:\n" +
-	"\atargets\x18\x01 \x03(\v2 .protos.IsOnlineReq.TargetsEntryR\atargets\x1a:\n" +
+	"\x15cluster/pb/peer.proto\x12\x02pb\"\a\n" +
+	"\x05Empty\"\x81\x01\n" +
+	"\vIsOnlineReq\x126\n" +
+	"\atargets\x18\x01 \x03(\v2\x1c.pb.IsOnlineReq.TargetsEntryR\atargets\x1a:\n" +
 	"\fTargetsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"&\n" +
 	"\fIsOnlineResp\x12\x16\n" +
-	"\x06online\x18\x01 \x01(\bR\x06online\"\x9d\x01\n" +
+	"\x06online\x18\x01 \x01(\bR\x06online\"\x99\x01\n" +
 	"\n" +
 	"MessageReq\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\fR\amessage\x129\n" +
-	"\atargets\x18\x04 \x03(\v2\x1f.protos.MessageReq.TargetsEntryR\atargets\x1a:\n" +
+	"\amessage\x18\x03 \x01(\fR\amessage\x125\n" +
+	"\atargets\x18\x04 \x03(\v2\x1b.pb.MessageReq.TargetsEntryR\atargets\x1a:\n" +
 	"\fTargetsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"=\n" +
 	"\vMessageResp\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x18\n" +
-	"\asuccess\x18\x02 \x01(\x05R\asuccess\"\x85\x01\n" +
-	"\vKickConnReq\x12:\n" +
-	"\atargets\x18\x01 \x03(\v2 .protos.KickConnReq.TargetsEntryR\atargets\x1a:\n" +
+	"\asuccess\x18\x02 \x01(\x05R\asuccess\"\x81\x01\n" +
+	"\vKickConnReq\x126\n" +
+	"\atargets\x18\x01 \x03(\v2\x1c.pb.KickConnReq.TargetsEntryR\atargets\x1a:\n" +
 	"\fTargetsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"!\n" +
 	"\vRaftMessage\x12\x12\n" +
 	"\x04data\x18\x01 \x01(\fR\x04data\"N\n" +
 	"\fRaftProgress\x12\x14\n" +
-	"\x05match\x18\x02 \x01(\x04R\x05match\x12\x12\n" +
-	"\x04next\x18\x03 \x01(\x04R\x04next\x12\x14\n" +
-	"\x05state\x18\x04 \x01(\tR\x05state\"\x83\x05\n" +
+	"\x05match\x18\x01 \x01(\x04R\x05match\x12\x12\n" +
+	"\x04next\x18\x02 \x01(\x04R\x04next\x12\x14\n" +
+	"\x05state\x18\x03 \x01(\tR\x05state\"\xf3\x04\n" +
 	"\x06Status\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1d\n" +
+	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1b\n" +
+	"\traft_term\x18\x02 \x01(\x04R\braftTerm\x12\x1d\n" +
 	"\n" +
-	"raft_state\x18\x02 \x01(\tR\traftState\x12\x1b\n" +
-	"\traft_term\x18\x03 \x01(\x04R\braftTerm\x12!\n" +
+	"raft_state\x18\x03 \x01(\tR\traftState\x12!\n" +
 	"\fraft_applied\x18\x04 \x01(\x04R\vraftApplied\x12\"\n" +
 	"\rraft_log_size\x18\x05 \x01(\x04R\vraftLogSize\x12!\n" +
 	"\fclient_count\x18\x06 \x01(\x05R\vclientCount\x12!\n" +
-	"\fcluster_size\x18\a \x01(\x05R\vclusterSize\x12<\n" +
+	"\fcluster_size\x18\a \x01(\x05R\vclusterSize\x128\n" +
 	"\n" +
-	"user_count\x18\b \x03(\v2\x1d.protos.Status.UserCountEntryR\tuserCount\x12E\n" +
-	"\rchannel_count\x18\t \x03(\v2 .protos.Status.ChannelCountEntryR\fchannelCount\x12E\n" +
+	"user_count\x18\b \x03(\v2\x19.pb.Status.UserCountEntryR\tuserCount\x12A\n" +
+	"\rchannel_count\x18\t \x03(\v2\x1c.pb.Status.ChannelCountEntryR\fchannelCount\x12A\n" +
 	"\rraft_progress\x18\n" +
-	" \x03(\v2 .protos.Status.RaftProgressEntryR\fraftProgress\x1a<\n" +
+	" \x03(\v2\x1c.pb.Status.RaftProgressEntryR\fraftProgress\x1a<\n" +
 	"\x0eUserCountEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a?\n" +
 	"\x11ChannelCountEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1aU\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1aQ\n" +
 	"\x11RaftProgressEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x04R\x03key\x12*\n" +
-	"\x05value\x18\x02 \x01(\v2\x14.protos.RaftProgressR\x05value:\x028\x012\xd1\x02\n" +
-	"\vPeerService\x12*\n" +
-	"\aInspect\x12\r.protos.Empty\x1a\x0e.protos.Status\"\x00\x127\n" +
-	"\bIsOnline\x12\x13.protos.IsOnlineReq\x1a\x14.protos.IsOnlineResp\"\x00\x120\n" +
-	"\bKickConn\x12\x13.protos.KickConnReq\x1a\r.protos.Empty\"\x00\x126\n" +
-	"\tSendToAll\x12\x12.protos.MessageReq\x1a\x13.protos.MessageResp\"\x00\x12:\n" +
-	"\rSendToTargets\x12\x12.protos.MessageReq\x1a\x13.protos.MessageResp\"\x00\x127\n" +
-	"\x0fSendRaftMessage\x12\x13.protos.RaftMessage\x1a\r.protos.Empty\"\x00B\n" +
-	"Z\b./protosb\x06proto3"
+	"\x03key\x18\x01 \x01(\x04R\x03key\x12&\n" +
+	"\x05value\x18\x02 \x01(\v2\x10.pb.RaftProgressR\x05value:\x028\x012\xa1\x02\n" +
+	"\vPeerService\x12\"\n" +
+	"\aInspect\x12\t.pb.Empty\x1a\n" +
+	".pb.Status\"\x00\x12/\n" +
+	"\bIsOnline\x12\x0f.pb.IsOnlineReq\x1a\x10.pb.IsOnlineResp\"\x00\x12(\n" +
+	"\bKickConn\x12\x0f.pb.KickConnReq\x1a\t.pb.Empty\"\x00\x12.\n" +
+	"\tSendToAll\x12\x0e.pb.MessageReq\x1a\x0f.pb.MessageResp\"\x00\x122\n" +
+	"\rSendToTargets\x12\x0e.pb.MessageReq\x1a\x0f.pb.MessageResp\"\x00\x12/\n" +
+	"\x0fSendRaftMessage\x12\x0f.pb.RaftMessage\x1a\t.pb.Empty\"\x00B\x06Z\x04./pbb\x06proto3"
 
 var (
-	file_broker_protos_peer_proto_rawDescOnce sync.Once
-	file_broker_protos_peer_proto_rawDescData []byte
+	file_cluster_pb_peer_proto_rawDescOnce sync.Once
+	file_cluster_pb_peer_proto_rawDescData []byte
 )
 
-func file_broker_protos_peer_proto_rawDescGZIP() []byte {
-	file_broker_protos_peer_proto_rawDescOnce.Do(func() {
-		file_broker_protos_peer_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_broker_protos_peer_proto_rawDesc), len(file_broker_protos_peer_proto_rawDesc)))
+func file_cluster_pb_peer_proto_rawDescGZIP() []byte {
+	file_cluster_pb_peer_proto_rawDescOnce.Do(func() {
+		file_cluster_pb_peer_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_cluster_pb_peer_proto_rawDesc), len(file_cluster_pb_peer_proto_rawDesc)))
 	})
-	return file_broker_protos_peer_proto_rawDescData
+	return file_cluster_pb_peer_proto_rawDescData
 }
 
-var file_broker_protos_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
-var file_broker_protos_peer_proto_goTypes = []any{
-	(*Empty)(nil),        // 0: protos.Empty
-	(*IsOnlineReq)(nil),  // 1: protos.IsOnlineReq
-	(*IsOnlineResp)(nil), // 2: protos.IsOnlineResp
-	(*MessageReq)(nil),   // 3: protos.MessageReq
-	(*MessageResp)(nil),  // 4: protos.MessageResp
-	(*KickConnReq)(nil),  // 5: protos.KickConnReq
-	(*RaftMessage)(nil),  // 6: protos.RaftMessage
-	(*RaftProgress)(nil), // 7: protos.RaftProgress
-	(*Status)(nil),       // 8: protos.Status
-	nil,                  // 9: protos.IsOnlineReq.TargetsEntry
-	nil,                  // 10: protos.MessageReq.TargetsEntry
-	nil,                  // 11: protos.KickConnReq.TargetsEntry
-	nil,                  // 12: protos.Status.UserCountEntry
-	nil,                  // 13: protos.Status.ChannelCountEntry
-	nil,                  // 14: protos.Status.RaftProgressEntry
+var file_cluster_pb_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_cluster_pb_peer_proto_goTypes = []any{
+	(*Empty)(nil),        // 0: pb.Empty
+	(*IsOnlineReq)(nil),  // 1: pb.IsOnlineReq
+	(*IsOnlineResp)(nil), // 2: pb.IsOnlineResp
+	(*MessageReq)(nil),   // 3: pb.MessageReq
+	(*MessageResp)(nil),  // 4: pb.MessageResp
+	(*KickConnReq)(nil),  // 5: pb.KickConnReq
+	(*RaftMessage)(nil),  // 6: pb.RaftMessage
+	(*RaftProgress)(nil), // 7: pb.RaftProgress
+	(*Status)(nil),       // 8: pb.Status
+	nil,                  // 9: pb.IsOnlineReq.TargetsEntry
+	nil,                  // 10: pb.MessageReq.TargetsEntry
+	nil,                  // 11: pb.KickConnReq.TargetsEntry
+	nil,                  // 12: pb.Status.UserCountEntry
+	nil,                  // 13: pb.Status.ChannelCountEntry
+	nil,                  // 14: pb.Status.RaftProgressEntry
 }
-var file_broker_protos_peer_proto_depIdxs = []int32{
-	9,  // 0: protos.IsOnlineReq.targets:type_name -> protos.IsOnlineReq.TargetsEntry
-	10, // 1: protos.MessageReq.targets:type_name -> protos.MessageReq.TargetsEntry
-	11, // 2: protos.KickConnReq.targets:type_name -> protos.KickConnReq.TargetsEntry
-	12, // 3: protos.Status.user_count:type_name -> protos.Status.UserCountEntry
-	13, // 4: protos.Status.channel_count:type_name -> protos.Status.ChannelCountEntry
-	14, // 5: protos.Status.raft_progress:type_name -> protos.Status.RaftProgressEntry
-	7,  // 6: protos.Status.RaftProgressEntry.value:type_name -> protos.RaftProgress
-	0,  // 7: protos.PeerService.Inspect:input_type -> protos.Empty
-	1,  // 8: protos.PeerService.IsOnline:input_type -> protos.IsOnlineReq
-	5,  // 9: protos.PeerService.KickConn:input_type -> protos.KickConnReq
-	3,  // 10: protos.PeerService.SendToAll:input_type -> protos.MessageReq
-	3,  // 11: protos.PeerService.SendToTargets:input_type -> protos.MessageReq
-	6,  // 12: protos.PeerService.SendRaftMessage:input_type -> protos.RaftMessage
-	8,  // 13: protos.PeerService.Inspect:output_type -> protos.Status
-	2,  // 14: protos.PeerService.IsOnline:output_type -> protos.IsOnlineResp
-	0,  // 15: protos.PeerService.KickConn:output_type -> protos.Empty
-	4,  // 16: protos.PeerService.SendToAll:output_type -> protos.MessageResp
-	4,  // 17: protos.PeerService.SendToTargets:output_type -> protos.MessageResp
-	0,  // 18: protos.PeerService.SendRaftMessage:output_type -> protos.Empty
+var file_cluster_pb_peer_proto_depIdxs = []int32{
+	9,  // 0: pb.IsOnlineReq.targets:type_name -> pb.IsOnlineReq.TargetsEntry
+	10, // 1: pb.MessageReq.targets:type_name -> pb.MessageReq.TargetsEntry
+	11, // 2: pb.KickConnReq.targets:type_name -> pb.KickConnReq.TargetsEntry
+	12, // 3: pb.Status.user_count:type_name -> pb.Status.UserCountEntry
+	13, // 4: pb.Status.channel_count:type_name -> pb.Status.ChannelCountEntry
+	14, // 5: pb.Status.raft_progress:type_name -> pb.Status.RaftProgressEntry
+	7,  // 6: pb.Status.RaftProgressEntry.value:type_name -> pb.RaftProgress
+	0,  // 7: pb.PeerService.Inspect:input_type -> pb.Empty
+	1,  // 8: pb.PeerService.IsOnline:input_type -> pb.IsOnlineReq
+	5,  // 9: pb.PeerService.KickConn:input_type -> pb.KickConnReq
+	3,  // 10: pb.PeerService.SendToAll:input_type -> pb.MessageReq
+	3,  // 11: pb.PeerService.SendToTargets:input_type -> pb.MessageReq
+	6,  // 12: pb.PeerService.SendRaftMessage:input_type -> pb.RaftMessage
+	8,  // 13: pb.PeerService.Inspect:output_type -> pb.Status
+	2,  // 14: pb.PeerService.IsOnline:output_type -> pb.IsOnlineResp
+	0,  // 15: pb.PeerService.KickConn:output_type -> pb.Empty
+	4,  // 16: pb.PeerService.SendToAll:output_type -> pb.MessageResp
+	4,  // 17: pb.PeerService.SendToTargets:output_type -> pb.MessageResp
+	0,  // 18: pb.PeerService.SendRaftMessage:output_type -> pb.Empty
 	13, // [13:19] is the sub-list for method output_type
 	7,  // [7:13] is the sub-list for method input_type
 	7,  // [7:7] is the sub-list for extension type_name
@@ -647,26 +646,26 @@ var file_broker_protos_peer_proto_depIdxs = []int32{
 	0,  // [0:7] is the sub-list for field type_name
 }
 
-func init() { file_broker_protos_peer_proto_init() }
-func file_broker_protos_peer_proto_init() {
-	if File_broker_protos_peer_proto != nil {
+func init() { file_cluster_pb_peer_proto_init() }
+func file_cluster_pb_peer_proto_init() {
+	if File_cluster_pb_peer_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_broker_protos_peer_proto_rawDesc), len(file_broker_protos_peer_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_cluster_pb_peer_proto_rawDesc), len(file_cluster_pb_peer_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   15,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_broker_protos_peer_proto_goTypes,
-		DependencyIndexes: file_broker_protos_peer_proto_depIdxs,
-		MessageInfos:      file_broker_protos_peer_proto_msgTypes,
+		GoTypes:           file_cluster_pb_peer_proto_goTypes,
+		DependencyIndexes: file_cluster_pb_peer_proto_depIdxs,
+		MessageInfos:      file_cluster_pb_peer_proto_msgTypes,
 	}.Build()
-	File_broker_protos_peer_proto = out.File
-	file_broker_protos_peer_proto_goTypes = nil
-	file_broker_protos_peer_proto_depIdxs = nil
+	File_cluster_pb_peer_proto = out.File
+	file_cluster_pb_peer_proto_goTypes = nil
+	file_cluster_pb_peer_proto_depIdxs = nil
 }

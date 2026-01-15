@@ -194,7 +194,7 @@ func (c *cluster) startRaft(join bool) {
 		ElectionTick:              10,
 		HeartbeatTick:             1,
 		Storage:                   storage,
-		MaxSizePerMsg:             1024 * 1024,
+		MaxSizePerMsg:             10 * 1024 * 1024,
 		MaxInflightMsgs:           256,
 		MaxUncommittedEntriesSize: 1 << 30,
 	}

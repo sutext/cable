@@ -60,21 +60,29 @@ spec:
     app: cable-cluster
   ports:
     - protocol: TCP
-      name: endpoint-tcp
-      port: 1683
-      targetPort: 1683
+      name: ws
+      port: 1881
+      targetPort: 1881
+    - protocol: TCP
+      name: wss
+      port: 1882
+      targetPort: 1882
+    - protocol: TCP
+      name: tcp
+      port: 1883
+      targetPort: 1883
+    - protocol: TCP
+      name: tls
+      port: 1884
+      targetPort: 1884
     - protocol: UDP
-      name: endpoint-udp
-      port: 1684
-      targetPort: 1684
+      name: udp
+      port: 1885
+      targetPort: 1885
     - protocol: UDP
-      name: endpoint-quic
-      port: 1685
-      targetPort: 1685
-    - protocol: UDP
-      name: endpoint-ws
-      port: 1688
-      targetPort: 1688
+      name: quic
+      port: 1886
+      targetPort: 1886
     - protocol: TCP
       name: pprof
       port: 6060

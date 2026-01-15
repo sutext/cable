@@ -40,9 +40,9 @@ message RaftMessage {
 }
 /// Progress represents the progress of raft node.
 message RaftProgress {
-  uint64 match = 2;
-  uint64 next = 3;
-  string state = 4;
+  uint64 match = 1;
+  uint64 next = 2;
+  string state = 3;
 }
 /// Inspects is the response message for Inspect RPC.
 message Status{

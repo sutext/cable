@@ -14,10 +14,9 @@ import (
 )
 
 type Cluster interface {
-	AddBroker(ctx context.Context, broker uint64, addr string) error
-	RemoveBroker(ctx context.Context, broker uint64) error
+	AddBroker(ctx context.Context, id uint64, addr string) error
+	KickBroker(ctx context.Context, id uint64) error
 }
-
 type cluster struct {
 	raft            raft.Node
 	size            int32
@@ -77,16 +76,16 @@ func (c *cluster) RaftLogSize() uint64 {
 	lastIndex, _ := c.storage.LastIndex()
 	return lastIndex - firstIndex + 1
 }
-func (c *cluster) AddBroker(ctx context.Context, brokerID uint64, addr string) error {
-	if brokerID == c.broker.id {
+func (c *cluster) AddBroker(ctx context.Context, id uint64, addr string) error {
+	if id == c.broker.id {
 		return nil
 	}
-	if p, ok := c.peers.Get(brokerID); ok {
+	if p, ok := c.peers.Get(id); ok {
 		p.updateAddr(addr)
 		return nil
 	}
-	peer := newPeerClient(brokerID, addr, c.broker.logger)
-	c.peers.Set(brokerID, peer)
+	peer := newPeerClient(id, addr, c.broker.logger)
+	c.peers.Set(id, peer)
 	peer.connect()
 	if c.peers.Len() == c.size-1 {
 		return nil
@@ -94,14 +93,14 @@ func (c *cluster) AddBroker(ctx context.Context, brokerID uint64, addr string) e
 	if !c.IsLeader() {
 		return nil
 	}
-	return c.addNode(ctx, brokerID)
+	return c.addNode(ctx, id)
 }
 
-func (c *cluster) RemoveBroker(ctx context.Context, brokerID uint64) error {
-	if brokerID == c.broker.id {
+func (c *cluster) KickBroker(ctx context.Context, id uint64) error {
+	if id == c.broker.id {
 		c.ready.Store(false)
 	}
-	return c.removeNode(ctx, brokerID)
+	return c.removeNode(ctx, id)
 }
 func (c *cluster) GetPeer(id uint64) (*peerClient, bool) {
 	if p, ok := c.peers.Get(id); ok {

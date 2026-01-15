@@ -2,6 +2,7 @@ package network
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"time"
@@ -13,6 +14,7 @@ import (
 
 type transportWebSocket struct {
 	logger        *xlog.Logger
+	tlsConfig     *tls.Config
 	httpServer    *http.Server
 	closeHandler  func(c Conn)
 	packetHandler func(p packet.Packet, c Conn)
@@ -20,9 +22,17 @@ type transportWebSocket struct {
 	queueCapacity int32
 }
 
-func NewWebSocket(logger *xlog.Logger, queueCapacity int32) Transport {
+func NewWS(logger *xlog.Logger, queueCapacity int32) Transport {
 	return &transportWebSocket{
 		logger:        logger,
+		queueCapacity: queueCapacity,
+	}
+}
+func NewWSS(config *tls.Config, logger *xlog.Logger, queueCapacity int32) Transport {
+	assertTLS(config)
+	return &transportWebSocket{
+		logger:        logger,
+		tlsConfig:     config,
 		queueCapacity: queueCapacity,
 	}
 }
@@ -53,6 +63,10 @@ func (l *transportWebSocket) Listen(address string) error {
 				return nil
 			},
 		},
+		TLSConfig: l.tlsConfig,
+	}
+	if l.tlsConfig != nil {
+		return l.httpServer.ListenAndServeTLS("", "")
 	}
 	return l.httpServer.ListenAndServe()
 }

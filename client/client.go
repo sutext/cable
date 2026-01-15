@@ -83,7 +83,7 @@ func New(address string, options ...Option) Client {
 		conn = newUDPConn(address)
 	case NetworkQUIC:
 		conn = newQUICConn(address, opts.quicConfig)
-	case NetworkWebSocket:
+	case NetworkWS:
 		conn = newWSConn(address)
 	default:
 		panic("unknown network")
