@@ -22,12 +22,12 @@ const (
 
 type Response struct {
 	packet
-	id   int64
+	id   uint16
 	Code StatusCode
 	Body []byte
 }
 
-func (p *Response) ID() int64 {
+func (p *Response) ID() uint16 {
 	return p.id
 }
 func (p *Response) Type() PacketType {
@@ -50,7 +50,7 @@ func (p *Response) String() string {
 	return fmt.Sprintf("RESPONSE(ID=%d, Code=%d,  Props=%v, Content=%d)", p.id, p.Code, p.props, len(p.Body))
 }
 func (p *Response) WriteTo(w coder.Encoder) error {
-	w.WriteInt64(p.id)
+	w.WriteUInt16(p.id)
 	w.WriteUInt8(uint8(p.Code))
 	if err := p.packet.WriteTo(w); err != nil {
 		return err
@@ -59,7 +59,7 @@ func (p *Response) WriteTo(w coder.Encoder) error {
 	return nil
 }
 func (p *Response) ReadFrom(r coder.Decoder) error {
-	id, err := r.ReadInt64()
+	id, err := r.ReadUInt16()
 	if err != nil {
 		return err
 	}

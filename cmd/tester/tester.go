@@ -38,7 +38,7 @@ func (c *Client) run() {
 }
 
 func (c *Client) sendToUser() {
-	msg := packet.NewMessage(rand.Int64(), fmt.Appendf(nil, "hello, i am %s", c.id.UserID))
+	msg := packet.NewMessage(fmt.Appendf(nil, "hello, i am %s", c.id.UserID))
 	msg.Qos = packet.MessageQos1
 	msg.Kind = packet.MessageKind(1)
 	msg.Set(packet.PropertyUserID, randomUserID())
@@ -48,7 +48,7 @@ func (c *Client) sendToUser() {
 	}
 }
 func (c *Client) sendToChannel() {
-	msg := packet.NewMessage(rand.Int64(), fmt.Appendf(nil, "hello group, i am %s", c.id.UserID))
+	msg := packet.NewMessage(fmt.Appendf(nil, "hello group, i am %s", c.id.UserID))
 	msg.Qos = packet.MessageQos1
 	msg.Kind = packet.MessageKind(2)
 	msg.Set(packet.PropertyChannel, randomChannel())

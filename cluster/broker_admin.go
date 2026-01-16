@@ -3,7 +3,6 @@ package cluster
 import (
 	"context"
 	"encoding/json"
-	"math/rand/v2"
 	"net/http"
 	"strconv"
 	"strings"
@@ -101,7 +100,7 @@ func (b *broker) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "msg is required", http.StatusBadRequest)
 		return
 	}
-	msgPacket := packet.NewMessage(rand.Int64(), []byte(msg))
+	msgPacket := packet.NewMessage([]byte(msg))
 	var total, success int32
 	var err error
 	if uid != "" {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"math/rand/v2"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/segmentio/kafka-go"
@@ -206,9 +205,8 @@ func (b *booter) readKafkaMessages(reader *kafka.Reader, kind packet.MessageKind
 		}
 
 		// Create packet message
-		pktMsg := packet.NewMessage(rand.Int64(), msg.Value)
+		pktMsg := packet.NewMessage(msg.Value)
 		pktMsg.Kind = kind
-
 		switch kind {
 		case MessageKindUser:
 			// For chat messages, extract user ID from key and send to user

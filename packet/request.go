@@ -4,31 +4,26 @@ import (
 	"bytes"
 	"fmt"
 	"maps"
-	"math/rand/v2"
 
 	"sutext.github.io/cable/coder"
 )
 
 type Request struct {
 	packet
-	id     int64
+	ID     uint16
 	Method string
 	Body   []byte
 }
 
-func NewRequest(method string, content ...[]byte) *Request {
+func NewRequest(method string, body ...[]byte) *Request {
 	var b []byte
-	if len(content) > 0 {
-		b = content[0]
+	if len(body) > 0 {
+		b = body[0]
 	}
 	return &Request{
-		id:     rand.Int64(),
 		Method: method,
 		Body:   b,
 	}
-}
-func (p *Request) ID() int64 {
-	return p.id
 }
 func (p *Request) Type() PacketType {
 	return REQUEST
@@ -42,12 +37,12 @@ func (p *Request) Equal(other Packet) bool {
 	}
 	o := other.(*Request)
 	return maps.Equal(p.props, o.props) &&
-		p.id == o.id &&
+		p.ID == o.ID &&
 		p.Method == o.Method &&
 		bytes.Equal(p.Body, o.Body)
 }
 func (p *Request) String() string {
-	return fmt.Sprintf("REQUEST(ID=%d, Method=%s, Props=%v, Content=%d)", p.id, p.Method, p.props, len(p.Body))
+	return fmt.Sprintf("REQUEST(ID=%d, Method=%s, Props=%v, Content=%d)", p.ID, p.Method, p.props, len(p.Body))
 }
 func (p *Request) Response(code StatusCode, content ...[]byte) *Response {
 	var b []byte
@@ -55,13 +50,13 @@ func (p *Request) Response(code StatusCode, content ...[]byte) *Response {
 		b = content[0]
 	}
 	return &Response{
-		id:   p.id,
+		id:   p.ID,
 		Code: code,
 		Body: b,
 	}
 }
 func (p *Request) WriteTo(w coder.Encoder) error {
-	w.WriteInt64(p.id)
+	w.WriteUInt16(p.ID)
 	w.WriteString(p.Method)
 	err := p.packet.WriteTo(w)
 	if err != nil {
@@ -72,7 +67,7 @@ func (p *Request) WriteTo(w coder.Encoder) error {
 }
 func (p *Request) ReadFrom(r coder.Decoder) error {
 	var err error
-	if p.id, err = r.ReadInt64(); err != nil {
+	if p.ID, err = r.ReadUInt16(); err != nil {
 		return err
 	}
 	if p.Method, err = r.ReadString(); err != nil {

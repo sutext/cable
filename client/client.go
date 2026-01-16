@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"math"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -61,13 +62,15 @@ type client struct {
 	pingLock       sync.Mutex
 	sendQueue      *queue.Queue
 	keepalive      *keepalive.KeepAlive
+	messageID      atomic.Uint64
+	requestID      atomic.Uint64
 	statusLock     sync.RWMutex
 	pingTimeout    time.Duration
 	pingInterval   time.Duration
 	requestLock    sync.Mutex
 	messageLock    sync.Mutex
-	requestTasks   map[int64]chan *packet.Response
-	messageTasks   map[int64]chan *packet.Messack
+	requestTasks   map[uint16]chan *packet.Response
+	messageTasks   map[uint16]chan *packet.Messack
 	writeTimeout   time.Duration
 	requestTimeout time.Duration
 	messageTimeout time.Duration
@@ -98,8 +101,8 @@ func New(address string, options ...Option) Client {
 		pingTimeout:    opts.pingTimeout,
 		pingInterval:   opts.pingInterval,
 		writeTimeout:   opts.writeTimeout,
-		requestTasks:   make(map[int64]chan *packet.Response),
-		messageTasks:   make(map[int64]chan *packet.Messack),
+		requestTasks:   make(map[uint16]chan *packet.Response),
+		messageTasks:   make(map[uint16]chan *packet.Messack),
 		requestTimeout: opts.requestTimeout,
 		messageTimeout: opts.messageTimeout,
 	}
@@ -245,6 +248,9 @@ func (c *client) SendMessage(ctx context.Context, p *packet.Message) error {
 	if p.Qos == packet.MessageQos0 {
 		return c.sendPacket(ctx, false, p)
 	}
+	if p.ID == 0 {
+		p.ID = uint16(c.messageID.Add(1) / math.MaxUint16)
+	}
 	return c.retryInflightMessage(ctx, p, 0)
 }
 func (c *client) retryInflightMessage(ctx context.Context, p *packet.Message, attempts int) error {
@@ -253,13 +259,14 @@ func (c *client) retryInflightMessage(ctx context.Context, p *packet.Message, at
 	}
 	if attempts > 0 {
 		p.Dup = true
-		c.logger.Warn("retry inflight message", xlog.I64("id", p.ID()), xlog.Int("attempts", attempts))
+		c.logger.Warn("retry inflight message", xlog.U16("id", p.ID), xlog.Int("attempts", attempts))
 	}
 	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
 	defer cancel()
 	_, err := c.sendInflightMessage(ctx, p)
 	if err != nil {
 		if t, ok := err.(interface{ Timeout() bool }); ok && t.Timeout() {
+			p.Dup = true
 			return c.retryInflightMessage(context.Background(), p, attempts+1)
 		}
 		return err
@@ -272,11 +279,11 @@ func (c *client) sendInflightMessage(ctx context.Context, p *packet.Message) (*p
 	}
 	c.messageLock.Lock()
 	ackCh := make(chan *packet.Messack)
-	c.messageTasks[p.ID()] = ackCh
+	c.messageTasks[p.ID] = ackCh
 	c.messageLock.Unlock()
 	defer func() {
 		c.messageLock.Lock()
-		delete(c.messageTasks, p.ID())
+		delete(c.messageTasks, p.ID)
 		close(ackCh)
 		c.messageLock.Unlock()
 	}()
@@ -294,13 +301,16 @@ func (c *client) SendRequest(ctx context.Context, p *packet.Request) (*packet.Re
 	if !c.IsReady() {
 		return nil, ErrConnectionNotReady
 	}
+	if p.ID == 0 {
+		p.ID = uint16(c.requestID.Add(1) / math.MaxUint16)
+	}
 	c.requestLock.Lock()
 	resp := make(chan *packet.Response)
-	c.requestTasks[p.ID()] = resp
+	c.requestTasks[p.ID] = resp
 	c.requestLock.Unlock()
 	defer func() {
 		c.requestLock.Lock()
-		delete(c.requestTasks, p.ID())
+		delete(c.requestTasks, p.ID)
 		close(resp)
 		c.requestLock.Unlock()
 	}()
@@ -398,7 +408,7 @@ func (c *client) handlePacket(p packet.Packet) {
 		}
 		c.messageLock.Unlock()
 		if !ok {
-			c.logger.Error("response task not found", xlog.I64("id", p.ID()))
+			c.logger.Error("response task not found", xlog.U16("id", p.ID()))
 		}
 	case packet.REQUEST:
 		res, err := c.handler.OnRequest(p.(*packet.Request))
@@ -420,7 +430,7 @@ func (c *client) handlePacket(p packet.Packet) {
 		}
 		c.requestLock.Unlock()
 		if !ok {
-			c.logger.Error("response task not found", xlog.I64("id", p.ID()))
+			c.logger.Error("response task not found", xlog.U16("id", p.ID()))
 		}
 	case packet.PING:
 		if err := c.sendPong(); err != nil {

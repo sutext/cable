@@ -6,7 +6,7 @@
             "type": "go",
             "request": "launch",
             "mode": "auto",
-            "program": "${workspaceFolder}/cmd/cable/main.go",
+            "program": "${workspaceFolder}/cmd/cable/",
             "env": {
               "ENTRY_MODE": "debug"
             }

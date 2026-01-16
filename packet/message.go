@@ -30,25 +30,21 @@ const (
 // Message represents a message packet.
 type Message struct {
 	packet
-	id      int64
+	ID      uint16
 	Qos     MessageQos
 	Dup     bool
 	Kind    MessageKind
 	Payload []byte
 }
 
-func NewMessage(id int64, payload []byte) *Message {
+func NewMessage(payload []byte) *Message {
 	return &Message{
-		id:      id,
 		Payload: payload,
 	}
 }
-func (p *Message) ID() int64 {
-	return p.id
-}
 func (p *Message) Ack() *Messack {
 	return &Messack{
-		id: p.id,
+		id: p.ID,
 	}
 }
 func (p *Message) Type() PacketType {
@@ -62,7 +58,7 @@ func (p *Message) Equal(other Packet) bool {
 		return false
 	}
 	o := other.(*Message)
-	return p.id == o.id &&
+	return p.ID == o.ID &&
 		p.Qos == o.Qos &&
 		p.Dup == o.Dup &&
 		p.Kind == o.Kind &&
@@ -70,7 +66,7 @@ func (p *Message) Equal(other Packet) bool {
 		bytes.Equal(p.Payload, o.Payload)
 }
 func (p *Message) String() string {
-	return fmt.Sprintf("MESSAGE(ID=%d, Qos=%d, Dup=%t, Kind=%d, Props=%v, Payload=%d)", p.id, p.Qos, p.Dup, p.Kind, p.props, len(p.Payload))
+	return fmt.Sprintf("MESSAGE(ID=%d, Qos=%d, Dup=%t, Kind=%d, Props=%v, Payload=%d)", p.ID, p.Qos, p.Dup, p.Kind, p.props, len(p.Payload))
 }
 func (p *Message) WriteTo(w coder.Encoder) error {
 	var flags uint8
@@ -85,7 +81,7 @@ func (p *Message) WriteTo(w coder.Encoder) error {
 	}
 	flags |= uint8(p.Kind)
 	w.WriteUInt8(flags)
-	w.WriteInt64(p.id)
+	w.WriteUInt16(p.ID)
 	err := p.packet.WriteTo(w)
 	if err != nil {
 		return err
@@ -98,7 +94,7 @@ func (p *Message) ReadFrom(r coder.Decoder) error {
 	if err != nil {
 		return err
 	}
-	id, err := r.ReadInt64()
+	id, err := r.ReadUInt16()
 	if err != nil {
 		return err
 	}
@@ -110,7 +106,7 @@ func (p *Message) ReadFrom(r coder.Decoder) error {
 	if err != nil {
 		return err
 	}
-	p.id = id
+	p.ID = id
 	p.Dup = flags&dupMask != 0
 	p.Qos = MessageQos((flags & qosMask) >> 7)
 	p.Kind = MessageKind(flags & kindMask)
@@ -120,10 +116,10 @@ func (p *Message) ReadFrom(r coder.Decoder) error {
 
 type Messack struct {
 	packet
-	id int64
+	id uint16
 }
 
-func (p *Messack) ID() int64 {
+func (p *Messack) ID() uint16 {
 	return p.id
 }
 func (p *Messack) Type() PacketType {
@@ -143,11 +139,11 @@ func (p *Messack) String() string {
 	return fmt.Sprintf("MESSACK(id=%d)", p.id)
 }
 func (p *Messack) WriteTo(w coder.Encoder) error {
-	w.WriteInt64(p.id)
+	w.WriteUInt16(p.id)
 	return p.packet.WriteTo(w)
 }
 func (p *Messack) ReadFrom(r coder.Decoder) (err error) {
-	p.id, err = r.ReadInt64()
+	p.id, err = r.ReadUInt16()
 	if err != nil {
 		return err
 	}

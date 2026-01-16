@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"hash/crc32"
+	"math"
 	"net/http"
 	"strings"
 	"sync"
@@ -53,14 +54,17 @@ type conn struct {
 	raw          rawconn
 	logger       *xlog.Logger
 	closed       atomic.Bool
-	sendQueue    *queue.Queue
 	pingLock     sync.Mutex
 	pingChan     chan struct{}
+	sendQueue    *queue.Queue
+	messageID    atomic.Uint64
+	requestID    atomic.Uint64
 	requestLock  sync.Mutex
 	messageLock  sync.Mutex
 	closeHandler func()
-	messageTasks map[int64]chan *packet.Messack
-	requestTasks map[int64]chan *packet.Response
+
+	messageTasks map[uint16]chan *packet.Messack
+	requestTasks map[uint16]chan *packet.Response
 }
 
 func newConn(raw rawconn, logger *xlog.Logger, queueCapacity int32) Conn {
@@ -118,6 +122,9 @@ func (c *conn) SendMessage(ctx context.Context, p *packet.Message) error {
 	if p.Qos == packet.MessageQos0 {
 		return c.SendPacket(ctx, p)
 	}
+	if p.ID == 0 {
+		p.ID = uint16(c.messageID.Add(1) / math.MaxUint16)
+	}
 	return c.retryInflightMessage(ctx, p, 0)
 }
 func (c *conn) retryInflightMessage(ctx context.Context, p *packet.Message, attempts int) error {
@@ -129,6 +136,7 @@ func (c *conn) retryInflightMessage(ctx context.Context, p *packet.Message, atte
 	_, err := c.sendInflightMessage(ctx, p)
 	if err != nil {
 		if t, ok := err.(interface{ Timeout() bool }); ok && t.Timeout() {
+			p.Dup = true
 			return c.retryInflightMessage(context.Background(), p, attempts+1)
 		}
 		return err
@@ -141,11 +149,11 @@ func (c *conn) sendInflightMessage(ctx context.Context, p *packet.Message) (*pac
 	}
 	c.messageLock.Lock()
 	ackCh := make(chan *packet.Messack)
-	c.messageTasks[p.ID()] = ackCh
+	c.messageTasks[p.ID] = ackCh
 	c.messageLock.Unlock()
 	defer func() {
 		c.messageLock.Lock()
-		delete(c.messageTasks, p.ID())
+		delete(c.messageTasks, p.ID)
 		close(ackCh)
 		c.messageLock.Unlock()
 	}()
@@ -163,13 +171,16 @@ func (c *conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Resp
 	if c.IsClosed() {
 		return nil, xerr.ConnectionIsClosed
 	}
+	if p.ID == 0 {
+		p.ID = uint16(c.requestID.Add(1) / math.MaxUint16)
+	}
 	c.requestLock.Lock()
 	resp := make(chan *packet.Response)
-	c.requestTasks[p.ID()] = resp
+	c.requestTasks[p.ID] = resp
 	c.requestLock.Unlock()
 	defer func() {
 		c.requestLock.Lock()
-		delete(c.requestTasks, p.ID())
+		delete(c.requestTasks, p.ID)
 		close(resp)
 		c.requestLock.Unlock()
 	}()
@@ -198,7 +209,7 @@ func (c *conn) RecvMessack(p *packet.Messack) {
 	}
 	c.messageLock.Unlock()
 	if !ok {
-		c.logger.Error("response task not found", xlog.I64("id", p.ID()))
+		c.logger.Error("response task not found", xlog.U16("id", p.ID()))
 	}
 }
 func (c *conn) RecvResponse(p *packet.Response) {
@@ -209,7 +220,7 @@ func (c *conn) RecvResponse(p *packet.Response) {
 	}
 	c.requestLock.Unlock()
 	if !ok {
-		c.logger.Error("response task not found", xlog.I64("id", p.ID()))
+		c.logger.Error("response task not found", xlog.U16("id", p.ID()))
 	}
 }
 func (c *conn) Close() error {

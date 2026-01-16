@@ -52,6 +52,12 @@ var (
 	Time = slog.Time
 )
 
+func I16(key string, i int16) slog.Attr {
+	return slog.Int(key, int(i))
+}
+func U16(key string, i uint16) slog.Attr {
+	return slog.Uint64(key, uint64(i))
+}
 func I32(key string, i int32) slog.Attr {
 	return slog.Int(key, int(i))
 }
