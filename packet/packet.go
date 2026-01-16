@@ -92,15 +92,17 @@ func (t PacketType) String() string {
 }
 
 // Property defines keys for packet properties.
+// These keys are used to store packet properties in a map.
+// User can define their own properties by using values greater than 3. 0...3 are reserved for standard properties.
+// The property keys are defined as uint8 to save memory.the maximum number of properties is 256.
 type Property uint8
 
 // Property constants.
 const (
-	PropertyConnID   Property = 1 // Connection ID property
-	PropertyUserID   Property = 2 // User ID property
-	PropertyChannel  Property = 3 // Channel property
-	PropertyClientID Property = 4 // Client ID property
-	PropertyPassword Property = 5 // Password property
+	PropertyNone    Property = 0 // Empty property
+	PropertyConnID  Property = 1 // Connection ID property
+	PropertyUserID  Property = 2 // User ID property
+	PropertyChannel Property = 3 // Channel property
 )
 
 // Properties defines an interface for managing packet properties.

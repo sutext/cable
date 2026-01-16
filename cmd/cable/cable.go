@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"net/http"
 	_ "net/http/pprof"
@@ -13,8 +14,14 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
+var configFile = "cable.config.yaml"
+
+func init() {
+	flag.StringVar(&configFile, "config", "cable.config.yaml", "config file path")
+	flag.Parse()
+}
 func main() {
-	conf, err := readConfig("cable.config.yaml")
+	conf, err := readConfig(configFile)
 	if err != nil {
 		panic(err)
 	}

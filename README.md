@@ -249,7 +249,7 @@ kubectl get pods
 
 ## Performance Metrics
 
-- **Connections** - Single node supports 100,000+ concurrent connections
+- **Connections** - Single node supports 500,000+ concurrent connections
 - **Message Latency** - Average latency < 10ms
 - **Throughput** - 100,000+ messages/second
 - **Failover** - Automatic recovery from node failure, recovery time < 10 seconds

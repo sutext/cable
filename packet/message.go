@@ -24,11 +24,16 @@ const (
 )
 
 // MessageKind defines the type of message payload.
+// User can define their own message kinds by extending this enum. 0...3 are reserved for system message kinds.
+// The maximum value of MessageKind is 63, which is the maximum value of the kindMask constant.
 type MessageKind uint8
 
 // MessageKind constants.
 const (
-	MessageKindNone MessageKind = 0 // No specific message kind
+	MessageKindNone      MessageKind = 0 // The default zero value. No specific behavior.
+	MessageKindToAll     MessageKind = 1 // Broker will auto broadcast message to all clients.
+	MessageKindToUser    MessageKind = 2 // Broker will auto resend message to a specific user. The userID exsits in the props map.
+	MessageKindToChannel MessageKind = 3 // Broker will auto resend message to a specific channel. The channel exsits in the props map.
 )
 
 // Bitmask constants for message flags.
