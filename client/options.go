@@ -1,3 +1,6 @@
+// Package client provides a client implementation for the cable protocol.
+// It supports multiple network protocols (TCP, UDP, WebSocket, QUIC) and provides
+// features like automatic reconnection, heartbeat detection, and request-response mechanism.
 package client
 
 import (
@@ -9,49 +12,69 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
+// Network constants define the supported network protocols.
 const (
-	NetworkWS   string = "ws"
-	NetworkWSS  string = "wss"
-	NetworkTCP  string = "tcp"
-	NetworkTLS  string = "tls"
-	NetworkUDP  string = "udp"
+	// NetworkWS represents WebSocket protocol.
+	NetworkWS string = "ws"
+	// NetworkWSS represents WebSocket Secure protocol.
+	NetworkWSS string = "wss"
+	// NetworkTCP represents TCP protocol.
+	NetworkTCP string = "tcp"
+	// NetworkTLS represents TCP with TLS protocol.
+	NetworkTLS string = "tls"
+	// NetworkUDP represents UDP protocol.
+	NetworkUDP string = "udp"
+	// NetworkQUIC represents QUIC protocol.
 	NetworkQUIC string = "quic"
 )
 
+// Handler defines the callback methods for client events.
 type Handler interface {
+	// OnStatus is called when the client status changes.
 	OnStatus(status Status)
+	// OnMessage is called when a message packet is received.
 	OnMessage(p *packet.Message) error
+	// OnRequest is called when a request packet is received and expects a response.
 	OnRequest(p *packet.Request) (*packet.Response, error)
 }
+
+// emptyHandler is a default implementation of Handler that does nothing.
 type emptyHandler struct{}
 
+// OnStatus implements the Handler interface with empty implementation.
 func (h *emptyHandler) OnStatus(status Status) {}
 
+// OnMessage implements the Handler interface with empty implementation.
 func (h *emptyHandler) OnMessage(p *packet.Message) error {
 	return nil
 }
+
+// OnRequest implements the Handler interface with empty implementation.
 func (h *emptyHandler) OnRequest(p *packet.Request) (*packet.Response, error) {
 	return nil, nil
 }
 
+// Options holds the configuration for the client.
 type Options struct {
-	logger            *xlog.Logger
-	handler           Handler
-	retrier           *Retrier
-	network           string
-	quicConfig        *quic.Config
-	pingTimeout       time.Duration
-	pingInterval      time.Duration
-	writeTimeout      time.Duration
-	requestTimeout    time.Duration
-	messageTimeout    time.Duration
-	sendQueueCapacity int32
+	logger            *xlog.Logger  // logger for client logging
+	handler           Handler       // event handler for client events
+	retrier           *Retrier      // retry mechanism for reconnections
+	network           string        // network protocol to use
+	quicConfig        *quic.Config  // QUIC configuration (if using QUIC)
+	pingTimeout       time.Duration // timeout for ping responses
+	pingInterval      time.Duration // interval between ping messages
+	writeTimeout      time.Duration // timeout for write operations
+	requestTimeout    time.Duration // timeout for request operations
+	messageTimeout    time.Duration // timeout for message operations
+	sendQueueCapacity int32         // capacity of the send queue
 }
 
+// Option is a function type for configuring the client using builder pattern.
 type Option struct {
-	f func(*Options)
+	f func(*Options) // function that modifies Options
 }
 
+// newOptions creates a new Options instance with default values and applies the given options.
 func newOptions(options ...Option) *Options {
 	opts := &Options{
 		logger:            xlog.With("GROUP", "CLIENT"),
@@ -70,58 +93,80 @@ func newOptions(options ...Option) *Options {
 	}
 	return opts
 }
+
+// WithPing sets the ping timeout and interval for keep-alive mechanism.
 func WithPing(timeout, interval time.Duration) Option {
 	return Option{f: func(o *Options) {
 		o.pingTimeout = timeout
 		o.pingInterval = interval
 	}}
 }
+
+// WithLogger sets the custom logger for the client.
 func WithLogger(logger *xlog.Logger) Option {
 	return Option{f: func(o *Options) {
 		o.logger = logger
 	}}
 }
+
+// WithNetwork sets the network protocol to use (TCP, UDP, WebSocket, QUIC).
 func WithNetwork(network string) Option {
 	return Option{f: func(o *Options) {
 		o.network = network
 	}}
 }
+
+// WithRetrier sets the custom retrier for reconnection attempts.
 func WithRetrier(retrier *Retrier) Option {
 	return Option{f: func(o *Options) {
 		o.retrier = retrier
 	}}
 }
+
+// WithQuicConfig sets the QUIC configuration for QUIC network protocol.
 func WithQuicConfig(config *quic.Config) Option {
 	return Option{f: func(o *Options) {
 		o.quicConfig = config
 	}}
 }
+
+// WithKeepAlive sets the keep-alive timeout and interval (alias for WithPing).
 func WithKeepAlive(timeout, interval time.Duration) Option {
 	return Option{f: func(o *Options) {
 		o.pingTimeout = timeout
 		o.pingInterval = interval
 	}}
 }
+
+// WithHandler sets the custom event handler for client events.
 func WithHandler(handler Handler) Option {
 	return Option{f: func(o *Options) {
 		o.handler = handler
 	}}
 }
+
+// WithWriteTimeout sets the timeout for write operations.
 func WithWriteTimeout(timeout time.Duration) Option {
 	return Option{f: func(o *Options) {
 		o.writeTimeout = timeout
 	}}
 }
+
+// WithRequestTimeout sets the timeout for request operations.
 func WithRequestTimeout(timeout time.Duration) Option {
 	return Option{f: func(o *Options) {
 		o.requestTimeout = timeout
 	}}
 }
+
+// WithMessageTimeout sets the timeout for message operations.
 func WithMessageTimeout(timeout time.Duration) Option {
 	return Option{f: func(o *Options) {
 		o.messageTimeout = timeout
 	}}
 }
+
+// WithSendQueue sets the capacity of the send queue.
 func WithSendQueue(capacity int32) Option {
 	return Option{f: func(o *Options) {
 		o.sendQueueCapacity = capacity

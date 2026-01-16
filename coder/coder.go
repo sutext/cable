@@ -1,3 +1,6 @@
+// Package coder provides a binary encoding/decoding library for network communication.
+// It supports various data types including basic types, variable-length integers,
+// strings, byte arrays, and complex types like maps and slices.
 package coder
 
 import (
@@ -5,59 +8,117 @@ import (
 	"io"
 )
 
+// Encoder defines methods for encoding various data types into a binary buffer.
+// The encoded data can be retrieved using the Bytes() method.
+// All encoding methods use big-endian byte order for multi-byte values.
 type Encoder interface {
+	// Bytes returns the encoded binary data.
 	Bytes() []byte
+	// WriteBytes writes a slice of bytes directly to the buffer.
 	WriteBytes(p []byte)
+	// WriteUInt8 writes an 8-bit unsigned integer to the buffer.
 	WriteUInt8(i uint8)
+	// WriteUInt16 writes a 16-bit unsigned integer to the buffer in big-endian order.
 	WriteUInt16(i uint16)
+	// WriteUInt32 writes a 32-bit unsigned integer to the buffer in big-endian order.
 	WriteUInt32(i uint32)
+	// WriteUInt64 writes a 64-bit unsigned integer to the buffer in big-endian order.
 	WriteUInt64(i uint64)
+	// WriteBool writes a boolean value to the buffer (1 for true, 0 for false).
 	WriteBool(b bool)
+	// WriteInt8 writes an 8-bit signed integer to the buffer.
 	WriteInt8(i int8)
+	// WriteInt16 writes a 16-bit signed integer to the buffer in big-endian order.
 	WriteInt16(i int16)
+	// WriteInt32 writes a 32-bit signed integer to the buffer in big-endian order.
 	WriteInt32(i int32)
+	// WriteInt64 writes a 64-bit signed integer to the buffer in big-endian order.
 	WriteInt64(i int64)
+	// WriteVarint writes a variable-length integer to the buffer.
+	// Uses Protocol Buffers varint encoding for efficient storage of small values.
 	WriteVarint(i uint64)
+	// WriteData writes a byte slice to the buffer with a varint length prefix.
 	WriteData(data []byte)
+	// WriteString writes a string to the buffer with a varint length prefix.
 	WriteString(s string)
+	// WriteStrMap writes a map[string]string to the buffer.
+	// Format: [varint length] [key1] [value1] [key2] [value2] ...
 	WriteStrMap(m map[string]string)
+	// WriteStrings writes a slice of strings to the buffer.
+	// Format: [varint length] [string1] [string2] ...
 	WriteStrings(ss []string)
+	// WriteUInt8Map writes a map[uint8]string to the buffer.
+	// Format: [uint8 length] [key1] [value1] [key2] [value2] ...
 	WriteUInt8Map(m map[uint8]string)
 }
+
+// Decoder defines methods for decoding binary data into various Go types.
+// Implements io.Reader interface for compatibility with standard library functions.
+// All decoding methods use big-endian byte order for multi-byte values.
 type Decoder interface {
 	io.Reader
+	// ReadBytes reads exactly l bytes from the buffer.
+	// Returns an error if there are not enough bytes remaining.
 	ReadBytes(l uint64) ([]byte, error)
+	// ReadUInt8 reads an 8-bit unsigned integer from the buffer.
 	ReadUInt8() (uint8, error)
+	// ReadUInt16 reads a 16-bit unsigned integer from the buffer in big-endian order.
 	ReadUInt16() (uint16, error)
+	// ReadUInt32 reads a 32-bit unsigned integer from the buffer in big-endian order.
 	ReadUInt32() (uint32, error)
+	// ReadUInt64 reads a 64-bit unsigned integer from the buffer in big-endian order.
 	ReadUInt64() (uint64, error)
+	// ReadBool reads a boolean value from the buffer (1 = true, 0 = false).
 	ReadBool() (bool, error)
+	// ReadInt8 reads an 8-bit signed integer from the buffer.
 	ReadInt8() (int8, error)
+	// ReadInt16 reads a 16-bit signed integer from the buffer in big-endian order.
 	ReadInt16() (int16, error)
+	// ReadInt32 reads a 32-bit signed integer from the buffer in big-endian order.
 	ReadInt32() (int32, error)
+	// ReadInt64 reads a 64-bit signed integer from the buffer in big-endian order.
 	ReadInt64() (int64, error)
+	// ReadVarint reads a variable-length integer from the buffer.
+	// Uses Protocol Buffers varint encoding.
 	ReadVarint() (uint64, error)
+	// ReadData reads a byte slice from the buffer with a varint length prefix.
 	ReadData() ([]byte, error)
+	// ReadString reads a string from the buffer with a varint length prefix.
 	ReadString() (string, error)
+	// ReadStrMap reads a map[string]string from the buffer.
+	// Expects format: [varint length] [key1] [value1] [key2] [value2] ...
 	ReadStrMap() (map[string]string, error)
+	// ReadStrings reads a slice of strings from the buffer.
+	// Expects format: [varint length] [string1] [string2] ...
 	ReadStrings() ([]string, error)
+	// ReadUInt8Map reads a map[uint8]string from the buffer.
+	// Expects format: [uint8 length] [key1] [value1] [key2] [value2] ...
 	ReadUInt8Map() (map[uint8]string, error)
+	// ReadAll reads all remaining bytes from the buffer.
 	ReadAll() ([]byte, error)
 }
 
+// NewEncoder creates a new Encoder with an optional initial buffer capacity.
+// If no capacity is provided, defaults to 256 bytes.
+// The buffer will automatically grow as needed.
 func NewEncoder(cap ...int) Encoder {
 	if len(cap) > 0 && cap[0] > 0 {
 		return &coder{pos: 0, buf: make([]byte, 0, cap[0])}
 	}
 	return &coder{pos: 0, buf: make([]byte, 0, 256)}
 }
+
+// NewDecoder creates a new Decoder that reads from the provided byte slice.
+// The decoder maintains an internal position pointer that advances as data is read.
 func NewDecoder(bytes []byte) Decoder {
 	return &coder{pos: 0, buf: bytes}
 }
 
+// coder implements both Encoder and Decoder interfaces.
+// Maintains a buffer for encoding/decoding and a position pointer for decoding.
 type coder struct {
-	pos uint64
-	buf []byte
+	pos uint64 // Current position in the buffer for reading
+	buf []byte // Buffer containing encoded data
 }
 
 func (b *coder) Bytes() []byte {

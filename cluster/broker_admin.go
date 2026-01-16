@@ -1,3 +1,5 @@
+// Package cluster provides a distributed cluster implementation for the cable protocol.
+// It supports broker management, peer communication, and distributed message routing.
 package cluster
 
 import (
@@ -14,6 +16,11 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
+// inspect returns the status of the local broker.
+// It includes information about user count, channel count, and Raft status.
+//
+// Returns:
+// - *pb.Status: Status information of the local broker
 func (b *broker) inspect() *pb.Status {
 	userCount := make(map[uint64]int32)
 	b.userClients.Range(func(key uint64, value *safe.KeyMap[string]) bool {
@@ -50,6 +57,15 @@ func (b *broker) inspect() *pb.Status {
 	}
 }
 
+// Inspects returns the status of all brokers in the cluster.
+// It collects status information from the local broker and all peer brokers.
+//
+// Parameters:
+// - ctx: Context for the operation
+//
+// Returns:
+// - []*pb.Status: List of status information for all brokers in the cluster
+// - error: Error if inspecting any broker fails, nil otherwise
 func (b *broker) Inspects(ctx context.Context) ([]*pb.Status, error) {
 	ss := make([]*pb.Status, 0, b.cluster.size)
 	ss = append(ss, b.inspect())
@@ -68,6 +84,12 @@ func (b *broker) Inspects(ctx context.Context) ([]*pb.Status, error) {
 	return ss, nil
 }
 
+// handleInspect handles HTTP requests to inspect the cluster status.
+// It returns status information for all brokers in the cluster as JSON.
+//
+// Parameters:
+// - w: HTTP response writer
+// - r: HTTP request
 func (b *broker) handleInspect(w http.ResponseWriter, r *http.Request) {
 	ss, err := b.Inspects(r.Context())
 	if err != nil {
@@ -82,6 +104,13 @@ func (b *broker) handleInspect(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(data)
 }
+
+// handleKickUser handles HTTP requests to kick a user from all connections in the cluster.
+// It requires a 'uid' query parameter specifying the user ID to kick.
+//
+// Parameters:
+// - w: HTTP response writer
+// - r: HTTP request
 func (b *broker) handleKickUser(w http.ResponseWriter, r *http.Request) {
 	uid := r.URL.Query().Get("uid")
 	if uid == "" {
@@ -92,6 +121,14 @@ func (b *broker) handleKickUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("ok"))
 }
+
+// handleSendMessage handles HTTP requests to send a message to users, channels, or all clients.
+// It supports sending to a specific user (via 'uid' query parameter), a specific channel (via 'channel' query parameter),
+// or all clients (if no uid or channel is specified). The 'msg' query parameter is required.
+//
+// Parameters:
+// - w: HTTP response writer
+// - r: HTTP request
 func (b *broker) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	uid := r.URL.Query().Get("uid")
 	channel := r.URL.Query().Get("channel")
@@ -127,6 +164,12 @@ func (b *broker) handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
+// handleJoin handles HTTP requests to add a user to one or more channels.
+// It requires 'uid' and 'channels' query parameters, where 'channels' is a comma-separated list of channel names.
+//
+// Parameters:
+// - w: HTTP response writer
+// - r: HTTP request
 func (b *broker) handleJoin(w http.ResponseWriter, r *http.Request) {
 	uid := r.URL.Query().Get("uid")
 	if uid == "" {
@@ -147,6 +190,13 @@ func (b *broker) handleJoin(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("ok"))
 }
+
+// handleHealth handles HTTP requests to check the health of the broker.
+// It returns HTTP 200 OK if the broker is ready, otherwise returns HTTP 500 Internal Server Error.
+//
+// Parameters:
+// - w: HTTP response writer
+// - r: HTTP request
 func (b *broker) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if !b.cluster.IsReady() {
 		http.Error(w, "broker is not ready", http.StatusInternalServerError)
@@ -155,6 +205,13 @@ func (b *broker) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("ok"))
 }
+
+// handleKickNode handles HTTP requests to remove a broker from the cluster.
+// It requires a 'nodeId' query parameter specifying the broker ID to remove.
+//
+// Parameters:
+// - w: HTTP response writer
+// - r: HTTP request
 func (b *broker) handleKickNode(w http.ResponseWriter, r *http.Request) {
 	str := r.URL.Query().Get("nodeId")
 	if str == "" {

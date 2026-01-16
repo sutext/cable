@@ -1,3 +1,5 @@
+// Package cluster provides a distributed cluster implementation for the cable protocol.
+// It supports broker management, peer communication, and distributed message routing.
 package cluster
 
 import (
@@ -15,35 +17,136 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
+// Broker defines the interface for the cluster broker.
+// It provides methods for managing clients, channels, and message routing.
 type Broker interface {
+	// Start starts the broker and all its components.
+	//
+	// Returns:
+	// - error: Error if starting fails, nil otherwise
 	Start() error
+	// Cluster returns the underlying cluster instance.
+	//
+	// Returns:
+	// - Cluster: The cluster instance
 	Cluster() Cluster
+	// Shutdown shuts down the broker and all its components.
+	//
+	// Parameters:
+	// - ctx: Context for the shutdown operation
+	//
+	// Returns:
+	// - error: Error if shutdown fails, nil otherwise
 	Shutdown(ctx context.Context) error
+	// Inspects returns the status of all brokers in the cluster.
+	//
+	// Parameters:
+	// - ctx: Context for the inspect operation
+	//
+	// Returns:
+	// - []*pb.Status: List of broker statuses
+	// - error: Error if inspecting fails, nil otherwise
 	Inspects(ctx context.Context) ([]*pb.Status, error)
+	// IsOnline checks if a user is online in the cluster.
+	//
+	// Parameters:
+	// - ctx: Context for the operation
+	// - uid: User ID to check
+	//
+	// Returns:
+	// - bool: True if the user is online, false otherwise
 	IsOnline(ctx context.Context, uid string) (ok bool)
+	// KickUser kicks a user from all connections in the cluster.
+	//
+	// Parameters:
+	// - ctx: Context for the operation
+	// - uid: User ID to kick
 	KickUser(ctx context.Context, uid string)
+	// SendToAll sends a message to all clients in the cluster.
+	//
+	// Parameters:
+	// - ctx: Context for the operation
+	// - m: Message to send
+	//
+	// Returns:
+	// - int32: Total number of clients attempted to send to
+	// - int32: Number of successful sends
+	// - error: Error if sending fails, nil otherwise
 	SendToAll(ctx context.Context, m *packet.Message) (total, success int32, err error)
+	// SendToUser sends a message to a specific user in the cluster.
+	//
+	// Parameters:
+	// - ctx: Context for the operation
+	// - uid: User ID to send to
+	// - m: Message to send
+	//
+	// Returns:
+	// - int32: Total number of clients attempted to send to
+	// - int32: Number of successful sends
+	// - error: Error if sending fails, nil otherwise
 	SendToUser(ctx context.Context, uid string, m *packet.Message) (total, success int32, err error)
+	// JoinChannel adds a user to one or more channels.
+	//
+	// Parameters:
+	// - ctx: Context for the operation
+	// - uid: User ID to add to channels
+	// - channels: List of channels to join
+	//
+	// Returns:
+	// - error: Error if joining fails, nil otherwise
 	JoinChannel(ctx context.Context, uid string, channels ...string) error
+	// LeaveChannel removes a user from one or more channels.
+	//
+	// Parameters:
+	// - ctx: Context for the operation
+	// - uid: User ID to remove from channels
+	// - channels: List of channels to leave
+	//
+	// Returns:
+	// - error: Error if leaving fails, nil otherwise
 	LeaveChannel(ctx context.Context, uid string, channels ...string) error
+	// SendToChannel sends a message to all clients in a channel.
+	//
+	// Parameters:
+	// - ctx: Context for the operation
+	// - channel: Channel to send to
+	// - m: Message to send
+	//
+	// Returns:
+	// - int32: Total number of clients attempted to send to
+	// - int32: Number of successful sends
+	// - error: Error if sending fails, nil otherwise
 	SendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success int32, err error)
+	// HandleRequest registers a handler for a specific request method.
+	//
+	// Parameters:
+	// - method: Request method to handle
+	// - handler: Handler function for the request method
 	HandleRequest(method string, handler server.RequestHandler)
 }
 
+// broker implements the Broker interface and manages client connections, channels, and message routing.
 type broker struct {
-	id             uint64
-	logger         *xlog.Logger
-	cluster        *cluster
-	handler        Handler
-	listeners      map[string]*Listener
-	peerServer     *peerServer
-	httpServer     *http.Server
-	userClients    safe.RMap[uint64, *safe.KeyMap[string]]   //bid map[uid]map[cid]net
-	channelClients safe.RMap[uint64, *safe.KeyMap[string]]   //bid map[channel]map[cid]net
-	clientChannels safe.RMap[uint64, *safe.KeyMap[struct{}]] //bid map[cid]map[channel]null
-	requstHandlers safe.RMap[string, server.RequestHandler]
+	id             uint64                                    // Unique broker ID
+	logger         *xlog.Logger                              // Logger for broker events
+	cluster        *cluster                                  // Underlying cluster instance
+	handler        Handler                                   // Event handler for broker events
+	listeners      map[string]*Listener                      // Map of network listeners (network -> listener)
+	peerServer     *peerServer                               // gRPC server for peer communication
+	httpServer     *http.Server                              // HTTP server for admin API
+	userClients    safe.RMap[uint64, *safe.KeyMap[string]]   // Maps broker ID to user clients (bid -> uid -> cid -> network)
+	channelClients safe.RMap[uint64, *safe.KeyMap[string]]   // Maps broker ID to channel clients (bid -> channel -> cid -> network)
+	clientChannels safe.RMap[uint64, *safe.KeyMap[struct{}]] // Maps broker ID to client channels (bid -> cid -> channel -> null)
+	requstHandlers safe.RMap[string, server.RequestHandler]  // Maps request methods to handlers
 }
 
+// NewBroker creates a new broker instance with the given options.
+//
+// Parameters:
+// - opts: Configuration options for the broker
+//
+// Returns:
+// - Broker: A new broker instance
 func NewBroker(opts ...Option) Broker {
 	options := newOptions(opts...)
 	b := &broker{}
@@ -80,6 +183,10 @@ func NewBroker(opts ...Option) Broker {
 	return b
 }
 
+// Start starts the broker and all its components.
+//
+// Returns:
+// - error: Error if starting fails, nil otherwise
 func (b *broker) Start() error {
 	for _, l := range b.listeners {
 		if l.autoStart {
@@ -99,9 +206,22 @@ func (b *broker) Start() error {
 	b.cluster.Start()
 	return nil
 }
+
+// Cluster returns the underlying cluster instance.
+//
+// Returns:
+// - Cluster: The cluster instance
 func (b *broker) Cluster() Cluster {
 	return b.cluster
 }
+
+// Shutdown shuts down the broker and all its components.
+//
+// Parameters:
+// - ctx: Context for the shutdown operation
+//
+// Returns:
+// - error: Error if shutdown fails, nil otherwise
 func (b *broker) Shutdown(ctx context.Context) (err error) {
 	for _, l := range b.listeners {
 		if err = l.Shutdown(ctx); err != nil {
@@ -117,11 +237,22 @@ func (b *broker) Shutdown(ctx context.Context) (err error) {
 	b.cluster.Stop()
 	return err
 }
+
+// ExpelAllConns expels all connections from all listeners.
 func (b *broker) ExpelAllConns() {
 	for _, l := range b.listeners {
 		l.ExpelAllConns()
 	}
 }
+
+// IsOnline checks if a user is online in the cluster.
+//
+// Parameters:
+// - ctx: Context for the operation
+// - uid: User ID to check
+//
+// Returns:
+// - bool: True if the user is online, false otherwise
 func (b *broker) IsOnline(ctx context.Context, uid string) (online bool) {
 	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
 		if id == b.id {
@@ -146,6 +277,11 @@ func (b *broker) IsOnline(ctx context.Context, uid string) (online bool) {
 	return online
 }
 
+// KickUser kicks a user from all connections in the cluster.
+//
+// Parameters:
+// - ctx: Context for the operation
+// - uid: User ID to kick
 func (b *broker) KickUser(ctx context.Context, uid string) {
 	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
 		if id == b.id {
@@ -164,6 +300,17 @@ func (b *broker) KickUser(ctx context.Context, uid string) {
 		return true
 	})
 }
+
+// SendToAll sends a message to all clients in the cluster.
+//
+// Parameters:
+// - ctx: Context for the operation
+// - m: Message to send
+//
+// Returns:
+// - int32: Total number of clients attempted to send to
+// - int32: Number of successful sends
+// - error: Error if sending fails, nil otherwise
 func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (total, success int32, err error) {
 	total, success = b.sendToAll(ctx, m)
 	wg := sync.WaitGroup{}
@@ -180,6 +327,18 @@ func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (total, succe
 	wg.Wait()
 	return total, success, nil
 }
+
+// SendToUser sends a message to a specific user in the cluster.
+//
+// Parameters:
+// - ctx: Context for the operation
+// - uid: User ID to send to
+// - m: Message to send
+//
+// Returns:
+// - int32: Total number of clients attempted to send to
+// - int32: Number of successful sends
+// - error: Error if sending fails, nil otherwise
 func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) (total, success int32, err error) {
 	if uid == "" {
 		return 0, 0, xerr.InvalidUserID
@@ -208,6 +367,18 @@ func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 	})
 	return total, success, nil
 }
+
+// SendToChannel sends a message to all clients in a channel.
+//
+// Parameters:
+// - ctx: Context for the operation
+// - channel: Channel to send to
+// - m: Message to send
+//
+// Returns:
+// - int32: Total number of clients attempted to send to
+// - int32: Number of successful sends
+// - error: Error if sending fails, nil otherwise
 func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success int32, err error) {
 	if channel == "" {
 		return 0, 0, xerr.InvalidChannel
@@ -237,6 +408,15 @@ func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Me
 	return total, success, nil
 }
 
+// JoinChannel adds a user to one or more channels.
+//
+// Parameters:
+// - ctx: Context for the operation
+// - uid: User ID to add to channels
+// - channels: List of channels to join
+//
+// Returns:
+// - error: Error if joining fails, nil otherwise
 func (b *broker) JoinChannel(ctx context.Context, uid string, channels ...string) error {
 	op := &joinChannelOp{
 		uid:      uid,
@@ -245,6 +425,15 @@ func (b *broker) JoinChannel(ctx context.Context, uid string, channels ...string
 	return b.cluster.SubmitOperation(ctx, op)
 }
 
+// LeaveChannel removes a user from one or more channels.
+//
+// Parameters:
+// - ctx: Context for the operation
+// - uid: User ID to remove from channels
+// - channels: List of channels to leave
+//
+// Returns:
+// - error: Error if leaving fails, nil otherwise
 func (b *broker) LeaveChannel(ctx context.Context, uid string, channels ...string) error {
 	op := &leaveChannelOp{
 		uid:      uid,
@@ -252,9 +441,21 @@ func (b *broker) LeaveChannel(ctx context.Context, uid string, channels ...strin
 	}
 	return b.cluster.SubmitOperation(ctx, op)
 }
+
+// HandleRequest registers a handler for a specific request method.
+//
+// Parameters:
+// - method: Request method to handle
+// - handler: Handler function for the request method
 func (b *broker) HandleRequest(method string, handler server.RequestHandler) {
 	b.requstHandlers.Set(method, handler)
 }
+
+// onUserClosed handles user disconnect events.
+// It submits a user closed operation to the cluster and notifies the handler.
+//
+// Parameters:
+// - id: Identity of the disconnected user
 func (b *broker) onUserClosed(id *packet.Identity) {
 	op := &userClosedOp{
 		uid: id.UserID,
@@ -265,6 +466,17 @@ func (b *broker) onUserClosed(id *packet.Identity) {
 	}
 	b.handler.OnClosed(id)
 }
+
+// onUserConnect handles user connect events.
+// It checks for duplicate connections, submits a user opened operation to the cluster,
+// and returns a connect code.
+//
+// Parameters:
+// - p: Connect packet from the user
+// - net: Network protocol used by the connection
+//
+// Returns:
+// - packet.ConnectCode: Connect result code
 func (b *broker) onUserConnect(p *packet.Connect, net string) packet.ConnectCode {
 	code := b.handler.OnConnect(p)
 	if code != packet.ConnectAccepted {
@@ -310,9 +522,30 @@ func (b *broker) onUserConnect(p *packet.Connect, net string) packet.ConnectCode
 	}
 	return packet.ConnectAccepted
 }
+
+// onUserMessage handles user message events.
+// It delegates to the broker's message handler.
+//
+// Parameters:
+// - p: Message packet received
+// - id: Identity of the user that sent the message
+//
+// Returns:
+// - error: Error if message handling fails, nil otherwise
 func (b *broker) onUserMessage(p *packet.Message, id *packet.Identity) error {
 	return b.handler.OnMessage(p, id)
 }
+
+// onUserRequest handles user request events.
+// It looks up the appropriate request handler and invokes it.
+//
+// Parameters:
+// - p: Request packet received
+// - id: Identity of the user that sent the request
+//
+// Returns:
+// - *packet.Response: Response packet to send back to the user
+// - error: Error if request handling fails, nil otherwise
 func (b *broker) onUserRequest(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
 	handler, ok := b.requstHandlers.Get(p.Method)
 	if !ok {
@@ -321,6 +554,13 @@ func (b *broker) onUserRequest(p *packet.Request, id *packet.Identity) (*packet.
 	return handler(p, id)
 }
 
+// isActive checks if any of the given targets are active connections.
+//
+// Parameters:
+// - targets: Map of client IDs to network protocols
+//
+// Returns:
+// - bool: True if any target is active, false otherwise
 func (b *broker) isActive(targets map[string]string) bool {
 	for cid, net := range targets {
 		if l, ok := b.listeners[net]; ok && l.ISStarted() {
@@ -331,6 +571,11 @@ func (b *broker) isActive(targets map[string]string) bool {
 	}
 	return false
 }
+
+// kickConn kicks the given targets from their respective listeners.
+//
+// Parameters:
+// - targets: Map of client IDs to network protocols
 func (b *broker) kickConn(targets map[string]string) {
 	for cid, net := range targets {
 		if l, ok := b.listeners[net]; ok && l.ISStarted() {
@@ -339,6 +584,15 @@ func (b *broker) kickConn(targets map[string]string) {
 	}
 }
 
+// sendToAll sends a message to all local clients.
+//
+// Parameters:
+// - ctx: Context for the operation
+// - m: Message to send
+//
+// Returns:
+// - int32: Total number of clients attempted to send to
+// - int32: Number of successful sends
 func (b *broker) sendToAll(ctx context.Context, m *packet.Message) (total, success int32) {
 	for _, l := range b.listeners {
 		if l.ISStarted() {
@@ -352,6 +606,17 @@ func (b *broker) sendToAll(ctx context.Context, m *packet.Message) (total, succe
 	}
 	return total, success
 }
+
+// sendToTargets sends a message to specific target clients.
+//
+// Parameters:
+// - ctx: Context for the operation
+// - m: Message to send
+// - targets: Map of client IDs to network protocols
+//
+// Returns:
+// - int32: Total number of clients attempted to send to
+// - int32: Number of successful sends
 func (b *broker) sendToTargets(ctx context.Context, m *packet.Message, targets map[string]string) (total, success int32) {
 	for cid, net := range targets {
 		total++
@@ -365,6 +630,12 @@ func (b *broker) sendToTargets(ctx context.Context, m *packet.Message, targets m
 	}
 	return total, success
 }
+
+// userOpenedOp processes user opened operations.
+// It updates the user clients, channel clients, and client channels mappings.
+//
+// Parameters:
+// - op: User opened operation
 func (b *broker) userOpenedOp(op *userOpenedOp) {
 	userClients, _ := b.userClients.GetOrSet(op.nodeID, &safe.KeyMap[string]{})
 	userClients.SetKey(op.uid, op.cid, op.net)
@@ -376,6 +647,11 @@ func (b *broker) userOpenedOp(op *userOpenedOp) {
 	}
 }
 
+// userClosedOp processes user closed operations.
+// It removes the user from the user clients, channel clients, and client channels mappings.
+//
+// Parameters:
+// - op: User closed operation
 func (b *broker) userClosedOp(op *userClosedOp) {
 	if userClients, ok := b.userClients.Get(op.nodeID); ok {
 		userClients.DeleteKey(op.uid, op.cid)
@@ -391,6 +667,11 @@ func (b *broker) userClosedOp(op *userClosedOp) {
 	}
 }
 
+// joinChannelOp processes join channel operations.
+// It adds a user to the specified channels across all brokers.
+//
+// Parameters:
+// - op: Join channel operation
 func (b *broker) joinChannelOp(op *joinChannelOp) {
 	b.userClients.Range(func(id uint64, userClients *safe.KeyMap[string]) bool {
 		channelClients, _ := b.channelClients.GetOrSet(id, &safe.KeyMap[string]{})
@@ -405,6 +686,12 @@ func (b *broker) joinChannelOp(op *joinChannelOp) {
 		return true
 	})
 }
+
+// leaveChannelOp processes leave channel operations.
+// It removes a user from the specified channels across all brokers.
+//
+// Parameters:
+// - op: Leave channel operation
 func (b *broker) leaveChannelOp(op *leaveChannelOp) {
 	b.userClients.Range(func(id uint64, userClients *safe.KeyMap[string]) bool {
 		channelClients, _ := b.channelClients.GetOrSet(id, &safe.KeyMap[string]{})
@@ -419,6 +706,13 @@ func (b *broker) leaveChannelOp(op *leaveChannelOp) {
 		return true
 	})
 }
+
+// makeSnapshot creates a snapshot of the cluster state.
+// It includes user clients, channel clients, and client channels mappings.
+//
+// Returns:
+// - []byte: Serialized snapshot data
+// - error: Error if snapshot creation fails, nil otherwise
 func (b *broker) makeSnapshot() ([]byte, error) {
 	userClients := make(map[uint64]map[string]map[string]string)
 	b.userClients.Range(func(id uint64, v *safe.KeyMap[string]) bool {
@@ -466,6 +760,12 @@ func (b *broker) makeSnapshot() ([]byte, error) {
 	}
 	return json.Marshal(snapshot)
 }
+
+// recoverFromSnapshot recovers the cluster state from a snapshot.
+// It restores user clients, channel clients, and client channels mappings.
+//
+// Parameters:
+// - s: Snapshot data to recover from
 func (b *broker) recoverFromSnapshot(s snapshot) {
 	b.userClients = safe.RMap[uint64, *safe.KeyMap[string]]{}
 	b.channelClients = safe.RMap[uint64, *safe.KeyMap[string]]{}

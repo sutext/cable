@@ -1,3 +1,5 @@
+// Package cluster provides a distributed cluster implementation for the cable protocol.
+// It supports broker management, peer communication, and distributed message routing.
 package cluster
 
 import (
@@ -14,36 +16,45 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
+// snapshot represents the cluster state snapshot.
 type snapshot struct {
-	UserClients    map[uint64]map[string]map[string]string   `json:"user_clients"`
-	ChannelClients map[uint64]map[string]map[string]string   `json:"channel_clients"`
-	ClientChannels map[uint64]map[string]map[string]struct{} `json:"client_channels"`
+	UserClients    map[uint64]map[string]map[string]string   `json:"user_clients"`    // Maps broker ID to user clients (bid -> uid -> cid -> network)
+	ChannelClients map[uint64]map[string]map[string]string   `json:"channel_clients"` // Maps broker ID to channel clients (bid -> channel -> cid -> network)
+	ClientChannels map[uint64]map[string]map[string]struct{} `json:"client_channels"` // Maps broker ID to client channels (bid -> cid -> channel -> null)
 }
+
+// optype defines the type of operations that can be performed in the cluster.
 type optype uint8
 
+// Operation type constants.
 const (
-	optypeUserOpened optype = iota
-	optypeUserClosed
-	optypeJoinChannel
-	optypeLeaveChannel
+	optypeUserOpened   optype = iota // User opened operation
+	optypeUserClosed                 // User closed operation
+	optypeJoinChannel                // Join channel operation
+	optypeLeaveChannel               // Leave channel operation
 )
 
+// opdata defines the interface for operation data that can be encoded and decoded.
 type opdata interface {
-	coder.Codable
-	opt() optype
+	coder.Codable // Embeds Codable interface for encoding/decoding
+	opt() optype  // Returns the operation type
 }
 
+// userOpenedOp represents a user opened operation.
 type userOpenedOp struct {
-	uid      string
-	cid      string
-	net      string
-	nodeID   uint64
-	channels []string
+	uid      string   // User ID
+	cid      string   // Client ID
+	net      string   // Network protocol
+	nodeID   uint64   // Node ID where the user connected
+	channels []string // Channels the user has joined
 }
 
+// opt returns the operation type for userOpenedOp.
 func (op *userOpenedOp) opt() optype {
 	return optypeUserOpened
 }
+
+// WriteTo encodes the userOpenedOp to an encoder.
 func (op *userOpenedOp) WriteTo(e coder.Encoder) error {
 	e.WriteString(op.uid)
 	e.WriteString(op.cid)
@@ -52,6 +63,8 @@ func (op *userOpenedOp) WriteTo(e coder.Encoder) error {
 	e.WriteStrings(op.channels)
 	return nil
 }
+
+// ReadFrom decodes the userOpenedOp from a decoder.
 func (op *userOpenedOp) ReadFrom(d coder.Decoder) error {
 	var err error
 	op.uid, err = d.ReadString()
@@ -74,21 +87,27 @@ func (op *userOpenedOp) ReadFrom(d coder.Decoder) error {
 	return err
 }
 
+// userClosedOp represents a user closed operation.
 type userClosedOp struct {
-	uid    string
-	cid    string
-	nodeID uint64
+	uid    string // User ID
+	cid    string // Client ID
+	nodeID uint64 // Node ID where the user disconnected
 }
 
+// opt returns the operation type for userClosedOp.
 func (op *userClosedOp) opt() optype {
 	return optypeUserClosed
 }
+
+// WriteTo encodes the userClosedOp to an encoder.
 func (op *userClosedOp) WriteTo(e coder.Encoder) error {
 	e.WriteString(op.uid)
 	e.WriteString(op.cid)
 	e.WriteUInt64(op.nodeID)
 	return nil
 }
+
+// ReadFrom decodes the userClosedOp from a decoder.
 func (op *userClosedOp) ReadFrom(d coder.Decoder) error {
 	var err error
 	op.uid, err = d.ReadString()
@@ -103,19 +122,25 @@ func (op *userClosedOp) ReadFrom(d coder.Decoder) error {
 	return err
 }
 
+// joinChannelOp represents a join channel operation.
 type joinChannelOp struct {
-	uid      string
-	channels []string
+	uid      string   // User ID
+	channels []string // Channels to join
 }
 
+// opt returns the operation type for joinChannelOp.
 func (op *joinChannelOp) opt() optype {
 	return optypeJoinChannel
 }
+
+// WriteTo encodes the joinChannelOp to an encoder.
 func (op *joinChannelOp) WriteTo(e coder.Encoder) error {
 	e.WriteString(op.uid)
 	e.WriteStrings(op.channels)
 	return nil
 }
+
+// ReadFrom decodes the joinChannelOp from a decoder.
 func (op *joinChannelOp) ReadFrom(d coder.Decoder) error {
 	var err error
 	op.uid, err = d.ReadString()
@@ -126,19 +151,25 @@ func (op *joinChannelOp) ReadFrom(d coder.Decoder) error {
 	return err
 }
 
+// leaveChannelOp represents a leave channel operation.
 type leaveChannelOp struct {
-	uid      string
-	channels []string
+	uid      string   // User ID
+	channels []string // Channels to leave
 }
 
+// opt returns the operation type for leaveChannelOp.
 func (op *leaveChannelOp) opt() optype {
 	return optypeLeaveChannel
 }
+
+// WriteTo encodes the leaveChannelOp to an encoder.
 func (op *leaveChannelOp) WriteTo(e coder.Encoder) error {
 	e.WriteString(op.uid)
 	e.WriteStrings(op.channels)
 	return nil
 }
+
+// ReadFrom decodes the leaveChannelOp from a decoder.
 func (op *leaveChannelOp) ReadFrom(d coder.Decoder) error {
 	var err error
 	op.uid, err = d.ReadString()
@@ -149,6 +180,14 @@ func (op *leaveChannelOp) ReadFrom(d coder.Decoder) error {
 	return err
 }
 
+// SubmitOperation submits an operation to the Raft cluster for consensus.
+//
+// Parameters:
+// - ctx: Context for the operation
+// - op: Operation data to submit
+//
+// Returns:
+// - error: Error if the Raft node is not ready, nil otherwise
 func (c *cluster) SubmitOperation(ctx context.Context, op opdata) error {
 	if c.raft == nil {
 		return xerr.RaftNodeNotReady
@@ -159,6 +198,15 @@ func (c *cluster) SubmitOperation(ctx context.Context, op opdata) error {
 	c.raft.Propose(ctx, ec.Bytes())
 	return nil
 }
+
+// addNode adds a node to the Raft cluster configuration.
+//
+// Parameters:
+// - ctx: Context for the operation
+// - id: Node ID to add
+//
+// Returns:
+// - error: Error if the Raft node is not ready, nil otherwise
 func (c *cluster) addNode(ctx context.Context, id uint64) error {
 	if c.raft == nil {
 		return xerr.RaftNodeNotReady
@@ -171,6 +219,15 @@ func (c *cluster) addNode(ctx context.Context, id uint64) error {
 	}
 	return c.raft.ProposeConfChange(ctx, cc)
 }
+
+// removeNode removes a node from the Raft cluster configuration.
+//
+// Parameters:
+// - ctx: Context for the operation
+// - id: Node ID to remove
+//
+// Returns:
+// - error: Error if the Raft node is not ready, nil otherwise
 func (c *cluster) removeNode(ctx context.Context, id uint64) error {
 	if c.raft == nil {
 		return xerr.RaftNodeNotReady
@@ -183,6 +240,11 @@ func (c *cluster) removeNode(ctx context.Context, id uint64) error {
 	}
 	return c.raft.ProposeConfChange(ctx, cc)
 }
+
+// startRaft starts the Raft node either as a new node or by joining an existing cluster.
+//
+// Parameters:
+// - join: True if joining an existing cluster, false if starting a new cluster
 func (c *cluster) startRaft(join bool) {
 	if c.raft != nil {
 		return
@@ -212,6 +274,7 @@ func (c *cluster) startRaft(join bool) {
 	go c.raftLoop()
 }
 
+// raftLoop runs the main Raft event loop.
 func (c *cluster) raftLoop() {
 	ticker := time.NewTicker(time.Millisecond * 100)
 	defer ticker.Stop()
@@ -252,6 +315,11 @@ func (c *cluster) raftLoop() {
 		}
 	}
 }
+
+// sendRaftMessags sends Raft messages to peers.
+//
+// Parameters:
+// - msgs: List of Raft messages to send
 func (c *cluster) sendRaftMessags(msgs []raftpb.Message) {
 	for _, msg := range msgs {
 		if peer, ok := c.peers.Get(msg.To); ok {
@@ -272,6 +340,11 @@ func (c *cluster) sendRaftMessags(msgs []raftpb.Message) {
 		}
 	}
 }
+
+// applySoftState applies the soft state from Raft, updating the leader information.
+//
+// Parameters:
+// - ss: Soft state containing leader information
 func (c *cluster) applySoftState(ss *raft.SoftState) {
 	newLeader := ss.Lead
 	if c.leader.Load() != newLeader {
@@ -280,6 +353,11 @@ func (c *cluster) applySoftState(ss *raft.SoftState) {
 	}
 	c.ready.Store(true)
 }
+
+// applyEntries applies the committed Raft entries to the cluster state.
+//
+// Parameters:
+// - entries: List of committed Raft entries to apply
 func (c *cluster) applyEntries(entries []raftpb.Entry) {
 	for _, entry := range entries {
 		switch entry.Type {
@@ -305,6 +383,10 @@ func (c *cluster) applyEntries(entries []raftpb.Entry) {
 	c.appliedIndex = entries[len(entries)-1].Index
 }
 
+// applyRaftOp applies a Raft operation to the cluster state.
+//
+// Parameters:
+// - data: Encoded operation data
 func (c *cluster) applyRaftOp(data []byte) {
 	opt := optype(data[0])
 	switch opt {
@@ -342,6 +424,10 @@ func (c *cluster) applyRaftOp(data []byte) {
 	}
 }
 
+// applyRemoveNode handles the removal of a node from the cluster.
+//
+// Parameters:
+// - id: Node ID to remove
 func (c *cluster) applyRemoveNode(id uint64) {
 	c.broker.userClients.Delete(id)
 	c.broker.clientChannels.Delete(id)
@@ -357,6 +443,7 @@ func (c *cluster) applyRemoveNode(id uint64) {
 	}
 }
 
+// attemptSnapshot creates a snapshot of the cluster state if enough entries have been applied.
 func (c *cluster) attemptSnapshot() {
 	if c.appliedIndex-c.snapshotIndex <= 1024 {
 		return
@@ -381,6 +468,10 @@ func (c *cluster) attemptSnapshot() {
 	}
 }
 
+// applySnapshot applies a snapshot to the cluster state.
+//
+// Parameters:
+// - snap: Raft snapshot to apply
 func (c *cluster) applySnapshot(snap raftpb.Snapshot) {
 	if snap.Metadata.Index <= c.appliedIndex {
 		panic(fmt.Sprintf("snapshot index [%d] should > progress.appliedIndex [%d]", snap.Metadata.Index, c.appliedIndex))

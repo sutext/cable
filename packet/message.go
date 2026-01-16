@@ -1,3 +1,9 @@
+// Package packet defines a binary protocol for network communication.
+// It provides a comprehensive set of packet types for establishing connections,
+// sending messages, making requests, and managing connection lifecycle.
+//
+// The protocol uses a compact binary format with variable-length encoding
+// for efficient network transmission.
 package packet
 
 import (
@@ -8,48 +14,60 @@ import (
 	"sutext.github.io/cable/coder"
 )
 
+// MessageQos defines the quality of service level for messages.
 type MessageQos uint8
 
+// MessageQos constants.
 const (
-	MessageQos0 MessageQos = 0
-	MessageQos1 MessageQos = 1
+	MessageQos0 MessageQos = 0 // At most once delivery
+	MessageQos1 MessageQos = 1 // At least once delivery
 )
 
+// MessageKind defines the type of message payload.
 type MessageKind uint8
 
+// MessageKind constants.
 const (
-	MessageKindNone MessageKind = 0
+	MessageKindNone MessageKind = 0 // No specific message kind
 )
 
+// Bitmask constants for message flags.
 const (
-	qosMask  = 0x80
-	dupMask  = 0x40
-	kindMask = 0x3f
+	qosMask  = 0x80 // Quality of Service flag mask
+	dupMask  = 0x40 // Duplicate message flag mask
+	kindMask = 0x3f // Message kind flag mask
 )
 
-// Message represents a message packet.
+// Message represents a data message packet.
 type Message struct {
-	packet
-	ID      uint16
-	Qos     MessageQos
-	Dup     bool
-	Kind    MessageKind
-	Payload []byte
+	packet              // Inherits property management
+	ID      uint16      // Message identifier
+	Qos     MessageQos  // Quality of service level
+	Dup     bool        // Duplicate message flag
+	Kind    MessageKind // Message kind
+	Payload []byte      // Message payload data
 }
 
+// NewMessage creates a new MESSAGE packet with the given payload.
 func NewMessage(payload []byte) *Message {
 	return &Message{
 		Payload: payload,
 	}
 }
+
+// Ack creates a MESSACK packet for this message.
 func (p *Message) Ack() *Messack {
 	return &Messack{
 		id: p.ID,
 	}
 }
+
+// Type returns the packet type (MESSAGE).
 func (p *Message) Type() PacketType {
 	return MESSAGE
 }
+
+// Equal compares two MESSAGE packets for equality.
 func (p *Message) Equal(other Packet) bool {
 	if other == nil {
 		return false
@@ -65,9 +83,13 @@ func (p *Message) Equal(other Packet) bool {
 		maps.Equal(p.props, o.props) &&
 		bytes.Equal(p.Payload, o.Payload)
 }
+
+// String returns a string representation of the MESSAGE packet.
 func (p *Message) String() string {
 	return fmt.Sprintf("MESSAGE(ID=%d, Qos=%d, Dup=%t, Kind=%d, Props=%v, Payload=%d)", p.ID, p.Qos, p.Dup, p.Kind, p.props, len(p.Payload))
 }
+
+// WriteTo encodes the MESSAGE packet to the provided encoder.
 func (p *Message) WriteTo(w coder.Encoder) error {
 	var flags uint8
 	if p.Qos > 0 {
@@ -89,6 +111,8 @@ func (p *Message) WriteTo(w coder.Encoder) error {
 	w.WriteBytes(p.Payload)
 	return nil
 }
+
+// ReadFrom decodes the MESSAGE packet from the provided decoder.
 func (p *Message) ReadFrom(r coder.Decoder) error {
 	flags, err := r.ReadUInt8()
 	if err != nil {
@@ -114,17 +138,23 @@ func (p *Message) ReadFrom(r coder.Decoder) error {
 	return nil
 }
 
+// Messack represents a message acknowledgment packet.
 type Messack struct {
-	packet
-	id uint16
+	packet        // Inherits property management
+	id     uint16 // Message identifier being acknowledged
 }
 
+// ID returns the message identifier being acknowledged.
 func (p *Messack) ID() uint16 {
 	return p.id
 }
+
+// Type returns the packet type (MESSACK).
 func (p *Messack) Type() PacketType {
 	return MESSACK
 }
+
+// Equal compares two MESSACK packets for equality.
 func (p *Messack) Equal(other Packet) bool {
 	if other == nil {
 		return false
@@ -135,13 +165,19 @@ func (p *Messack) Equal(other Packet) bool {
 	o := other.(*Messack)
 	return maps.Equal(p.props, o.props) && p.id == o.id
 }
+
+// String returns a string representation of the MESSACK packet.
 func (p *Messack) String() string {
 	return fmt.Sprintf("MESSACK(id=%d)", p.id)
 }
+
+// WriteTo encodes the MESSACK packet to the provided encoder.
 func (p *Messack) WriteTo(w coder.Encoder) error {
 	w.WriteUInt16(p.id)
 	return p.packet.WriteTo(w)
 }
+
+// ReadFrom decodes the MESSACK packet from the provided decoder.
 func (p *Messack) ReadFrom(r coder.Decoder) (err error) {
 	p.id, err = r.ReadUInt16()
 	if err != nil {

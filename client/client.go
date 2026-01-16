@@ -1,3 +1,6 @@
+// Package client provides a client implementation for the cable protocol.
+// It supports multiple network protocols (TCP, UDP, WebSocket, QUIC) and provides
+// features like automatic reconnection, heartbeat detection, and request-response mechanism.
 package client
 
 import (
@@ -13,16 +16,19 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
+// Error defines client-specific error codes.
 type Error uint8
 
+// Error constants for the client package.
 const (
-	ErrInvalidPacket      Error = 0
-	ErrRequestTimeout     Error = 1
-	ErrConnectionFailed   Error = 2
-	ErrConnectionClosed   Error = 3
-	ErrConnectionNotReady Error = 4
+	ErrInvalidPacket      Error = 0 // Invalid packet received
+	ErrRequestTimeout     Error = 1 // Request timed out
+	ErrConnectionFailed   Error = 2 // Connection failed
+	ErrConnectionClosed   Error = 3 // Connection closed
+	ErrConnectionNotReady Error = 4 // Connection not ready
 )
 
+// Error implements the error interface for Error type.
 func (e Error) Error() string {
 	switch e {
 	case ErrInvalidPacket:
@@ -40,42 +46,54 @@ func (e Error) Error() string {
 	}
 }
 
+// Client defines the interface for a cable client.
+// It provides methods for connection management, message sending, and request handling.
 type Client interface {
+	// ID returns the client's identity.
 	ID() *packet.Identity
+	// Status returns the current client status.
 	Status() Status
+	// Connect establishes a connection with the given identity.
 	Connect(identity *packet.Identity)
+	// IsReady returns whether the client is ready to send messages.
 	IsReady() bool
+	// SendMessage sends a message to the server.
 	SendMessage(ctx context.Context, p *packet.Message) error
+	// SendRequest sends a request to the server and returns the response.
 	SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error)
 }
+
+// client implements the Client interface.
 type client struct {
-	id             *packet.Identity
-	conn           Conn
-	connId         string
-	closed         atomic.Bool
-	status         Status
-	logger         *xlog.Logger
-	retrier        *Retrier
-	handler        Handler
-	retrying       bool
-	pingChan       chan struct{}
-	pingLock       sync.Mutex
-	sendQueue      *queue.Queue
-	keepalive      *keepalive.KeepAlive
-	messageID      atomic.Uint64
-	requestID      atomic.Uint64
-	statusLock     sync.RWMutex
-	pingTimeout    time.Duration
-	pingInterval   time.Duration
-	requestLock    sync.Mutex
-	messageLock    sync.Mutex
-	requestTasks   map[uint16]chan *packet.Response
-	messageTasks   map[uint16]chan *packet.Messack
-	writeTimeout   time.Duration
-	requestTimeout time.Duration
-	messageTimeout time.Duration
+	id             *packet.Identity                 // Client identity
+	conn           Conn                             // Underlying connection
+	connId         string                           // Connection ID assigned by server
+	closed         atomic.Bool                      // Whether the client is closed
+	status         Status                           // Current client status
+	logger         *xlog.Logger                     // Logger instance
+	retrier        *Retrier                         // Retry mechanism for reconnections
+	handler        Handler                          // Packet handler
+	retrying       bool                             // Whether the client is retrying a connection
+	pingChan       chan struct{}                    // Channel for ping/pong communication
+	pingLock       sync.Mutex                       // Lock for ping operations
+	sendQueue      *queue.Queue                     // Queue for outgoing packets
+	keepalive      *keepalive.KeepAlive             // Keepalive mechanism
+	messageID      atomic.Uint64                    // Message ID generator
+	requestID      atomic.Uint64                    // Request ID generator
+	statusLock     sync.RWMutex                     // Lock for status changes
+	pingTimeout    time.Duration                    // Timeout for ping operations
+	pingInterval   time.Duration                    // Interval for sending pings
+	requestLock    sync.Mutex                       // Lock for request tasks
+	messageLock    sync.Mutex                       // Lock for message tasks
+	requestTasks   map[uint16]chan *packet.Response // Pending request tasks
+	messageTasks   map[uint16]chan *packet.Messack  // Pending message tasks
+	writeTimeout   time.Duration                    // Timeout for write operations
+	requestTimeout time.Duration                    // Timeout for requests
+	messageTimeout time.Duration                    // Timeout for messages
 }
 
+// New creates a new Client instance with the specified address and options.
+// Supports multiple network protocols: TCP, UDP, WebSocket, QUIC.
 func New(address string, options ...Option) Client {
 	opts := newOptions(options...)
 	var conn Conn
@@ -109,9 +127,13 @@ func New(address string, options ...Option) Client {
 	c.keepalive = keepalive.New(c.pingInterval, c)
 	return c
 }
+
+// ID returns the client's identity.
 func (c *client) ID() *packet.Identity {
 	return c.id
 }
+
+// Close closes the client connection and releases resources.
 func (c *client) Close() {
 	if c.closed.CompareAndSwap(false, true) {
 		c.keepalive.Stop()
@@ -120,6 +142,7 @@ func (c *client) Close() {
 	}
 }
 
+// Connect establishes a connection with the server using the provided identity.
 func (c *client) Connect(identity *packet.Identity) {
 	c.id = identity
 	switch c.Status() {
@@ -133,9 +156,13 @@ func (c *client) Connect(identity *packet.Identity) {
 		c.tryClose(err)
 	}
 }
+
+// IsReady returns whether the client is ready to send messages.
 func (c *client) IsReady() bool {
 	return c.Status() == StatusOpened
 }
+
+// tryClose attempts to close the client connection with retry logic.
 func (c *client) tryClose(err error) {
 	c.statusLock.Lock()
 	defer c.statusLock.Unlock()
@@ -177,6 +204,7 @@ func (c *client) tryClose(err error) {
 	})
 }
 
+// reconnect handles reconnection logic when the connection is lost.
 func (c *client) reconnect() error {
 	err := c.conn.Dail()
 	if err != nil {
@@ -204,6 +232,7 @@ func (c *client) reconnect() error {
 	return nil
 }
 
+// SendPing sends a ping message to the server.
 func (c *client) SendPing() {
 	ctx, cancel := context.WithTimeout(context.Background(), c.pingTimeout)
 	defer cancel()
@@ -215,6 +244,8 @@ func (c *client) SendPing() {
 		}
 	}
 }
+
+// sendPing sends a ping message with context and waits for pong response.
 func (c *client) sendPing(ctx context.Context) error {
 	if !c.IsReady() {
 		return ErrConnectionNotReady
@@ -238,9 +269,13 @@ func (c *client) sendPing(ctx context.Context) error {
 		return ctx.Err()
 	}
 }
+
+// sendPong sends a pong message in response to a ping.
 func (c *client) sendPong() error {
 	return c.sendPacket(context.Background(), true, packet.NewPong())
 }
+
+// SendMessage sends a message to the server with optional QoS.
 func (c *client) SendMessage(ctx context.Context, p *packet.Message) error {
 	if !c.IsReady() {
 		return ErrConnectionNotReady
@@ -253,6 +288,8 @@ func (c *client) SendMessage(ctx context.Context, p *packet.Message) error {
 	}
 	return c.retryInflightMessage(ctx, p, 0)
 }
+
+// retryInflightMessage retries sending a message with QoS > 0 until acknowledged or timed out.
 func (c *client) retryInflightMessage(ctx context.Context, p *packet.Message, attempts int) error {
 	if attempts > 5 {
 		return ErrRequestTimeout
@@ -273,6 +310,8 @@ func (c *client) retryInflightMessage(ctx context.Context, p *packet.Message, at
 	}
 	return nil
 }
+
+// sendInflightMessage sends a message and waits for acknowledgment.
 func (c *client) sendInflightMessage(ctx context.Context, p *packet.Message) (*packet.Messack, error) {
 	if !c.IsReady() {
 		return nil, ErrConnectionNotReady
@@ -297,6 +336,8 @@ func (c *client) sendInflightMessage(ctx context.Context, p *packet.Message) (*p
 		return nil, ctx.Err()
 	}
 }
+
+// SendRequest sends a request to the server and waits for the response.
 func (c *client) SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {
 	if !c.IsReady() {
 		return nil, ErrConnectionNotReady
@@ -325,6 +366,7 @@ func (c *client) SendRequest(ctx context.Context, p *packet.Request) (*packet.Re
 	}
 }
 
+// sendPacket sends a packet through the connection with optional priority.
 func (c *client) sendPacket(ctx context.Context, jump bool, p packet.Packet) error {
 	if !c.IsReady() {
 		return ErrConnectionNotReady
@@ -344,16 +386,22 @@ func (c *client) sendPacket(ctx context.Context, jump bool, p packet.Packet) err
 		c.keepalive.UpdateTime()
 	})
 }
+
+// Status returns the current client status.
 func (c *client) Status() Status {
 	c.statusLock.RLock()
 	defer c.statusLock.RUnlock()
 	return c.status
 }
+
+// setStatus sets the client status with thread safety.
 func (c *client) setStatus(status Status) {
 	c.statusLock.Lock()
 	defer c.statusLock.Unlock()
 	c._setStatus(status)
 }
+
+// _setStatus sets the client status without locking (internal use only).
 func (c *client) _setStatus(status Status) {
 	if c.status == status {
 		return
@@ -373,6 +421,7 @@ func (c *client) _setStatus(status Status) {
 	go c.handler.OnStatus(status)
 }
 
+// recv continuously receives packets from the connection.
 func (c *client) recv() {
 	for {
 		p, err := c.conn.ReadPacket()
@@ -384,6 +433,7 @@ func (c *client) recv() {
 	}
 }
 
+// handlePacket processes incoming packets based on their type.
 func (c *client) handlePacket(p packet.Packet) {
 	c.keepalive.UpdateTime()
 	switch p.Type() {
