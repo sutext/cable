@@ -1,20 +1,5 @@
 # Cable Server Configuration
 
-# Redis Configuration
-redis:
-  db: 0
-  address: "localhost:6379"
-  password: ""
-
-# Kafka Configuration
-kafka:
-  brokers:
-    - "localhost:9092"
-  userUpTopic: "cable-upstream-user"
-  groupUpTopic: "cable-upstream-group"
-  userDownTopic: "cable-downstream-user"
-  groupDownTopic: "cable-downstream-group"
-
 # Pprof Debugging
 pprof: false
 
@@ -32,6 +17,12 @@ peerPort: 4567
 
 # Log Level: debug, info, warn, error
 logLevel: "info"
+
+# Redis Configuration
+redis:
+  db: 0
+  address: "localhost:6379"
+  password: ""
 
 # Listeners Configuration
 listeners:
@@ -67,5 +58,19 @@ listeners:
     autoStart: false
     tls:
       certFile: "cert.pem"
-      keyFile: "key.pem"  
+      keyFile: "key.pem"
+
+# Kafka Brokers Configuration
+kafkaBrokers:
+  - "localhost:9092"
+
+# Message Route Configuration
+messageRoute:
+  # Example message routes, adjust based on your actual message types
+  0: 
+    resendType: "user"
+    kafkaTopic: "cable-upstream-user"
+  1:
+    resendType: "channel"
+    kafkaTopic: "cable-upstream-group"
   

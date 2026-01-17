@@ -7,7 +7,7 @@ metadata:
   labels:
     app: cable-cluster
 data:
-  cable.config.yaml: |
+  config.yaml: |
     # Cable Server Configuration
 
     # Redis Configuration
@@ -104,8 +104,8 @@ spec:
           imagePullPolicy: Never
           volumeMounts:
             - name: cable-config-volume
-              mountPath: /app/cable.config.yaml
-              subPath: cable.config.yaml
+              mountPath: /app/config.yaml
+              subPath: config.yaml
           livenessProbe:
             httpGet:
               path: /health

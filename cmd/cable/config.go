@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"gopkg.in/yaml.v3"
+	"sutext.github.io/cable/packet"
 )
 
 type tlsConfig struct {
@@ -23,23 +24,30 @@ type redisConfig struct {
 	Address  string `yaml:"address"`
 	Password string `yaml:"password"`
 }
-type kafkaConfig struct {
-	Brokers        []string `yaml:"brokers"`
-	UserUpTopic    string   `yaml:"userUpTopic"`
-	GroupUpTopic   string   `yaml:"groupUpTopic"`
-	UserDownTopic  string   `yaml:"userDownTopic"`
-	GroupDownTopic string   `yaml:"groupDownTopic"`
+type resendType string
+
+const (
+	resendNone      resendType = "none"
+	resendToAll     resendType = "all"
+	resendToUser    resendType = "user"
+	resendToChannel resendType = "channel"
+)
+
+type route struct {
+	ResendType resendType
+	KafkaTopic string
 }
 type config struct {
-	Redis     redisConfig `yaml:"redis"`
-	Kafka     kafkaConfig `yaml:"kafka"`
-	Pprof     bool        `yaml:"pprof"`
-	BrokerID  uint64      `yaml:"brokerid"`
-	InitSize  int32       `yaml:"initSize"`
-	HTTPPort  uint16      `yaml:"httpPort"`
-	PeerPort  uint16      `yaml:"peerPort"`
-	LogLevel  string      `yaml:"logLevel"`
-	Listeners []listener  `yaml:"listeners"`
+	Pprof        bool                         `yaml:"pprof"`
+	BrokerID     uint64                       `yaml:"brokerid"`
+	InitSize     int32                        `yaml:"initSize"`
+	HTTPPort     uint16                       `yaml:"httpPort"`
+	PeerPort     uint16                       `yaml:"peerPort"`
+	LogLevel     string                       `yaml:"logLevel"`
+	Redis        redisConfig                  `yaml:"redis"`
+	Listeners    []listener                   `yaml:"listeners"`
+	KafkaBrokers []string                     `yaml:"kafkaBrokers"`
+	MessageRoute map[packet.MessageKind]route `yaml:"messageRoute"`
 }
 
 func readConfig(path string) (*config, error) {

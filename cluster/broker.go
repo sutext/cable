@@ -90,21 +90,21 @@ type Broker interface {
 	// Parameters:
 	// - ctx: Context for the operation
 	// - uid: User ID to add to channels
-	// - channels: List of channels to join
+	// - channels: set of channels to join
 	//
 	// Returns:
 	// - error: Error if joining fails, nil otherwise
-	JoinChannel(ctx context.Context, uid string, channels ...string) error
+	JoinChannel(ctx context.Context, uid string, channels map[string]string) error
 	// LeaveChannel removes a user from one or more channels.
 	//
 	// Parameters:
 	// - ctx: Context for the operation
 	// - uid: User ID to remove from channels
-	// - channels: List of channels to leave
+	// - channels: set of channels to leave
 	//
 	// Returns:
 	// - error: Error if leaving fails, nil otherwise
-	LeaveChannel(ctx context.Context, uid string, channels ...string) error
+	LeaveChannel(ctx context.Context, uid string, channels map[string]string) error
 	// SendToChannel sends a message to all clients in a channel.
 	//
 	// Parameters:
@@ -417,7 +417,7 @@ func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Me
 //
 // Returns:
 // - error: Error if joining fails, nil otherwise
-func (b *broker) JoinChannel(ctx context.Context, uid string, channels ...string) error {
+func (b *broker) JoinChannel(ctx context.Context, uid string, channels map[string]string) error {
 	op := &joinChannelOp{
 		uid:      uid,
 		channels: channels,
@@ -434,7 +434,7 @@ func (b *broker) JoinChannel(ctx context.Context, uid string, channels ...string
 //
 // Returns:
 // - error: Error if leaving fails, nil otherwise
-func (b *broker) LeaveChannel(ctx context.Context, uid string, channels ...string) error {
+func (b *broker) LeaveChannel(ctx context.Context, uid string, channels map[string]string) error {
 	op := &leaveChannelOp{
 		uid:      uid,
 		channels: channels,
@@ -507,7 +507,6 @@ func (b *broker) onUserConnect(p *packet.Connect, net string) packet.ConnectCode
 	chs, err := b.handler.GetChannels(p.Identity.UserID)
 	if err != nil {
 		b.logger.Error("get channels failed", xlog.Err(err))
-		chs = []string{}
 	}
 	op := &userOpenedOp{
 		uid:      p.Identity.UserID,
@@ -641,7 +640,7 @@ func (b *broker) userOpenedOp(op *userOpenedOp) {
 	userClients.SetKey(op.uid, op.cid, op.net)
 	channelClients, _ := b.channelClients.GetOrSet(op.nodeID, &safe.KeyMap[string]{})
 	clientChannels, _ := b.clientChannels.GetOrSet(op.nodeID, &safe.KeyMap[struct{}]{})
-	for _, ch := range op.channels {
+	for ch := range op.channels {
 		clientChannels.SetKey(op.cid, ch, struct{}{})
 		channelClients.SetKey(ch, op.cid, op.net)
 	}
@@ -677,7 +676,7 @@ func (b *broker) joinChannelOp(op *joinChannelOp) {
 		channelClients, _ := b.channelClients.GetOrSet(id, &safe.KeyMap[string]{})
 		clientChannels, _ := b.clientChannels.GetOrSet(id, &safe.KeyMap[struct{}]{})
 		userClients.RangeKey(op.uid, func(cid string, net string) bool {
-			for _, channel := range op.channels {
+			for channel := range op.channels {
 				channelClients.SetKey(channel, cid, net)
 				clientChannels.SetKey(cid, channel, struct{}{})
 			}
@@ -697,7 +696,7 @@ func (b *broker) leaveChannelOp(op *leaveChannelOp) {
 		channelClients, _ := b.channelClients.GetOrSet(id, &safe.KeyMap[string]{})
 		clientChannels, _ := b.clientChannels.GetOrSet(id, &safe.KeyMap[struct{}]{})
 		userClients.RangeKey(op.uid, func(cid string, net string) bool {
-			for _, ch := range op.channels {
+			for ch := range op.channels {
 				channelClients.DeleteKey(ch, cid)
 				clientChannels.DeleteKey(cid, ch)
 			}

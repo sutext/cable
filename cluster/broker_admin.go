@@ -181,8 +181,12 @@ func (b *broker) handleJoin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "channels is required", http.StatusBadRequest)
 		return
 	}
-	channels := strings.Split(chs, ",")
-	err := b.JoinChannel(r.Context(), uid, channels...)
+	strs := strings.Split(chs, ",")
+	channels := make(map[string]string)
+	for _, ch := range strs {
+		channels[ch] = ""
+	}
+	err := b.JoinChannel(r.Context(), uid, channels)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

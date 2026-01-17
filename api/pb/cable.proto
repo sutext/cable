@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+option go_package = "./pb";
+
+package pb;
+
+/// MessageReq is the request message for SendToClients RPC.
+message MessageReq{
+  bytes message = 3;
+  map<string,string> targets = 4;
+}
+
+/// MessageResp is the response message for SendMessage RPC.
+message MessageResp{
+ int32 total = 1;
+ int32 success = 2;
+}
+
+service CableService{
+  rpc SendMessage(MessageReq) returns (MessageResp){}
+}

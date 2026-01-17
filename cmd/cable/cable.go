@@ -14,13 +14,13 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
-var configFile = "cable.config.yaml"
+var configFile = "config.yaml"
 
 func init() {
-	flag.StringVar(&configFile, "config", "cable.config.yaml", "config file path")
-	flag.Parse()
+	flag.StringVar(&configFile, "config", "config.yaml", "config file path")
 }
 func main() {
+	flag.Parse()
 	conf, err := readConfig(configFile)
 	if err != nil {
 		panic(err)

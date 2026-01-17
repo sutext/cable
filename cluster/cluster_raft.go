@@ -42,11 +42,11 @@ type opdata interface {
 
 // userOpenedOp represents a user opened operation.
 type userOpenedOp struct {
-	uid      string   // User ID
-	cid      string   // Client ID
-	net      string   // Network protocol
-	nodeID   uint64   // Node ID where the user connected
-	channels []string // Channels the user has joined
+	uid      string            // User ID
+	cid      string            // Client ID
+	net      string            // Network protocol
+	nodeID   uint64            // Node ID where the user connected
+	channels map[string]string // Channels the user has joined
 }
 
 // opt returns the operation type for userOpenedOp.
@@ -60,7 +60,7 @@ func (op *userOpenedOp) WriteTo(e coder.Encoder) error {
 	e.WriteString(op.cid)
 	e.WriteString(op.net)
 	e.WriteUInt64(op.nodeID)
-	e.WriteStrings(op.channels)
+	e.WriteStrMap(op.channels)
 	return nil
 }
 
@@ -83,7 +83,7 @@ func (op *userOpenedOp) ReadFrom(d coder.Decoder) error {
 	if err != nil {
 		return err
 	}
-	op.channels, err = d.ReadStrings()
+	op.channels, err = d.ReadStrMap()
 	return err
 }
 
@@ -124,8 +124,8 @@ func (op *userClosedOp) ReadFrom(d coder.Decoder) error {
 
 // joinChannelOp represents a join channel operation.
 type joinChannelOp struct {
-	uid      string   // User ID
-	channels []string // Channels to join
+	uid      string            // User ID
+	channels map[string]string // Channels to join
 }
 
 // opt returns the operation type for joinChannelOp.
@@ -136,7 +136,7 @@ func (op *joinChannelOp) opt() optype {
 // WriteTo encodes the joinChannelOp to an encoder.
 func (op *joinChannelOp) WriteTo(e coder.Encoder) error {
 	e.WriteString(op.uid)
-	e.WriteStrings(op.channels)
+	e.WriteStrMap(op.channels)
 	return nil
 }
 
@@ -147,14 +147,14 @@ func (op *joinChannelOp) ReadFrom(d coder.Decoder) error {
 	if err != nil {
 		return err
 	}
-	op.channels, err = d.ReadStrings()
+	op.channels, err = d.ReadStrMap()
 	return err
 }
 
 // leaveChannelOp represents a leave channel operation.
 type leaveChannelOp struct {
-	uid      string   // User ID
-	channels []string // Channels to leave
+	uid      string            // User ID
+	channels map[string]string // Channels to leave
 }
 
 // opt returns the operation type for leaveChannelOp.
@@ -165,7 +165,7 @@ func (op *leaveChannelOp) opt() optype {
 // WriteTo encodes the leaveChannelOp to an encoder.
 func (op *leaveChannelOp) WriteTo(e coder.Encoder) error {
 	e.WriteString(op.uid)
-	e.WriteStrings(op.channels)
+	e.WriteStrMap(op.channels)
 	return nil
 }
 
@@ -176,7 +176,7 @@ func (op *leaveChannelOp) ReadFrom(d coder.Decoder) error {
 	if err != nil {
 		return err
 	}
-	op.channels, err = d.ReadStrings()
+	op.channels, err = d.ReadStrMap()
 	return err
 }
 

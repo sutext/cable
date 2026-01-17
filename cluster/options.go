@@ -42,9 +42,9 @@ type Handler interface {
 	// - uid: User ID to get channels for
 	//
 	// Returns:
-	// - []string: List of channels the user has joined
+	// - map[string]string: List of channels the user has joined
 	// - error: Error if getting channels fails, nil otherwise
-	GetChannels(uid string) (channels []string, err error) //uid join channels
+	GetChannels(uid string) (channels map[string]string, err error) //uid join channels
 }
 
 // emptyHandler is a default implementation of Handler that does nothing.
@@ -65,7 +65,7 @@ func (h *emptyHandler) OnMessage(p *packet.Message, id *packet.Identity) error {
 }
 
 // GetChannels implements the Handler interface with empty implementation.
-func (h *emptyHandler) GetChannels(uid string) (channels []string, err error) {
+func (h *emptyHandler) GetChannels(uid string) (channels map[string]string, err error) {
 	return nil, nil
 }
 
