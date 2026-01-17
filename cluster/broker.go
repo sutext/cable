@@ -22,9 +22,7 @@ import (
 type Broker interface {
 	// Start starts the broker and all its components.
 	//
-	// Returns:
-	// - error: Error if starting fails, nil otherwise
-	Start() error
+	Start()
 	// Cluster returns the underlying cluster instance.
 	//
 	// Returns:
@@ -187,7 +185,7 @@ func NewBroker(opts ...Option) Broker {
 //
 // Returns:
 // - error: Error if starting fails, nil otherwise
-func (b *broker) Start() error {
+func (b *broker) Start() {
 	for _, l := range b.listeners {
 		if l.autoStart {
 			l.Start()
@@ -204,7 +202,6 @@ func (b *broker) Start() error {
 		}
 	}()
 	b.cluster.Start()
-	return nil
 }
 
 // Cluster returns the underlying cluster instance.

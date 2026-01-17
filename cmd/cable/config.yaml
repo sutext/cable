@@ -9,6 +9,9 @@ brokerid: 0
 # Initial size of cluster
 initSize: 1
 
+# gRPC Server Port for API
+grpcPort: 8880
+
 # HTTP Server Port for Admin API
 httpPort: 8888
 
@@ -23,6 +26,7 @@ redis:
   db: 0
   address: "localhost:6379"
   password: ""
+  userPrefix: "cable-user-channels:"
 
 # Listeners Configuration
 listeners:

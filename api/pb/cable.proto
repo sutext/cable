@@ -4,18 +4,55 @@ option go_package = "./pb";
 
 package pb;
 
+message Empty{
+}
+message ToAllReq{
+    int32 qos = 1;
+    int32 kind = 2;
+    bytes message = 3;
+
+}
 /// MessageReq is the request message for SendToClients RPC.
-message MessageReq{
-  bytes message = 3;
-  map<string,string> targets = 4;
+message ToUserReq{
+    string uid = 1;
+    int32  qos = 2;
+    int32  kind = 3;
+    bytes  message = 4;
+}
+message ToChannelReq{
+    string channel = 1;
+    int32 qos = 2;
+    int32 kind = 3;
+    bytes message = 4;
 }
 
 /// MessageResp is the response message for SendMessage RPC.
 message MessageResp{
- int32 total = 1;
- int32 success = 2;
+    int32 total = 1;
+    int32 success = 2;
 }
 
+message JoinReq{
+    string uid = 1;
+    map<string,string> channels = 2;
+}
+
+message UserReq{
+    string uid = 1;
+}
+message UserResp{
+    bool ok = 1;
+}
+message Channels{
+    map<string,string> channels = 1;
+}
 service CableService{
-  rpc SendMessage(MessageReq) returns (MessageResp){}
+    rpc IsOnline(UserReq) returns (UserResp){}
+    rpc KickUser(UserReq) returns (UserResp){}
+    rpc SendToAll(ToAllReq) returns (MessageResp){}
+    rpc SendToUser(ToUserReq) returns (MessageResp){}
+    rpc SendToChannel(ToChannelReq) returns (MessageResp){}
+    rpc JoinChannel(JoinReq) returns (Empty){}
+    rpc LeaveChannel(JoinReq) returns (Empty){}
+    rpc GetChannels(UserReq) returns (Channels){}
 }

@@ -15,6 +15,7 @@ import (
 )
 
 type booter struct {
+	api      *apiServer
 	broker   cluster.Broker
 	config   *config
 	redis    *redis.Client
@@ -57,9 +58,10 @@ func newBooter(config *config) *booter {
 		cluster.WithInitSize(config.InitSize),
 		cluster.WithListeners(liss),
 	)
+	b.api = newAPIServer(b)
 	return b
 }
-func (b *booter) Start() error {
+func (b *booter) Start() {
 	// Initialize Redis
 	rconfg := b.config.Redis
 	b.redis = redis.NewClient(&redis.Options{
@@ -85,8 +87,13 @@ func (b *booter) Start() error {
 			}
 		}
 	}
-
-	return b.broker.Start()
+	// Start API server
+	go func() {
+		if err := b.api.Serve(); err != nil {
+			xlog.Error("Failed to start API server", xlog.Err(err))
+		}
+	}()
+	b.broker.Start()
 }
 func (b *booter) Shutdown(ctx context.Context) error {
 	if b.redis != nil {
@@ -228,5 +235,8 @@ func (b *booter) GetChannels(uid string) (map[string]string, error) {
 	if b.redis == nil {
 		return nil, fmt.Errorf("redis client not initialized")
 	}
-	return b.redis.HGetAll(context.Background(), uid).Result()
+	return b.redis.HGetAll(context.Background(), b.userKey(uid)).Result()
+}
+func (b *booter) userKey(uid string) string {
+	return fmt.Sprintf("%s:%s", b.config.Redis.UserPrefix, uid)
 }

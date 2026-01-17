@@ -42,10 +42,7 @@ func main() {
 		cancel(fmt.Errorf("cable signal received"))
 	}()
 	boot := newBooter(conf)
-	if err := boot.Start(); err != nil {
-		xlog.Error("cable server start :", xlog.Err(err))
-		return
-	}
+	boot.Start()
 	xlog.Info("cable server started")
 	<-ctx.Done()
 	done := make(chan struct{})

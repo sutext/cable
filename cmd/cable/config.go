@@ -20,9 +20,10 @@ type listener struct {
 	TLS       *tlsConfig `yaml:"tls"`
 }
 type redisConfig struct {
-	DB       int    `yaml:"db"`
-	Address  string `yaml:"address"`
-	Password string `yaml:"password"`
+	DB         int    `yaml:"db"`
+	Address    string `yaml:"address"`
+	Password   string `yaml:"password"`
+	UserPrefix string `yaml:"userPrefix"`
 }
 type resendType string
 
@@ -41,6 +42,7 @@ type config struct {
 	Pprof        bool                         `yaml:"pprof"`
 	BrokerID     uint64                       `yaml:"brokerid"`
 	InitSize     int32                        `yaml:"initSize"`
+	GrpcPort     uint16                       `yaml:"grpcPort"`
 	HTTPPort     uint16                       `yaml:"httpPort"`
 	PeerPort     uint16                       `yaml:"peerPort"`
 	LogLevel     string                       `yaml:"logLevel"`

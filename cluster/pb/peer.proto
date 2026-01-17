@@ -19,8 +19,8 @@ message IsOnlineResp{
 
 /// MessageReq is the request message for SendToClients RPC.
 message MessageReq{
-  bytes message = 3;
-  map<string,string> targets = 4;
+  bytes message = 1;
+  map<string,string> targets = 2;
 }
 
 /// MessageResp is the response message for SendMessage RPC.
