@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"sync"
 
 	"sutext.github.io/cable/cluster/pb"
@@ -131,7 +130,6 @@ type broker struct {
 	handler        Handler                                   // Event handler for broker events
 	listeners      map[string]*Listener                      // Map of network listeners (network -> listener)
 	peerServer     *peerServer                               // gRPC server for peer communication
-	httpServer     *http.Server                              // HTTP server for admin API
 	userClients    safe.RMap[uint64, *safe.KeyMap[string]]   // Maps broker ID to user clients (bid -> uid -> cid -> network)
 	channelClients safe.RMap[uint64, *safe.KeyMap[string]]   // Maps broker ID to channel clients (bid -> channel -> cid -> network)
 	clientChannels safe.RMap[uint64, *safe.KeyMap[struct{}]] // Maps broker ID to client channels (bid -> cid -> channel -> null)
@@ -170,14 +168,6 @@ func NewBroker(opts ...Option) Broker {
 	}
 	b.cluster = newCluster(b, options.initSize, options.peerPort)
 	b.peerServer = newPeerServer(b, fmt.Sprintf(":%d", options.peerPort))
-	mux := http.NewServeMux()
-	mux.HandleFunc("/join", b.handleJoin)
-	mux.HandleFunc("/send", b.handleSendMessage)
-	mux.HandleFunc("/health", b.handleHealth)
-	mux.HandleFunc("/inspect", b.handleInspect)
-	mux.HandleFunc("/kickUser", b.handleKickUser)
-	mux.HandleFunc("/kickNode", b.handleKickNode)
-	b.httpServer = &http.Server{Addr: fmt.Sprintf(":%d", options.httpPort), Handler: mux}
 	return b
 }
 
@@ -194,11 +184,6 @@ func (b *broker) Start() {
 	go func() {
 		if err := b.peerServer.Serve(); err != nil {
 			b.logger.Info("peer server stoped", xlog.Err(err))
-		}
-	}()
-	go func() {
-		if err := b.httpServer.ListenAndServe(); err != nil {
-			b.logger.Info("http server stoped", xlog.Err(err))
 		}
 	}()
 	b.cluster.Start()
@@ -225,9 +210,6 @@ func (b *broker) Shutdown(ctx context.Context) (err error) {
 			b.logger.Error("listener shutdown", xlog.Err(err))
 		}
 	}
-	if err = b.httpServer.Shutdown(ctx); err != nil {
-		b.logger.Error("http server shutdown", xlog.Err(err))
-	}
 	if err = b.peerServer.Shutdown(ctx); err != nil {
 		b.logger.Error("peer server shutdown", xlog.Err(err))
 	}
@@ -240,6 +222,33 @@ func (b *broker) ExpelAllConns() {
 	for _, l := range b.listeners {
 		l.ExpelAllConns()
 	}
+}
+
+// Inspects returns the status of all brokers in the cluster.
+// It collects status information from the local broker and all peer brokers.
+//
+// Parameters:
+// - ctx: Context for the operation
+//
+// Returns:
+// - []*pb.Status: List of status information for all brokers in the cluster
+// - error: Error if inspecting any broker fails, nil otherwise
+func (b *broker) Inspects(ctx context.Context) ([]*pb.Status, error) {
+	ss := make([]*pb.Status, 0, b.cluster.size)
+	ss = append(ss, b.inspect())
+	wg := sync.WaitGroup{}
+	b.cluster.RangePeers(func(id uint64, cli *peerClient) {
+		wg.Go(func() {
+			s, err := cli.inspect(ctx)
+			if err != nil {
+				b.logger.Error("inspect peer failed", xlog.Peer(id), xlog.Err(err))
+				return
+			}
+			ss = append(ss, s)
+		})
+	})
+	wg.Wait()
+	return ss, nil
 }
 
 // IsOnline checks if a user is online in the cluster.
@@ -625,6 +634,47 @@ func (b *broker) sendToTargets(ctx context.Context, m *packet.Message, targets m
 		}
 	}
 	return total, success
+}
+
+// inspect returns the status of the local broker.
+// It includes information about user count, channel count, and Raft status.
+//
+// Returns:
+// - *pb.Status: Status information of the local broker
+func (b *broker) inspect() *pb.Status {
+	userCount := make(map[uint64]int32)
+	b.userClients.Range(func(key uint64, value *safe.KeyMap[string]) bool {
+		userCount[key] = value.Len()
+		return true
+	})
+	channelCount := make(map[uint64]int32)
+	b.channelClients.Range(func(key uint64, value *safe.KeyMap[string]) bool {
+		channelCount[key] = value.Len()
+		return true
+	})
+	status, _ := b.cluster.Status()
+	progress := make(map[uint64]*pb.RaftProgress)
+	if status.Progress != nil {
+		for id, p := range status.Progress {
+			progress[id] = &pb.RaftProgress{
+				Match: p.Match,
+				Next:  p.Next,
+				State: p.State.String(),
+			}
+		}
+	}
+	return &pb.Status{
+		Id:           b.id,
+		UserCount:    userCount,
+		ClientCount:  b.clientChannels.Len(),
+		ClusterSize:  b.cluster.size,
+		ChannelCount: channelCount,
+		RaftState:    status.RaftState.String(),
+		RaftTerm:     status.Term,
+		RaftLogSize:  b.cluster.RaftLogSize(),
+		RaftApplied:  status.Applied,
+		RaftProgress: progress,
+	}
 }
 
 // userOpenedOp processes user opened operations.

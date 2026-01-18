@@ -73,7 +73,6 @@ func (h *emptyHandler) GetChannels(uid string) (channels map[string]string, err 
 type options struct {
 	handler   Handler     // Handler for cluster events
 	brokerID  uint64      // Unique ID for the broker
-	httpPort  uint16      // HTTP port for admin interface
 	peerPort  uint16      // Port for peer-to-peer communication
 	initSize  int32       // Initial cluster size
 	listeners []*Listener // List of listeners for client connections
@@ -89,7 +88,6 @@ type options struct {
 func newOptions(opts ...Option) *options {
 	options := &options{
 		handler:  &emptyHandler{},
-		httpPort: 8888,
 		peerPort: 4567,
 		initSize: 3,
 	}
@@ -114,19 +112,6 @@ type Option struct {
 func WithHandler(h Handler) Option {
 	return Option{func(o *options) {
 		o.handler = h
-	}}
-}
-
-// WithHTTPPort sets the HTTP port for the admin interface.
-//
-// Parameters:
-// - port: HTTP port number
-//
-// Returns:
-// - Option: Configuration option for the cluster
-func WithHTTPPort(port uint16) Option {
-	return Option{func(o *options) {
-		o.httpPort = port
 	}}
 }
 

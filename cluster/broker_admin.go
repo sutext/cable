@@ -3,86 +3,13 @@
 package cluster
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
-	"sync"
 
-	"sutext.github.io/cable/cluster/pb"
-	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
-	"sutext.github.io/cable/xlog"
 )
-
-// inspect returns the status of the local broker.
-// It includes information about user count, channel count, and Raft status.
-//
-// Returns:
-// - *pb.Status: Status information of the local broker
-func (b *broker) inspect() *pb.Status {
-	userCount := make(map[uint64]int32)
-	b.userClients.Range(func(key uint64, value *safe.KeyMap[string]) bool {
-		userCount[key] = value.Len()
-		return true
-	})
-	channelCount := make(map[uint64]int32)
-	b.channelClients.Range(func(key uint64, value *safe.KeyMap[string]) bool {
-		channelCount[key] = value.Len()
-		return true
-	})
-	status, _ := b.cluster.Status()
-	progress := make(map[uint64]*pb.RaftProgress)
-	if status.Progress != nil {
-		for id, p := range status.Progress {
-			progress[id] = &pb.RaftProgress{
-				Match: p.Match,
-				Next:  p.Next,
-				State: p.State.String(),
-			}
-		}
-	}
-	return &pb.Status{
-		Id:           b.id,
-		UserCount:    userCount,
-		ClientCount:  b.clientChannels.Len(),
-		ClusterSize:  b.cluster.size,
-		ChannelCount: channelCount,
-		RaftState:    status.RaftState.String(),
-		RaftTerm:     status.Term,
-		RaftLogSize:  b.cluster.RaftLogSize(),
-		RaftApplied:  status.Applied,
-		RaftProgress: progress,
-	}
-}
-
-// Inspects returns the status of all brokers in the cluster.
-// It collects status information from the local broker and all peer brokers.
-//
-// Parameters:
-// - ctx: Context for the operation
-//
-// Returns:
-// - []*pb.Status: List of status information for all brokers in the cluster
-// - error: Error if inspecting any broker fails, nil otherwise
-func (b *broker) Inspects(ctx context.Context) ([]*pb.Status, error) {
-	ss := make([]*pb.Status, 0, b.cluster.size)
-	ss = append(ss, b.inspect())
-	wg := sync.WaitGroup{}
-	b.cluster.RangePeers(func(id uint64, cli *peerClient) {
-		wg.Go(func() {
-			s, err := cli.inspect(ctx)
-			if err != nil {
-				b.logger.Error("inspect peer failed", xlog.Peer(id), xlog.Err(err))
-				return
-			}
-			ss = append(ss, s)
-		})
-	})
-	wg.Wait()
-	return ss, nil
-}
 
 // handleInspect handles HTTP requests to inspect the cluster status.
 // It returns status information for all brokers in the cluster as JSON.

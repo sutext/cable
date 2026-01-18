@@ -1,0 +1,43 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # Cable broker metrics - static configuration
+  - job_name: 'cable-brokers'
+    metrics_path: '/metrics'
+    static_configs:
+      # Broker 1
+      - targets: ['broker1.example.com:9090']
+        labels:
+          cluster: 'production'
+          region: 'us-east-1'
+      # Broker 2
+      - targets: ['broker2.example.com:9090']
+        labels:
+          cluster: 'production'
+          region: 'us-east-1'
+      # Broker 3
+      - targets: ['broker3.example.com:9090']
+        labels:
+          cluster: 'production'
+          region: 'us-west-2'
+
+  # Alternative: Use DNS SRV records for service discovery
+  # - job_name: 'cable-brokers-dns'
+  #   dns_sd_configs:
+  #     - names: ['_cable-metrics._tcp.cable.example.com']
+  #       type: 'SRV'
+  #       port: 9090
+
+  # Alternative: Use Kubernetes service discovery
+  # - job_name: 'cable-brokers-k8s'
+  #   kubernetes_sd_configs:
+  #     - role: pod
+  #   relabel_configs:
+  #     - source_labels: [__meta_kubernetes_pod_label_app]
+  #       action: keep
+  #       regex: cable-broker
+  #     - source_labels: [__meta_kubernetes_pod_ip]
+  #       target_label: __address__
+  #       replacement: $1:9090

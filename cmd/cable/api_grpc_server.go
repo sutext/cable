@@ -6,6 +6,7 @@ import (
 	"net"
 	"time"
 
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 	"sutext.github.io/cable/api/pb"
@@ -13,7 +14,7 @@ import (
 	"sutext.github.io/cable/packet"
 )
 
-type apiServer struct {
+type grpcServer struct {
 	pb.UnimplementedCableServiceServer
 	booter   *booter
 	broker   cluster.Broker
@@ -21,14 +22,14 @@ type apiServer struct {
 	listener net.Listener
 }
 
-func newAPIServer(booter *booter) *apiServer {
-	return &apiServer{
+func newGRPC(booter *booter) *grpcServer {
+	return &grpcServer{
 		booter:  booter,
 		broker:  booter.broker,
 		address: fmt.Sprintf(":%d", booter.config.GrpcPort)}
 }
 
-func (s *apiServer) Serve() error {
+func (s *grpcServer) Serve() error {
 	lis, err := net.Listen("tcp", s.address)
 	if err != nil {
 		return err
@@ -39,22 +40,23 @@ func (s *apiServer) Serve() error {
 			MinTime:             time.Second * 20,
 			PermitWithoutStream: true,
 		}),
+		grpc.StatsHandler(otelgrpc.NewServerHandler()),
 	)
 	pb.RegisterCableServiceServer(gs, s)
 	return gs.Serve(lis)
 }
 
-func (s *apiServer) IsOnline(ctx context.Context, req *pb.UserReq) (*pb.OnlineResp, error) {
+func (s *grpcServer) IsOnline(ctx context.Context, req *pb.UserReq) (*pb.OnlineResp, error) {
 	ok := s.broker.IsOnline(ctx, req.Uid)
 	return &pb.OnlineResp{
 		Ok: ok,
 	}, nil
 }
-func (s *apiServer) KickUser(ctx context.Context, req *pb.UserReq) (*pb.EmptyResp, error) {
+func (s *grpcServer) KickUser(ctx context.Context, req *pb.UserReq) (*pb.EmptyResp, error) {
 	s.broker.KickUser(ctx, req.Uid)
 	return &pb.EmptyResp{}, nil
 }
-func (s *apiServer) SendToAll(ctx context.Context, req *pb.ToAllReq) (*pb.MsgResp, error) {
+func (s *grpcServer) SendToAll(ctx context.Context, req *pb.ToAllReq) (*pb.MsgResp, error) {
 	msg := &packet.Message{
 		Qos:     packet.MessageQos(req.Qos),
 		Kind:    packet.MessageKind(req.Kind),
@@ -69,7 +71,7 @@ func (s *apiServer) SendToAll(ctx context.Context, req *pb.ToAllReq) (*pb.MsgRes
 		Success: success,
 	}, nil
 }
-func (s *apiServer) SendToUser(ctx context.Context, req *pb.ToUserReq) (*pb.MsgResp, error) {
+func (s *grpcServer) SendToUser(ctx context.Context, req *pb.ToUserReq) (*pb.MsgResp, error) {
 	msg := &packet.Message{
 		Qos:     packet.MessageQos(req.Qos),
 		Kind:    packet.MessageKind(req.Kind),
@@ -84,7 +86,7 @@ func (s *apiServer) SendToUser(ctx context.Context, req *pb.ToUserReq) (*pb.MsgR
 		Success: success,
 	}, nil
 }
-func (s *apiServer) SendToChannel(ctx context.Context, req *pb.ToChannelReq) (*pb.MsgResp, error) {
+func (s *grpcServer) SendToChannel(ctx context.Context, req *pb.ToChannelReq) (*pb.MsgResp, error) {
 	msg := &packet.Message{
 		Qos:     packet.MessageQos(req.Qos),
 		Kind:    packet.MessageKind(req.Kind),
@@ -99,7 +101,7 @@ func (s *apiServer) SendToChannel(ctx context.Context, req *pb.ToChannelReq) (*p
 		Success: success,
 	}, nil
 }
-func (s *apiServer) JoinChannel(ctx context.Context, req *pb.JoinReq) (*pb.EmptyResp, error) {
+func (s *grpcServer) JoinChannel(ctx context.Context, req *pb.JoinReq) (*pb.EmptyResp, error) {
 	if s.booter.redis != nil {
 		s.booter.redis.HSet(ctx, s.booter.userKey(req.Uid), "channels", req.Channels)
 	}
@@ -109,7 +111,7 @@ func (s *apiServer) JoinChannel(ctx context.Context, req *pb.JoinReq) (*pb.Empty
 	}
 	return &pb.EmptyResp{}, nil
 }
-func (s *apiServer) LeaveChannel(ctx context.Context, req *pb.JoinReq) (*pb.EmptyResp, error) {
+func (s *grpcServer) LeaveChannel(ctx context.Context, req *pb.JoinReq) (*pb.EmptyResp, error) {
 	if s.booter.redis != nil {
 		s.booter.redis.HDel(ctx, s.booter.userKey(req.Uid), "channels")
 	}
@@ -120,7 +122,7 @@ func (s *apiServer) LeaveChannel(ctx context.Context, req *pb.JoinReq) (*pb.Empt
 	return &pb.EmptyResp{}, nil
 }
 
-func (s *apiServer) GetChannels(ctx context.Context, req *pb.UserReq) (*pb.ChannelsResp, error) {
+func (s *grpcServer) GetChannels(ctx context.Context, req *pb.UserReq) (*pb.ChannelsResp, error) {
 	channels, err := s.booter.redis.HGetAll(ctx, s.booter.userKey(req.Uid)).Result()
 	if err != nil {
 		return nil, err

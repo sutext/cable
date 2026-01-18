@@ -12,7 +12,7 @@ initSize: 1
 # gRPC Server Port for API
 grpcPort: 8880
 
-# HTTP Server Port for Admin API
+# HTTP Server Port for API
 httpPort: 8888
 
 # Peer Port for Cluster Communication
@@ -78,3 +78,13 @@ messageRoute:
     resendType: "channel"
     kafkaTopic: "cable-upstream-group"
   
+trace:
+  enabled: true
+  otlpEndpoint: localhost:4317
+  serviceName: cable
+  samplerRatio: 0.1
+
+metrics:
+  enabled: true
+  port: 9090
+  path: /metrics

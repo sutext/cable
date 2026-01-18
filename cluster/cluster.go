@@ -17,6 +17,11 @@ import (
 
 // Cluster defines the interface for cluster management operations.
 type Cluster interface {
+	// IsReady checks if the cluster is ready for operations.
+	//
+	// Returns:
+	// - bool: True if the cluster is ready, false otherwise
+	IsReady() bool
 	// AddBroker adds a new broker to the cluster.
 	//
 	// Parameters:

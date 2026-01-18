@@ -38,6 +38,19 @@ type route struct {
 	ResendType resendType
 	KafkaTopic string
 }
+type traceConfig struct {
+	Enabled      bool    `yaml:"enabled"`
+	OTLPEndpoint string  `yaml:"otlpEndpoint"`
+	ServiceName  string  `yaml:"serviceName"`
+	SamplerRatio float64 `yaml:"samplerRatio"`
+}
+
+type metricsConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Port    uint16 `yaml:"port"`
+	Path    string `yaml:"path"`
+}
+
 type config struct {
 	Pprof        bool                         `yaml:"pprof"`
 	BrokerID     uint64                       `yaml:"brokerid"`
@@ -50,6 +63,8 @@ type config struct {
 	Listeners    []listener                   `yaml:"listeners"`
 	KafkaBrokers []string                     `yaml:"kafkaBrokers"`
 	MessageRoute map[packet.MessageKind]route `yaml:"messageRoute"`
+	Trace        traceConfig                  `yaml:"trace"`
+	Metrics      metricsConfig                `yaml:"metrics"`
 }
 
 func readConfig(path string) (*config, error) {
