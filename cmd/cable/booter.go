@@ -274,7 +274,7 @@ func (b *booter) OnMessage(m *packet.Message, id *packet.Identity) error {
 
 	// Get route configuration for this message kind
 	route, exists := b.config.MessageRoute[m.Kind]
-	if !exists {
+	if !exists || !route.Enabled {
 		// No route configured, do nothing
 		span.SetAttributes(attribute.Bool("route.exists", false))
 		return nil

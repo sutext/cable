@@ -35,8 +35,9 @@ const (
 )
 
 type route struct {
-	ResendType resendType
-	KafkaTopic string
+	Enabled    bool       `yaml:"enabled"`
+	ResendType resendType `yaml:"resendType"`
+	KafkaTopic string     `yaml:"kafkaTopic"`
 }
 type traceConfig struct {
 	Enabled      bool    `yaml:"enabled"`
@@ -60,11 +61,11 @@ type config struct {
 	PeerPort     uint16                       `yaml:"peerPort"`
 	LogLevel     string                       `yaml:"logLevel"`
 	Redis        redisConfig                  `yaml:"redis"`
+	Trace        traceConfig                  `yaml:"trace"`
+	Metrics      metricsConfig                `yaml:"metrics"`
 	Listeners    []listener                   `yaml:"listeners"`
 	KafkaBrokers []string                     `yaml:"kafkaBrokers"`
 	MessageRoute map[packet.MessageKind]route `yaml:"messageRoute"`
-	Trace        traceConfig                  `yaml:"trace"`
-	Metrics      metricsConfig                `yaml:"metrics"`
 }
 
 func readConfig(path string) (*config, error) {

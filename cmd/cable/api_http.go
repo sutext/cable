@@ -13,9 +13,9 @@ import (
 )
 
 type httpServer struct {
-	mux        *http.ServeMux
-	broker     cluster.Broker
-	httpServer *http.Server
+	mux    *http.ServeMux
+	broker cluster.Broker
+	hs     *http.Server
 }
 
 func newHTTP(broker cluster.Broker, port uint16) *httpServer {
@@ -29,16 +29,16 @@ func newHTTP(broker cluster.Broker, port uint16) *httpServer {
 	s.mux.HandleFunc("/inspect", s.handleInspect)
 	s.mux.HandleFunc("/kickUser", s.handleKickUser)
 	s.mux.HandleFunc("/kickNode", s.handleKickNode)
-	s.httpServer = &http.Server{Addr: fmt.Sprintf(":%d", port), Handler: s.mux}
+	s.hs = &http.Server{Addr: fmt.Sprintf(":%d", port), Handler: s.mux}
 	return s
 
 }
 
 func (s *httpServer) Serve() error {
-	return s.httpServer.ListenAndServe()
+	return s.hs.ListenAndServe()
 }
 func (s *httpServer) Shutdown() error {
-	return s.httpServer.Shutdown(context.Background())
+	return s.hs.Shutdown(context.Background())
 }
 func (s *httpServer) Handle(path string, handler http.Handler) {
 	s.mux.Handle(path, handler)
