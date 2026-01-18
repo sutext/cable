@@ -33,14 +33,14 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type CableServiceClient interface {
-	IsOnline(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*UserResp, error)
-	KickUser(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*UserResp, error)
-	SendToAll(ctx context.Context, in *ToAllReq, opts ...grpc.CallOption) (*MessageResp, error)
-	SendToUser(ctx context.Context, in *ToUserReq, opts ...grpc.CallOption) (*MessageResp, error)
-	SendToChannel(ctx context.Context, in *ToChannelReq, opts ...grpc.CallOption) (*MessageResp, error)
-	JoinChannel(ctx context.Context, in *JoinReq, opts ...grpc.CallOption) (*Empty, error)
-	LeaveChannel(ctx context.Context, in *JoinReq, opts ...grpc.CallOption) (*Empty, error)
-	GetChannels(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*Channels, error)
+	IsOnline(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*OnlineResp, error)
+	KickUser(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*EmptyResp, error)
+	SendToAll(ctx context.Context, in *ToAllReq, opts ...grpc.CallOption) (*MsgResp, error)
+	SendToUser(ctx context.Context, in *ToUserReq, opts ...grpc.CallOption) (*MsgResp, error)
+	SendToChannel(ctx context.Context, in *ToChannelReq, opts ...grpc.CallOption) (*MsgResp, error)
+	JoinChannel(ctx context.Context, in *JoinReq, opts ...grpc.CallOption) (*EmptyResp, error)
+	LeaveChannel(ctx context.Context, in *JoinReq, opts ...grpc.CallOption) (*EmptyResp, error)
+	GetChannels(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*ChannelsResp, error)
 }
 
 type cableServiceClient struct {
@@ -51,9 +51,9 @@ func NewCableServiceClient(cc grpc.ClientConnInterface) CableServiceClient {
 	return &cableServiceClient{cc}
 }
 
-func (c *cableServiceClient) IsOnline(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*UserResp, error) {
+func (c *cableServiceClient) IsOnline(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*OnlineResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UserResp)
+	out := new(OnlineResp)
 	err := c.cc.Invoke(ctx, CableService_IsOnline_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -61,9 +61,9 @@ func (c *cableServiceClient) IsOnline(ctx context.Context, in *UserReq, opts ...
 	return out, nil
 }
 
-func (c *cableServiceClient) KickUser(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*UserResp, error) {
+func (c *cableServiceClient) KickUser(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*EmptyResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UserResp)
+	out := new(EmptyResp)
 	err := c.cc.Invoke(ctx, CableService_KickUser_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -71,9 +71,9 @@ func (c *cableServiceClient) KickUser(ctx context.Context, in *UserReq, opts ...
 	return out, nil
 }
 
-func (c *cableServiceClient) SendToAll(ctx context.Context, in *ToAllReq, opts ...grpc.CallOption) (*MessageResp, error) {
+func (c *cableServiceClient) SendToAll(ctx context.Context, in *ToAllReq, opts ...grpc.CallOption) (*MsgResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(MessageResp)
+	out := new(MsgResp)
 	err := c.cc.Invoke(ctx, CableService_SendToAll_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -81,9 +81,9 @@ func (c *cableServiceClient) SendToAll(ctx context.Context, in *ToAllReq, opts .
 	return out, nil
 }
 
-func (c *cableServiceClient) SendToUser(ctx context.Context, in *ToUserReq, opts ...grpc.CallOption) (*MessageResp, error) {
+func (c *cableServiceClient) SendToUser(ctx context.Context, in *ToUserReq, opts ...grpc.CallOption) (*MsgResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(MessageResp)
+	out := new(MsgResp)
 	err := c.cc.Invoke(ctx, CableService_SendToUser_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -91,9 +91,9 @@ func (c *cableServiceClient) SendToUser(ctx context.Context, in *ToUserReq, opts
 	return out, nil
 }
 
-func (c *cableServiceClient) SendToChannel(ctx context.Context, in *ToChannelReq, opts ...grpc.CallOption) (*MessageResp, error) {
+func (c *cableServiceClient) SendToChannel(ctx context.Context, in *ToChannelReq, opts ...grpc.CallOption) (*MsgResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(MessageResp)
+	out := new(MsgResp)
 	err := c.cc.Invoke(ctx, CableService_SendToChannel_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -101,9 +101,9 @@ func (c *cableServiceClient) SendToChannel(ctx context.Context, in *ToChannelReq
 	return out, nil
 }
 
-func (c *cableServiceClient) JoinChannel(ctx context.Context, in *JoinReq, opts ...grpc.CallOption) (*Empty, error) {
+func (c *cableServiceClient) JoinChannel(ctx context.Context, in *JoinReq, opts ...grpc.CallOption) (*EmptyResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Empty)
+	out := new(EmptyResp)
 	err := c.cc.Invoke(ctx, CableService_JoinChannel_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -111,9 +111,9 @@ func (c *cableServiceClient) JoinChannel(ctx context.Context, in *JoinReq, opts 
 	return out, nil
 }
 
-func (c *cableServiceClient) LeaveChannel(ctx context.Context, in *JoinReq, opts ...grpc.CallOption) (*Empty, error) {
+func (c *cableServiceClient) LeaveChannel(ctx context.Context, in *JoinReq, opts ...grpc.CallOption) (*EmptyResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Empty)
+	out := new(EmptyResp)
 	err := c.cc.Invoke(ctx, CableService_LeaveChannel_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -121,9 +121,9 @@ func (c *cableServiceClient) LeaveChannel(ctx context.Context, in *JoinReq, opts
 	return out, nil
 }
 
-func (c *cableServiceClient) GetChannels(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*Channels, error) {
+func (c *cableServiceClient) GetChannels(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*ChannelsResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Channels)
+	out := new(ChannelsResp)
 	err := c.cc.Invoke(ctx, CableService_GetChannels_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -135,14 +135,14 @@ func (c *cableServiceClient) GetChannels(ctx context.Context, in *UserReq, opts 
 // All implementations must embed UnimplementedCableServiceServer
 // for forward compatibility.
 type CableServiceServer interface {
-	IsOnline(context.Context, *UserReq) (*UserResp, error)
-	KickUser(context.Context, *UserReq) (*UserResp, error)
-	SendToAll(context.Context, *ToAllReq) (*MessageResp, error)
-	SendToUser(context.Context, *ToUserReq) (*MessageResp, error)
-	SendToChannel(context.Context, *ToChannelReq) (*MessageResp, error)
-	JoinChannel(context.Context, *JoinReq) (*Empty, error)
-	LeaveChannel(context.Context, *JoinReq) (*Empty, error)
-	GetChannels(context.Context, *UserReq) (*Channels, error)
+	IsOnline(context.Context, *UserReq) (*OnlineResp, error)
+	KickUser(context.Context, *UserReq) (*EmptyResp, error)
+	SendToAll(context.Context, *ToAllReq) (*MsgResp, error)
+	SendToUser(context.Context, *ToUserReq) (*MsgResp, error)
+	SendToChannel(context.Context, *ToChannelReq) (*MsgResp, error)
+	JoinChannel(context.Context, *JoinReq) (*EmptyResp, error)
+	LeaveChannel(context.Context, *JoinReq) (*EmptyResp, error)
+	GetChannels(context.Context, *UserReq) (*ChannelsResp, error)
 	mustEmbedUnimplementedCableServiceServer()
 }
 
@@ -153,28 +153,28 @@ type CableServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedCableServiceServer struct{}
 
-func (UnimplementedCableServiceServer) IsOnline(context.Context, *UserReq) (*UserResp, error) {
+func (UnimplementedCableServiceServer) IsOnline(context.Context, *UserReq) (*OnlineResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method IsOnline not implemented")
 }
-func (UnimplementedCableServiceServer) KickUser(context.Context, *UserReq) (*UserResp, error) {
+func (UnimplementedCableServiceServer) KickUser(context.Context, *UserReq) (*EmptyResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method KickUser not implemented")
 }
-func (UnimplementedCableServiceServer) SendToAll(context.Context, *ToAllReq) (*MessageResp, error) {
+func (UnimplementedCableServiceServer) SendToAll(context.Context, *ToAllReq) (*MsgResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method SendToAll not implemented")
 }
-func (UnimplementedCableServiceServer) SendToUser(context.Context, *ToUserReq) (*MessageResp, error) {
+func (UnimplementedCableServiceServer) SendToUser(context.Context, *ToUserReq) (*MsgResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method SendToUser not implemented")
 }
-func (UnimplementedCableServiceServer) SendToChannel(context.Context, *ToChannelReq) (*MessageResp, error) {
+func (UnimplementedCableServiceServer) SendToChannel(context.Context, *ToChannelReq) (*MsgResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method SendToChannel not implemented")
 }
-func (UnimplementedCableServiceServer) JoinChannel(context.Context, *JoinReq) (*Empty, error) {
+func (UnimplementedCableServiceServer) JoinChannel(context.Context, *JoinReq) (*EmptyResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method JoinChannel not implemented")
 }
-func (UnimplementedCableServiceServer) LeaveChannel(context.Context, *JoinReq) (*Empty, error) {
+func (UnimplementedCableServiceServer) LeaveChannel(context.Context, *JoinReq) (*EmptyResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method LeaveChannel not implemented")
 }
-func (UnimplementedCableServiceServer) GetChannels(context.Context, *UserReq) (*Channels, error) {
+func (UnimplementedCableServiceServer) GetChannels(context.Context, *UserReq) (*ChannelsResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetChannels not implemented")
 }
 func (UnimplementedCableServiceServer) mustEmbedUnimplementedCableServiceServer() {}

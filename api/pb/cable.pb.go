@@ -21,26 +21,26 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-type Empty struct {
+type EmptyResp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Empty) Reset() {
-	*x = Empty{}
+func (x *EmptyResp) Reset() {
+	*x = EmptyResp{}
 	mi := &file_api_pb_cable_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Empty) String() string {
+func (x *EmptyResp) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Empty) ProtoMessage() {}
+func (*EmptyResp) ProtoMessage() {}
 
-func (x *Empty) ProtoReflect() protoreflect.Message {
+func (x *EmptyResp) ProtoReflect() protoreflect.Message {
 	mi := &file_api_pb_cable_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -52,8 +52,8 @@ func (x *Empty) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Empty.ProtoReflect.Descriptor instead.
-func (*Empty) Descriptor() ([]byte, []int) {
+// Deprecated: Use EmptyResp.ProtoReflect.Descriptor instead.
+func (*EmptyResp) Descriptor() ([]byte, []int) {
 	return file_api_pb_cable_proto_rawDescGZIP(), []int{0}
 }
 
@@ -254,8 +254,7 @@ func (x *ToChannelReq) GetMessage() []byte {
 	return nil
 }
 
-// / MessageResp is the response message for SendMessage RPC.
-type MessageResp struct {
+type MsgResp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Total         int32                  `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`
 	Success       int32                  `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"`
@@ -263,20 +262,20 @@ type MessageResp struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *MessageResp) Reset() {
-	*x = MessageResp{}
+func (x *MsgResp) Reset() {
+	*x = MsgResp{}
 	mi := &file_api_pb_cable_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *MessageResp) String() string {
+func (x *MsgResp) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*MessageResp) ProtoMessage() {}
+func (*MsgResp) ProtoMessage() {}
 
-func (x *MessageResp) ProtoReflect() protoreflect.Message {
+func (x *MsgResp) ProtoReflect() protoreflect.Message {
 	mi := &file_api_pb_cable_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -288,19 +287,19 @@ func (x *MessageResp) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use MessageResp.ProtoReflect.Descriptor instead.
-func (*MessageResp) Descriptor() ([]byte, []int) {
+// Deprecated: Use MsgResp.ProtoReflect.Descriptor instead.
+func (*MsgResp) Descriptor() ([]byte, []int) {
 	return file_api_pb_cable_proto_rawDescGZIP(), []int{4}
 }
 
-func (x *MessageResp) GetTotal() int32 {
+func (x *MsgResp) GetTotal() int32 {
 	if x != nil {
 		return x.Total
 	}
 	return 0
 }
 
-func (x *MessageResp) GetSuccess() int32 {
+func (x *MsgResp) GetSuccess() int32 {
 	if x != nil {
 		return x.Success
 	}
@@ -403,27 +402,27 @@ func (x *UserReq) GetUid() string {
 	return ""
 }
 
-type UserResp struct {
+type OnlineResp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *UserResp) Reset() {
-	*x = UserResp{}
+func (x *OnlineResp) Reset() {
+	*x = OnlineResp{}
 	mi := &file_api_pb_cable_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *UserResp) String() string {
+func (x *OnlineResp) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*UserResp) ProtoMessage() {}
+func (*OnlineResp) ProtoMessage() {}
 
-func (x *UserResp) ProtoReflect() protoreflect.Message {
+func (x *OnlineResp) ProtoReflect() protoreflect.Message {
 	mi := &file_api_pb_cable_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -435,39 +434,39 @@ func (x *UserResp) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use UserResp.ProtoReflect.Descriptor instead.
-func (*UserResp) Descriptor() ([]byte, []int) {
+// Deprecated: Use OnlineResp.ProtoReflect.Descriptor instead.
+func (*OnlineResp) Descriptor() ([]byte, []int) {
 	return file_api_pb_cable_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *UserResp) GetOk() bool {
+func (x *OnlineResp) GetOk() bool {
 	if x != nil {
 		return x.Ok
 	}
 	return false
 }
 
-type Channels struct {
+type ChannelsResp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Channels      map[string]string      `protobuf:"bytes,1,rep,name=channels,proto3" json:"channels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Channels) Reset() {
-	*x = Channels{}
+func (x *ChannelsResp) Reset() {
+	*x = ChannelsResp{}
 	mi := &file_api_pb_cable_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Channels) String() string {
+func (x *ChannelsResp) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Channels) ProtoMessage() {}
+func (*ChannelsResp) ProtoMessage() {}
 
-func (x *Channels) ProtoReflect() protoreflect.Message {
+func (x *ChannelsResp) ProtoReflect() protoreflect.Message {
 	mi := &file_api_pb_cable_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -479,12 +478,12 @@ func (x *Channels) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Channels.ProtoReflect.Descriptor instead.
-func (*Channels) Descriptor() ([]byte, []int) {
+// Deprecated: Use ChannelsResp.ProtoReflect.Descriptor instead.
+func (*ChannelsResp) Descriptor() ([]byte, []int) {
 	return file_api_pb_cable_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *Channels) GetChannels() map[string]string {
+func (x *ChannelsResp) GetChannels() map[string]string {
 	if x != nil {
 		return x.Channels
 	}
@@ -495,8 +494,8 @@ var File_api_pb_cable_proto protoreflect.FileDescriptor
 
 const file_api_pb_cable_proto_rawDesc = "" +
 	"\n" +
-	"\x12api/pb/cable.proto\x12\x02pb\"\a\n" +
-	"\x05Empty\"J\n" +
+	"\x12api/pb/cable.proto\x12\x02pb\"\v\n" +
+	"\tEmptyResp\"J\n" +
 	"\bToAllReq\x12\x10\n" +
 	"\x03qos\x18\x01 \x01(\x05R\x03qos\x12\x12\n" +
 	"\x04kind\x18\x02 \x01(\x05R\x04kind\x12\x18\n" +
@@ -510,8 +509,8 @@ const file_api_pb_cable_proto_rawDesc = "" +
 	"\achannel\x18\x01 \x01(\tR\achannel\x12\x10\n" +
 	"\x03qos\x18\x02 \x01(\x05R\x03qos\x12\x12\n" +
 	"\x04kind\x18\x03 \x01(\x05R\x04kind\x12\x18\n" +
-	"\amessage\x18\x04 \x01(\fR\amessage\"=\n" +
-	"\vMessageResp\x12\x14\n" +
+	"\amessage\x18\x04 \x01(\fR\amessage\"9\n" +
+	"\aMsgResp\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x18\n" +
 	"\asuccess\x18\x02 \x01(\x05R\asuccess\"\x8f\x01\n" +
 	"\aJoinReq\x12\x10\n" +
@@ -521,24 +520,25 @@ const file_api_pb_cable_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x1b\n" +
 	"\aUserReq\x12\x10\n" +
-	"\x03uid\x18\x01 \x01(\tR\x03uid\"\x1a\n" +
-	"\bUserResp\x12\x0e\n" +
-	"\x02ok\x18\x01 \x01(\bR\x02ok\"\x7f\n" +
-	"\bChannels\x126\n" +
-	"\bchannels\x18\x01 \x03(\v2\x1a.pb.Channels.ChannelsEntryR\bchannels\x1a;\n" +
+	"\x03uid\x18\x01 \x01(\tR\x03uid\"\x1c\n" +
+	"\n" +
+	"OnlineResp\x12\x0e\n" +
+	"\x02ok\x18\x01 \x01(\bR\x02ok\"\x87\x01\n" +
+	"\fChannelsResp\x12:\n" +
+	"\bchannels\x18\x01 \x03(\v2\x1e.pb.ChannelsResp.ChannelsEntryR\bchannels\x1a;\n" +
 	"\rChannelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\xf3\x02\n" +
-	"\fCableService\x12'\n" +
-	"\bIsOnline\x12\v.pb.UserReq\x1a\f.pb.UserResp\"\x00\x12'\n" +
-	"\bKickUser\x12\v.pb.UserReq\x1a\f.pb.UserResp\"\x00\x12,\n" +
-	"\tSendToAll\x12\f.pb.ToAllReq\x1a\x0f.pb.MessageResp\"\x00\x12.\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\xf6\x02\n" +
+	"\fCableService\x12)\n" +
+	"\bIsOnline\x12\v.pb.UserReq\x1a\x0e.pb.OnlineResp\"\x00\x12(\n" +
+	"\bKickUser\x12\v.pb.UserReq\x1a\r.pb.EmptyResp\"\x00\x12(\n" +
+	"\tSendToAll\x12\f.pb.ToAllReq\x1a\v.pb.MsgResp\"\x00\x12*\n" +
 	"\n" +
-	"SendToUser\x12\r.pb.ToUserReq\x1a\x0f.pb.MessageResp\"\x00\x124\n" +
-	"\rSendToChannel\x12\x10.pb.ToChannelReq\x1a\x0f.pb.MessageResp\"\x00\x12'\n" +
-	"\vJoinChannel\x12\v.pb.JoinReq\x1a\t.pb.Empty\"\x00\x12(\n" +
-	"\fLeaveChannel\x12\v.pb.JoinReq\x1a\t.pb.Empty\"\x00\x12*\n" +
-	"\vGetChannels\x12\v.pb.UserReq\x1a\f.pb.Channels\"\x00B\x06Z\x04./pbb\x06proto3"
+	"SendToUser\x12\r.pb.ToUserReq\x1a\v.pb.MsgResp\"\x00\x120\n" +
+	"\rSendToChannel\x12\x10.pb.ToChannelReq\x1a\v.pb.MsgResp\"\x00\x12+\n" +
+	"\vJoinChannel\x12\v.pb.JoinReq\x1a\r.pb.EmptyResp\"\x00\x12,\n" +
+	"\fLeaveChannel\x12\v.pb.JoinReq\x1a\r.pb.EmptyResp\"\x00\x12.\n" +
+	"\vGetChannels\x12\v.pb.UserReq\x1a\x10.pb.ChannelsResp\"\x00B\x06Z\x04./pbb\x06proto3"
 
 var (
 	file_api_pb_cable_proto_rawDescOnce sync.Once
@@ -554,21 +554,21 @@ func file_api_pb_cable_proto_rawDescGZIP() []byte {
 
 var file_api_pb_cable_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_api_pb_cable_proto_goTypes = []any{
-	(*Empty)(nil),        // 0: pb.Empty
+	(*EmptyResp)(nil),    // 0: pb.EmptyResp
 	(*ToAllReq)(nil),     // 1: pb.ToAllReq
 	(*ToUserReq)(nil),    // 2: pb.ToUserReq
 	(*ToChannelReq)(nil), // 3: pb.ToChannelReq
-	(*MessageResp)(nil),  // 4: pb.MessageResp
+	(*MsgResp)(nil),      // 4: pb.MsgResp
 	(*JoinReq)(nil),      // 5: pb.JoinReq
 	(*UserReq)(nil),      // 6: pb.UserReq
-	(*UserResp)(nil),     // 7: pb.UserResp
-	(*Channels)(nil),     // 8: pb.Channels
+	(*OnlineResp)(nil),   // 7: pb.OnlineResp
+	(*ChannelsResp)(nil), // 8: pb.ChannelsResp
 	nil,                  // 9: pb.JoinReq.ChannelsEntry
-	nil,                  // 10: pb.Channels.ChannelsEntry
+	nil,                  // 10: pb.ChannelsResp.ChannelsEntry
 }
 var file_api_pb_cable_proto_depIdxs = []int32{
 	9,  // 0: pb.JoinReq.channels:type_name -> pb.JoinReq.ChannelsEntry
-	10, // 1: pb.Channels.channels:type_name -> pb.Channels.ChannelsEntry
+	10, // 1: pb.ChannelsResp.channels:type_name -> pb.ChannelsResp.ChannelsEntry
 	6,  // 2: pb.CableService.IsOnline:input_type -> pb.UserReq
 	6,  // 3: pb.CableService.KickUser:input_type -> pb.UserReq
 	1,  // 4: pb.CableService.SendToAll:input_type -> pb.ToAllReq
@@ -577,14 +577,14 @@ var file_api_pb_cable_proto_depIdxs = []int32{
 	5,  // 7: pb.CableService.JoinChannel:input_type -> pb.JoinReq
 	5,  // 8: pb.CableService.LeaveChannel:input_type -> pb.JoinReq
 	6,  // 9: pb.CableService.GetChannels:input_type -> pb.UserReq
-	7,  // 10: pb.CableService.IsOnline:output_type -> pb.UserResp
-	7,  // 11: pb.CableService.KickUser:output_type -> pb.UserResp
-	4,  // 12: pb.CableService.SendToAll:output_type -> pb.MessageResp
-	4,  // 13: pb.CableService.SendToUser:output_type -> pb.MessageResp
-	4,  // 14: pb.CableService.SendToChannel:output_type -> pb.MessageResp
-	0,  // 15: pb.CableService.JoinChannel:output_type -> pb.Empty
-	0,  // 16: pb.CableService.LeaveChannel:output_type -> pb.Empty
-	8,  // 17: pb.CableService.GetChannels:output_type -> pb.Channels
+	7,  // 10: pb.CableService.IsOnline:output_type -> pb.OnlineResp
+	0,  // 11: pb.CableService.KickUser:output_type -> pb.EmptyResp
+	4,  // 12: pb.CableService.SendToAll:output_type -> pb.MsgResp
+	4,  // 13: pb.CableService.SendToUser:output_type -> pb.MsgResp
+	4,  // 14: pb.CableService.SendToChannel:output_type -> pb.MsgResp
+	0,  // 15: pb.CableService.JoinChannel:output_type -> pb.EmptyResp
+	0,  // 16: pb.CableService.LeaveChannel:output_type -> pb.EmptyResp
+	8,  // 17: pb.CableService.GetChannels:output_type -> pb.ChannelsResp
 	10, // [10:18] is the sub-list for method output_type
 	2,  // [2:10] is the sub-list for method input_type
 	2,  // [2:2] is the sub-list for extension type_name

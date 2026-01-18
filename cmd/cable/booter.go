@@ -16,9 +16,9 @@ import (
 
 type booter struct {
 	api      *apiServer
-	broker   cluster.Broker
-	config   *config
 	redis    *redis.Client
+	config   *config
+	broker   cluster.Broker
 	kafka    sarama.Client
 	producer sarama.SyncProducer
 }

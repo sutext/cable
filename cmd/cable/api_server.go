@@ -44,19 +44,17 @@ func (s *apiServer) Serve() error {
 	return gs.Serve(lis)
 }
 
-func (s *apiServer) IsOnline(ctx context.Context, req *pb.UserReq) (*pb.UserResp, error) {
+func (s *apiServer) IsOnline(ctx context.Context, req *pb.UserReq) (*pb.OnlineResp, error) {
 	ok := s.broker.IsOnline(ctx, req.Uid)
-	return &pb.UserResp{
+	return &pb.OnlineResp{
 		Ok: ok,
 	}, nil
 }
-func (s *apiServer) KickUser(ctx context.Context, req *pb.UserReq) (*pb.UserResp, error) {
+func (s *apiServer) KickUser(ctx context.Context, req *pb.UserReq) (*pb.EmptyResp, error) {
 	s.broker.KickUser(ctx, req.Uid)
-	return &pb.UserResp{
-		Ok: true,
-	}, nil
+	return &pb.EmptyResp{}, nil
 }
-func (s *apiServer) SendToAll(ctx context.Context, req *pb.ToAllReq) (*pb.MessageResp, error) {
+func (s *apiServer) SendToAll(ctx context.Context, req *pb.ToAllReq) (*pb.MsgResp, error) {
 	msg := &packet.Message{
 		Qos:     packet.MessageQos(req.Qos),
 		Kind:    packet.MessageKind(req.Kind),
@@ -66,12 +64,12 @@ func (s *apiServer) SendToAll(ctx context.Context, req *pb.ToAllReq) (*pb.Messag
 	if err != nil {
 		return nil, err
 	}
-	return &pb.MessageResp{
+	return &pb.MsgResp{
 		Total:   total,
 		Success: success,
 	}, nil
 }
-func (s *apiServer) SendToUser(ctx context.Context, req *pb.ToUserReq) (*pb.MessageResp, error) {
+func (s *apiServer) SendToUser(ctx context.Context, req *pb.ToUserReq) (*pb.MsgResp, error) {
 	msg := &packet.Message{
 		Qos:     packet.MessageQos(req.Qos),
 		Kind:    packet.MessageKind(req.Kind),
@@ -81,12 +79,12 @@ func (s *apiServer) SendToUser(ctx context.Context, req *pb.ToUserReq) (*pb.Mess
 	if err != nil {
 		return nil, err
 	}
-	return &pb.MessageResp{
+	return &pb.MsgResp{
 		Total:   total,
 		Success: success,
 	}, nil
 }
-func (s *apiServer) SendToChannel(ctx context.Context, req *pb.ToChannelReq) (*pb.MessageResp, error) {
+func (s *apiServer) SendToChannel(ctx context.Context, req *pb.ToChannelReq) (*pb.MsgResp, error) {
 	msg := &packet.Message{
 		Qos:     packet.MessageQos(req.Qos),
 		Kind:    packet.MessageKind(req.Kind),
@@ -96,12 +94,12 @@ func (s *apiServer) SendToChannel(ctx context.Context, req *pb.ToChannelReq) (*p
 	if err != nil {
 		return nil, err
 	}
-	return &pb.MessageResp{
+	return &pb.MsgResp{
 		Total:   total,
 		Success: success,
 	}, nil
 }
-func (s *apiServer) JoinChannel(ctx context.Context, req *pb.JoinReq) (*pb.Empty, error) {
+func (s *apiServer) JoinChannel(ctx context.Context, req *pb.JoinReq) (*pb.EmptyResp, error) {
 	if s.booter.redis != nil {
 		s.booter.redis.HSet(ctx, s.booter.userKey(req.Uid), "channels", req.Channels)
 	}
@@ -109,9 +107,9 @@ func (s *apiServer) JoinChannel(ctx context.Context, req *pb.JoinReq) (*pb.Empty
 	if err != nil {
 		return nil, err
 	}
-	return &pb.Empty{}, nil
+	return &pb.EmptyResp{}, nil
 }
-func (s *apiServer) LeaveChannel(ctx context.Context, req *pb.JoinReq) (*pb.Empty, error) {
+func (s *apiServer) LeaveChannel(ctx context.Context, req *pb.JoinReq) (*pb.EmptyResp, error) {
 	if s.booter.redis != nil {
 		s.booter.redis.HDel(ctx, s.booter.userKey(req.Uid), "channels")
 	}
@@ -119,15 +117,15 @@ func (s *apiServer) LeaveChannel(ctx context.Context, req *pb.JoinReq) (*pb.Empt
 	if err != nil {
 		return nil, err
 	}
-	return &pb.Empty{}, nil
+	return &pb.EmptyResp{}, nil
 }
 
-func (s *apiServer) GetChannels(ctx context.Context, req *pb.UserReq) (*pb.Channels, error) {
+func (s *apiServer) GetChannels(ctx context.Context, req *pb.UserReq) (*pb.ChannelsResp, error) {
 	channels, err := s.booter.redis.HGetAll(ctx, s.booter.userKey(req.Uid)).Result()
 	if err != nil {
 		return nil, err
 	}
-	return &pb.Channels{
+	return &pb.ChannelsResp{
 		Channels: channels,
 	}, nil
 }
