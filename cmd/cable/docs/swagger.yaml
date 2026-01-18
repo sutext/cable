@@ -1,0 +1,357 @@
+basePath: /
+definitions:
+  main.JoinReq:
+    properties:
+      channels:
+        additionalProperties:
+          type: string
+        type: object
+      uid:
+        type: string
+    type: object
+  main.msgResult:
+    properties:
+      success:
+        type: integer
+      total:
+        type: integer
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@example.com
+    name: API Support
+    url: http://www.example.com/support
+  description: Cable is a high-performance, distributed real-time communication platform.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  termsOfService: http://swagger.io/terms/
+  title: Cable HTTP API
+  version: "1.0"
+paths:
+  /joinChannel:
+    post:
+      consumes:
+      - application/json
+      description: Join a user to one or more channels
+      parameters:
+      - description: '{\'
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/main.JoinReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ok
+          schema:
+            type: string
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "405":
+          description: method not allowed
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Join channel
+      tags:
+      - channel
+  /kickNode:
+    post:
+      consumes:
+      - application/json
+      description: Kick a specific node from the cluster
+      parameters:
+      - description: '{\'
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties:
+            format: int64
+            type: integer
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ok
+          schema:
+            type: string
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "405":
+          description: method not allowed
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Kick node
+      tags:
+      - cluster
+  /leaveChannel:
+    post:
+      consumes:
+      - application/json
+      description: Remove a user from one or more channels
+      parameters:
+      - description: '{\'
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/main.JoinReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: ok
+          schema:
+            type: string
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "405":
+          description: method not allowed
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Leave channel
+      tags:
+      - channel
+  /listChannels:
+    get:
+      consumes:
+      - application/json
+      description: List all channels a user has joined
+      parameters:
+      - description: User ID
+        in: query
+        name: uid
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{\"channel1\": \"role1\"}'
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: uid is required
+          schema:
+            type: string
+        "405":
+          description: method not allowed
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: List channels
+      tags:
+      - channel
+  /listUsers:
+    get:
+      consumes:
+      - application/json
+      description: List all users connected to a specific broker
+      parameters:
+      - description: Broker ID
+        in: query
+        name: brokerID
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '[\"user1\", \"user2\"]'
+          schema:
+            items:
+              type: string
+            type: array
+        "400":
+          description: Invalid brokerID
+          schema:
+            type: string
+        "405":
+          description: method not allowed
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: List users
+      tags:
+      - user
+  /sendToAll:
+    post:
+      consumes:
+      - application/json
+      description: Send a message to all connected users
+      parameters:
+      - description: Message QoS level
+        in: header
+        name: message-qos
+        required: true
+        type: string
+      - description: Message kind
+        in: header
+        name: message-kind
+        required: true
+        type: string
+      - description: Message payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{\"total\": 100, \"success\": 98}'
+          schema:
+            $ref: '#/definitions/main.msgResult'
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "405":
+          description: method not allowed
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Send message to all users
+      tags:
+      - message
+  /sendToChannel:
+    post:
+      consumes:
+      - application/json
+      description: Send a message to a specific channel
+      parameters:
+      - description: Channel name
+        in: header
+        name: message-channel
+        required: true
+        type: string
+      - description: Message QoS level
+        in: header
+        name: message-qos
+        required: true
+        type: string
+      - description: Message kind
+        in: header
+        name: message-kind
+        required: true
+        type: string
+      - description: Message payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{\"total\": 50, \"success\": 48}'
+          schema:
+            $ref: '#/definitions/main.msgResult'
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "405":
+          description: method not allowed
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Send message to channel
+      tags:
+      - message
+  /sendToUser:
+    post:
+      consumes:
+      - application/json
+      description: Send a message to a specific user
+      parameters:
+      - description: User ID
+        in: header
+        name: message-uid
+        required: true
+        type: string
+      - description: Message QoS level
+        in: header
+        name: message-qos
+        required: true
+        type: string
+      - description: Message kind
+        in: header
+        name: message-kind
+        required: true
+        type: string
+      - description: Message payload
+        in: body
+        name: payload
+        required: true
+        schema:
+          type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: '{\"total\": 1, \"success\": 1}'
+          schema:
+            $ref: '#/definitions/main.msgResult'
+        "400":
+          description: Invalid request
+          schema:
+            type: string
+        "405":
+          description: method not allowed
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            type: string
+      summary: Send message to user
+      tags:
+      - message
+schemes:
+- http
+securityDefinitions:
+  ApiKeyAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

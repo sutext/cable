@@ -1,3 +1,4 @@
+//go:generate swag init -g api_http.go
 package main
 
 import (
@@ -8,9 +9,31 @@ import (
 	"net/http"
 	"strconv"
 
+	_ "github.com/swaggo/files/v2"
+
 	"sutext.github.io/cable/cluster"
 	"sutext.github.io/cable/packet"
 )
+
+// @title Cable HTTP API
+// @version 1.0
+// @description Cable is a high-performance, distributed real-time communication platform.
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.url http://www.example.com/support
+// @contact.email support@example.com
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host localhost:8080
+// @BasePath /
+// @schemes http
+
+// @securityDefinitions.apikey ApiKeyAuth
+// @in header
+// @name Authorization
 
 type httpServer struct {
 	hs     *http.Server
@@ -37,6 +60,50 @@ func newHTTP(booter *booter) *httpServer {
 	s.mux.HandleFunc("/leaveChannel", s.handleLeaveChannel)
 	s.mux.HandleFunc("/listChannels", s.handleListChannels)
 	s.mux.HandleFunc("/listUsers", s.handleListUsers)
+
+	// Serve swagger.json and swagger.yaml directly
+	s.mux.HandleFunc("/swagger/swagger.json", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./docs/swagger.json")
+	})
+	s.mux.HandleFunc("/swagger/swagger.yaml", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "./docs/swagger.yaml")
+	})
+
+	// Add a simple Swagger UI HTML page that loads swagger.json directly
+	s.mux.HandleFunc("/swagger", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, `<html>
+		<head>
+			<title>Swagger UI</title>
+			<link rel="stylesheet" type="text/css" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui.css">
+		</head>
+		<body>
+			<div id="swagger-ui"></div>
+			<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui-bundle.js"></script>
+			<script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui-standalone-preset.js"></script>
+			<script>
+				const ui = SwaggerUIBundle({
+					url: "/swagger/swagger.json",
+					dom_id: '#swagger-ui',
+				
+deepLinking: true,
+					docExpansion: 'list',
+					presets: [
+						SwaggerUIBundle.presets.apis,
+						SwaggerUIStandalonePreset
+					],
+					layout: "StandaloneLayout"
+				});
+			</script>
+		</body>
+		</html>`)
+	})
+
+	// Redirect /swagger/index.html to /swagger
+	s.mux.HandleFunc("/swagger/index.html", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/swagger", http.StatusMovedPermanently)
+	})
+
 	s.hs = &http.Server{Addr: fmt.Sprintf(":%d", booter.config.HTTPPort), Handler: s.mux}
 	return s
 }
@@ -114,6 +181,18 @@ func (s *httpServer) handleKickUser(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("ok"))
 }
+
+// @Summary Kick node
+// @Description Kick a specific node from the cluster
+// @Tags cluster
+// @Accept json
+// @Produce json
+// @Param body body map[string]uint64 true "{\"id\": 2}"
+// @Success 200 {string} string "ok"
+// @Failure 400 {string} string "Invalid request"
+// @Failure 405 {string} string "method not allowed"
+// @Failure 500 {string} string "Internal server error"
+// @Router /kickNode [post]
 func (s *httpServer) handleKickNode(w http.ResponseWriter, r *http.Request) {
 	if !s.broker.Cluster().IsReady() {
 		http.Error(w, "broker is not ready", http.StatusInternalServerError)
@@ -149,6 +228,19 @@ type msgResult struct {
 	Success int32 `json:"success"`
 }
 
+// @Summary Send message to all users
+// @Description Send a message to all connected users
+// @Tags message
+// @Accept json
+// @Produce json
+// @Param message-qos header string true "Message QoS level"
+// @Param message-kind header string true "Message kind"
+// @Param payload body string true "Message payload"
+// @Success 200 {object} msgResult "{\"total\": 100, \"success\": 98}"
+// @Failure 400 {string} string "Invalid request"
+// @Failure 405 {string} string "method not allowed"
+// @Failure 500 {string} string "Internal server error"
+// @Router /sendToAll [post]
 func (s *httpServer) handleSendToAll(w http.ResponseWriter, r *http.Request) {
 	if !s.broker.Cluster().IsReady() {
 		http.Error(w, "broker is not ready", http.StatusInternalServerError)
@@ -180,6 +272,21 @@ func (s *httpServer) handleSendToAll(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(data)
 }
+
+// @Summary Send message to user
+// @Description Send a message to a specific user
+// @Tags message
+// @Accept json
+// @Produce json
+// @Param message-uid header string true "User ID"
+// @Param message-qos header string true "Message QoS level"
+// @Param message-kind header string true "Message kind"
+// @Param payload body string true "Message payload"
+// @Success 200 {object} msgResult "{\"total\": 1, \"success\": 1}"
+// @Failure 400 {string} string "Invalid request"
+// @Failure 405 {string} string "method not allowed"
+// @Failure 500 {string} string "Internal server error"
+// @Router /sendToUser [post]
 func (s *httpServer) handleSendToUser(w http.ResponseWriter, r *http.Request) {
 	if !s.broker.Cluster().IsReady() {
 		http.Error(w, "broker is not ready", http.StatusInternalServerError)
@@ -216,6 +323,21 @@ func (s *httpServer) handleSendToUser(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(data)
 }
+
+// @Summary Send message to channel
+// @Description Send a message to a specific channel
+// @Tags message
+// @Accept json
+// @Produce json
+// @Param message-channel header string true "Channel name"
+// @Param message-qos header string true "Message QoS level"
+// @Param message-kind header string true "Message kind"
+// @Param payload body string true "Message payload"
+// @Success 200 {object} msgResult "{\"total\": 50, \"success\": 48}"
+// @Failure 400 {string} string "Invalid request"
+// @Failure 405 {string} string "method not allowed"
+// @Failure 500 {string} string "Internal server error"
+// @Router /sendToChannel [post]
 func (s *httpServer) handleSendToChannel(w http.ResponseWriter, r *http.Request) {
 	if !s.broker.Cluster().IsReady() {
 		http.Error(w, "broker is not ready", http.StatusInternalServerError)
@@ -258,6 +380,17 @@ type JoinReq struct {
 	Channels map[string]string `json:"channels"`
 }
 
+// @Summary Join channel
+// @Description Join a user to one or more channels
+// @Tags channel
+// @Accept json
+// @Produce json
+// @Param body body JoinReq true "{\"uid\": \"user1\", \"channels\": {\"channel1\": \"role1\"}}"
+// @Success 200 {string} string "ok"
+// @Failure 400 {string} string "Invalid request"
+// @Failure 405 {string} string "method not allowed"
+// @Failure 500 {string} string "Internal server error"
+// @Router /joinChannel [post]
 func (s *httpServer) handleJoinChannel(w http.ResponseWriter, r *http.Request) {
 	if !s.broker.Cluster().IsReady() {
 		http.Error(w, "broker is not ready", http.StatusInternalServerError)
@@ -289,6 +422,18 @@ func (s *httpServer) handleJoinChannel(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("ok"))
 }
+
+// @Summary Leave channel
+// @Description Remove a user from one or more channels
+// @Tags channel
+// @Accept json
+// @Produce json
+// @Param body body JoinReq true "{\"uid\": \"user1\", \"channels\": {\"channel1\": \"\"}}"
+// @Success 200 {string} string "ok"
+// @Failure 400 {string} string "Invalid request"
+// @Failure 405 {string} string "method not allowed"
+// @Failure 500 {string} string "Internal server error"
+// @Router /leaveChannel [post]
 func (s *httpServer) handleLeaveChannel(w http.ResponseWriter, r *http.Request) {
 	if !s.broker.Cluster().IsReady() {
 		http.Error(w, "broker is not ready", http.StatusInternalServerError)
@@ -320,6 +465,18 @@ func (s *httpServer) handleLeaveChannel(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("ok"))
 }
+
+// @Summary List channels
+// @Description List all channels a user has joined
+// @Tags channel
+// @Accept json
+// @Produce json
+// @Param uid query string true "User ID"
+// @Success 200 {object} map[string]string "{\"channel1\": \"role1\"}"
+// @Failure 400 {string} string "uid is required"
+// @Failure 405 {string} string "method not allowed"
+// @Failure 500 {string} string "Internal server error"
+// @Router /listChannels [get]
 func (s *httpServer) handleListChannels(w http.ResponseWriter, r *http.Request) {
 	if !s.broker.Cluster().IsReady() {
 		http.Error(w, "broker is not ready", http.StatusInternalServerError)
@@ -347,6 +504,18 @@ func (s *httpServer) handleListChannels(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(data)
 }
+
+// @Summary List users
+// @Description List all users connected to a specific broker
+// @Tags user
+// @Accept json
+// @Produce json
+// @Param brokerID query string true "Broker ID"
+// @Success 200 {array} string "[\"user1\", \"user2\"]"
+// @Failure 400 {string} string "Invalid brokerID"
+// @Failure 405 {string} string "method not allowed"
+// @Failure 500 {string} string "Internal server error"
+// @Router /listUsers [get]
 func (s *httpServer) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	if !s.broker.Cluster().IsReady() {
 		http.Error(w, "broker is not ready", http.StatusInternalServerError)
@@ -375,6 +544,9 @@ func (s *httpServer) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	w.Write(data)
 }
 
+// @Summary Parse message from request
+// @Description Internal function to parse message from HTTP request
+// @Tags internal
 func (s *httpServer) parseMessage(r *http.Request) (*packet.Message, error) {
 	qos, err := packet.ParseQos(r.Header.Get("message-qos"))
 	if err != nil {
