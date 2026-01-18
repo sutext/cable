@@ -31,7 +31,7 @@ type Client interface {
 	SendToChannel(ctx context.Context, channel string, qos packet.MessageQos, kind packet.MessageKind, message []byte) (total, success int32, err error)
 	JoinChannel(ctx context.Context, uid string, channels map[string]string) (err error)
 	LeaveChannel(ctx context.Context, uid string, channels map[string]string) (err error)
-	GetChannels(ctx context.Context, uid string) (channels map[string]string, err error)
+	ListChannels(ctx context.Context, uid string) (channels map[string]string, err error)
 }
 type client struct {
 	mu     sync.Mutex
@@ -205,11 +205,11 @@ func (c *client) LeaveChannel(ctx context.Context, uid string, channels map[stri
 	})
 	return err
 }
-func (c *client) GetChannels(ctx context.Context, uid string) (channels map[string]string, err error) {
+func (c *client) ListChannels(ctx context.Context, uid string) (channels map[string]string, err error) {
 	if !c.IsReady() {
 		return nil, ErrClientNotReady
 	}
-	resp, err := c.rpc.GetChannels(ctx, &pb.UserReq{
+	resp, err := c.rpc.ListChannels(ctx, &pb.UserReq{
 		Uid: uid,
 	})
 	if err != nil {

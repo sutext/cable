@@ -21,6 +21,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// EmptyResp is a response message that does not contain any data.
 type EmptyResp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -57,6 +58,7 @@ func (*EmptyResp) Descriptor() ([]byte, []int) {
 	return file_api_pb_cable_proto_rawDescGZIP(), []int{0}
 }
 
+// ToAllReq is a request message to send a message to all users.
 type ToAllReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Qos           int32                  `protobuf:"varint,1,opt,name=qos,proto3" json:"qos,omitempty"`
@@ -117,7 +119,7 @@ func (x *ToAllReq) GetMessage() []byte {
 	return nil
 }
 
-// / MessageReq is the request message for SendToClients RPC.
+// ToUserReq is a request message to send a message to a specific user.
 type ToUserReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Uid           string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`
@@ -186,6 +188,7 @@ func (x *ToUserReq) GetMessage() []byte {
 	return nil
 }
 
+// ToChannelReq is a request message to send a message to a specific channel.
 type ToChannelReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Channel       string                 `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
@@ -254,6 +257,7 @@ func (x *ToChannelReq) GetMessage() []byte {
 	return nil
 }
 
+// MsgResp is a response message to indicate the result of a message sending operation.
 type MsgResp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Total         int32                  `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`
@@ -306,6 +310,7 @@ func (x *MsgResp) GetSuccess() int32 {
 	return 0
 }
 
+// JoinReq is a request message to join a specific channel.
 type JoinReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Uid           string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`
@@ -358,6 +363,7 @@ func (x *JoinReq) GetChannels() map[string]string {
 	return nil
 }
 
+// UserReq is a request message to identify a specific user.
 type UserReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Uid           string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`
@@ -402,6 +408,52 @@ func (x *UserReq) GetUid() string {
 	return ""
 }
 
+// KickNodeReq is a request message to kick a specific node from the cluster.
+type KickNodeReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BrokerID      uint64                 `protobuf:"varint,1,opt,name=brokerID,proto3" json:"brokerID,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *KickNodeReq) Reset() {
+	*x = KickNodeReq{}
+	mi := &file_api_pb_cable_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *KickNodeReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*KickNodeReq) ProtoMessage() {}
+
+func (x *KickNodeReq) ProtoReflect() protoreflect.Message {
+	mi := &file_api_pb_cable_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use KickNodeReq.ProtoReflect.Descriptor instead.
+func (*KickNodeReq) Descriptor() ([]byte, []int) {
+	return file_api_pb_cable_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *KickNodeReq) GetBrokerID() uint64 {
+	if x != nil {
+		return x.BrokerID
+	}
+	return 0
+}
+
+// OnlineResp is a response message to indicate whether a user is online.
 type OnlineResp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Ok            bool                   `protobuf:"varint,1,opt,name=ok,proto3" json:"ok,omitempty"`
@@ -411,7 +463,7 @@ type OnlineResp struct {
 
 func (x *OnlineResp) Reset() {
 	*x = OnlineResp{}
-	mi := &file_api_pb_cable_proto_msgTypes[7]
+	mi := &file_api_pb_cable_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -423,7 +475,7 @@ func (x *OnlineResp) String() string {
 func (*OnlineResp) ProtoMessage() {}
 
 func (x *OnlineResp) ProtoReflect() protoreflect.Message {
-	mi := &file_api_pb_cable_proto_msgTypes[7]
+	mi := &file_api_pb_cable_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -436,7 +488,7 @@ func (x *OnlineResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OnlineResp.ProtoReflect.Descriptor instead.
 func (*OnlineResp) Descriptor() ([]byte, []int) {
-	return file_api_pb_cable_proto_rawDescGZIP(), []int{7}
+	return file_api_pb_cable_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *OnlineResp) GetOk() bool {
@@ -446,6 +498,7 @@ func (x *OnlineResp) GetOk() bool {
 	return false
 }
 
+// ChannelsResp is a response message to list all channels a user is joined.
 type ChannelsResp struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Channels      map[string]string      `protobuf:"bytes,1,rep,name=channels,proto3" json:"channels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
@@ -455,7 +508,7 @@ type ChannelsResp struct {
 
 func (x *ChannelsResp) Reset() {
 	*x = ChannelsResp{}
-	mi := &file_api_pb_cable_proto_msgTypes[8]
+	mi := &file_api_pb_cable_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -467,7 +520,7 @@ func (x *ChannelsResp) String() string {
 func (*ChannelsResp) ProtoMessage() {}
 
 func (x *ChannelsResp) ProtoReflect() protoreflect.Message {
-	mi := &file_api_pb_cable_proto_msgTypes[8]
+	mi := &file_api_pb_cable_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -480,7 +533,7 @@ func (x *ChannelsResp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChannelsResp.ProtoReflect.Descriptor instead.
 func (*ChannelsResp) Descriptor() ([]byte, []int) {
-	return file_api_pb_cable_proto_rawDescGZIP(), []int{8}
+	return file_api_pb_cable_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ChannelsResp) GetChannels() map[string]string {
@@ -520,7 +573,9 @@ const file_api_pb_cable_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x1b\n" +
 	"\aUserReq\x12\x10\n" +
-	"\x03uid\x18\x01 \x01(\tR\x03uid\"\x1c\n" +
+	"\x03uid\x18\x01 \x01(\tR\x03uid\")\n" +
+	"\vKickNodeReq\x12\x1a\n" +
+	"\bbrokerID\x18\x01 \x01(\x04R\bbrokerID\"\x1c\n" +
 	"\n" +
 	"OnlineResp\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\"\x87\x01\n" +
@@ -528,17 +583,18 @@ const file_api_pb_cable_proto_rawDesc = "" +
 	"\bchannels\x18\x01 \x03(\v2\x1e.pb.ChannelsResp.ChannelsEntryR\bchannels\x1a;\n" +
 	"\rChannelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\xf6\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\xa5\x03\n" +
 	"\fCableService\x12)\n" +
 	"\bIsOnline\x12\v.pb.UserReq\x1a\x0e.pb.OnlineResp\"\x00\x12(\n" +
-	"\bKickUser\x12\v.pb.UserReq\x1a\r.pb.EmptyResp\"\x00\x12(\n" +
+	"\bKickUser\x12\v.pb.UserReq\x1a\r.pb.EmptyResp\"\x00\x12,\n" +
+	"\bKickNode\x12\x0f.pb.KickNodeReq\x1a\r.pb.EmptyResp\"\x00\x12(\n" +
 	"\tSendToAll\x12\f.pb.ToAllReq\x1a\v.pb.MsgResp\"\x00\x12*\n" +
 	"\n" +
 	"SendToUser\x12\r.pb.ToUserReq\x1a\v.pb.MsgResp\"\x00\x120\n" +
 	"\rSendToChannel\x12\x10.pb.ToChannelReq\x1a\v.pb.MsgResp\"\x00\x12+\n" +
 	"\vJoinChannel\x12\v.pb.JoinReq\x1a\r.pb.EmptyResp\"\x00\x12,\n" +
-	"\fLeaveChannel\x12\v.pb.JoinReq\x1a\r.pb.EmptyResp\"\x00\x12.\n" +
-	"\vGetChannels\x12\v.pb.UserReq\x1a\x10.pb.ChannelsResp\"\x00B\x06Z\x04./pbb\x06proto3"
+	"\fLeaveChannel\x12\v.pb.JoinReq\x1a\r.pb.EmptyResp\"\x00\x12/\n" +
+	"\fListChannels\x12\v.pb.UserReq\x1a\x10.pb.ChannelsResp\"\x00B\x06Z\x04./pbb\x06proto3"
 
 var (
 	file_api_pb_cable_proto_rawDescOnce sync.Once
@@ -552,7 +608,7 @@ func file_api_pb_cable_proto_rawDescGZIP() []byte {
 	return file_api_pb_cable_proto_rawDescData
 }
 
-var file_api_pb_cable_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_api_pb_cable_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_api_pb_cable_proto_goTypes = []any{
 	(*EmptyResp)(nil),    // 0: pb.EmptyResp
 	(*ToAllReq)(nil),     // 1: pb.ToAllReq
@@ -561,32 +617,35 @@ var file_api_pb_cable_proto_goTypes = []any{
 	(*MsgResp)(nil),      // 4: pb.MsgResp
 	(*JoinReq)(nil),      // 5: pb.JoinReq
 	(*UserReq)(nil),      // 6: pb.UserReq
-	(*OnlineResp)(nil),   // 7: pb.OnlineResp
-	(*ChannelsResp)(nil), // 8: pb.ChannelsResp
-	nil,                  // 9: pb.JoinReq.ChannelsEntry
-	nil,                  // 10: pb.ChannelsResp.ChannelsEntry
+	(*KickNodeReq)(nil),  // 7: pb.KickNodeReq
+	(*OnlineResp)(nil),   // 8: pb.OnlineResp
+	(*ChannelsResp)(nil), // 9: pb.ChannelsResp
+	nil,                  // 10: pb.JoinReq.ChannelsEntry
+	nil,                  // 11: pb.ChannelsResp.ChannelsEntry
 }
 var file_api_pb_cable_proto_depIdxs = []int32{
-	9,  // 0: pb.JoinReq.channels:type_name -> pb.JoinReq.ChannelsEntry
-	10, // 1: pb.ChannelsResp.channels:type_name -> pb.ChannelsResp.ChannelsEntry
+	10, // 0: pb.JoinReq.channels:type_name -> pb.JoinReq.ChannelsEntry
+	11, // 1: pb.ChannelsResp.channels:type_name -> pb.ChannelsResp.ChannelsEntry
 	6,  // 2: pb.CableService.IsOnline:input_type -> pb.UserReq
 	6,  // 3: pb.CableService.KickUser:input_type -> pb.UserReq
-	1,  // 4: pb.CableService.SendToAll:input_type -> pb.ToAllReq
-	2,  // 5: pb.CableService.SendToUser:input_type -> pb.ToUserReq
-	3,  // 6: pb.CableService.SendToChannel:input_type -> pb.ToChannelReq
-	5,  // 7: pb.CableService.JoinChannel:input_type -> pb.JoinReq
-	5,  // 8: pb.CableService.LeaveChannel:input_type -> pb.JoinReq
-	6,  // 9: pb.CableService.GetChannels:input_type -> pb.UserReq
-	7,  // 10: pb.CableService.IsOnline:output_type -> pb.OnlineResp
-	0,  // 11: pb.CableService.KickUser:output_type -> pb.EmptyResp
-	4,  // 12: pb.CableService.SendToAll:output_type -> pb.MsgResp
-	4,  // 13: pb.CableService.SendToUser:output_type -> pb.MsgResp
-	4,  // 14: pb.CableService.SendToChannel:output_type -> pb.MsgResp
-	0,  // 15: pb.CableService.JoinChannel:output_type -> pb.EmptyResp
-	0,  // 16: pb.CableService.LeaveChannel:output_type -> pb.EmptyResp
-	8,  // 17: pb.CableService.GetChannels:output_type -> pb.ChannelsResp
-	10, // [10:18] is the sub-list for method output_type
-	2,  // [2:10] is the sub-list for method input_type
+	7,  // 4: pb.CableService.KickNode:input_type -> pb.KickNodeReq
+	1,  // 5: pb.CableService.SendToAll:input_type -> pb.ToAllReq
+	2,  // 6: pb.CableService.SendToUser:input_type -> pb.ToUserReq
+	3,  // 7: pb.CableService.SendToChannel:input_type -> pb.ToChannelReq
+	5,  // 8: pb.CableService.JoinChannel:input_type -> pb.JoinReq
+	5,  // 9: pb.CableService.LeaveChannel:input_type -> pb.JoinReq
+	6,  // 10: pb.CableService.ListChannels:input_type -> pb.UserReq
+	8,  // 11: pb.CableService.IsOnline:output_type -> pb.OnlineResp
+	0,  // 12: pb.CableService.KickUser:output_type -> pb.EmptyResp
+	0,  // 13: pb.CableService.KickNode:output_type -> pb.EmptyResp
+	4,  // 14: pb.CableService.SendToAll:output_type -> pb.MsgResp
+	4,  // 15: pb.CableService.SendToUser:output_type -> pb.MsgResp
+	4,  // 16: pb.CableService.SendToChannel:output_type -> pb.MsgResp
+	0,  // 17: pb.CableService.JoinChannel:output_type -> pb.EmptyResp
+	0,  // 18: pb.CableService.LeaveChannel:output_type -> pb.EmptyResp
+	9,  // 19: pb.CableService.ListChannels:output_type -> pb.ChannelsResp
+	11, // [11:20] is the sub-list for method output_type
+	2,  // [2:11] is the sub-list for method input_type
 	2,  // [2:2] is the sub-list for extension type_name
 	2,  // [2:2] is the sub-list for extension extendee
 	0,  // [0:2] is the sub-list for field type_name
@@ -603,7 +662,7 @@ func file_api_pb_cable_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_pb_cable_proto_rawDesc), len(file_api_pb_cable_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -122,8 +122,8 @@ func (s *grpcServer) LeaveChannel(ctx context.Context, req *pb.JoinReq) (*pb.Emp
 	return &pb.EmptyResp{}, nil
 }
 
-func (s *grpcServer) GetChannels(ctx context.Context, req *pb.UserReq) (*pb.ChannelsResp, error) {
-	channels, err := s.booter.redis.HGetAll(ctx, s.booter.userKey(req.Uid)).Result()
+func (s *grpcServer) ListChannels(ctx context.Context, req *pb.UserReq) (*pb.ChannelsResp, error) {
+	channels, err := s.booter.ListChannels(ctx, req.Uid)
 	if err != nil {
 		return nil, err
 	}

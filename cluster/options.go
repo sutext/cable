@@ -13,12 +13,12 @@ import (
 
 // Handler defines the callback methods for cluster events.
 type Handler interface {
-	// OnClosed is called when a client connection is closed.
+	// OnUserClosed is called when a client connection is closed.
 	//
 	// Parameters:
 	// - id: Identity of the closed connection
-	OnClosed(id *packet.Identity)
-	// OnConnect is called when a new client connects to the cluster.
+	OnUserClosed(id *packet.Identity)
+	// OnUserConnect is called when a new client connects to the cluster.
 	// It returns a connection code indicating whether the connection is accepted.
 	//
 	// Parameters:
@@ -26,8 +26,8 @@ type Handler interface {
 	//
 	// Returns:
 	// - packet.ConnectCode: Connection result code
-	OnConnect(p *packet.Connect) (code packet.ConnectCode)
-	// OnMessage is called when a message packet is received from a client.
+	OnUserConnect(p *packet.Connect) (code packet.ConnectCode)
+	// OnUserMessage is called when a message packet is received from a client.
 	//
 	// Parameters:
 	// - p: Message packet received
@@ -35,8 +35,8 @@ type Handler interface {
 	//
 	// Returns:
 	// - error: Error if message handling fails, nil otherwise
-	OnMessage(p *packet.Message, id *packet.Identity) error
-	// GetChannels returns the list of channels a user has joined.
+	OnUserMessage(p *packet.Message, id *packet.Identity) error
+	// GetUserChannels returns the list of channels a user has joined.
 	//
 	// Parameters:
 	// - uid: User ID to get channels for
@@ -44,28 +44,28 @@ type Handler interface {
 	// Returns:
 	// - map[string]string: List of channels the user has joined
 	// - error: Error if getting channels fails, nil otherwise
-	GetChannels(uid string) (channels map[string]string, err error) //uid join channels
+	GetUserChannels(uid string) (channels map[string]string, err error) //uid join channels
 }
 
 // emptyHandler is a default implementation of Handler that does nothing.
 type emptyHandler struct{}
 
-// OnClosed implements the Handler interface with empty implementation.
-func (h *emptyHandler) OnClosed(id *packet.Identity) {
+// OnUserClosed implements the Handler interface with empty implementation.
+func (h *emptyHandler) OnUserClosed(id *packet.Identity) {
 }
 
-// OnConnect implements the Handler interface with default implementation that accepts all connections.
-func (h *emptyHandler) OnConnect(p *packet.Connect) (code packet.ConnectCode) {
+// OnUserConnect implements the Handler interface with default implementation that accepts all connections.
+func (h *emptyHandler) OnUserConnect(p *packet.Connect) (code packet.ConnectCode) {
 	return packet.ConnectAccepted
 }
 
-// OnMessage implements the Handler interface with empty implementation.
-func (h *emptyHandler) OnMessage(p *packet.Message, id *packet.Identity) error {
+// OnUserMessage implements the Handler interface with empty implementation.
+func (h *emptyHandler) OnUserMessage(p *packet.Message, id *packet.Identity) error {
 	return nil
 }
 
-// GetChannels implements the Handler interface with empty implementation.
-func (h *emptyHandler) GetChannels(uid string) (channels map[string]string, err error) {
+// GetUserChannels implements the Handler interface with empty implementation.
+func (h *emptyHandler) GetUserChannels(uid string) (channels map[string]string, err error) {
 	return nil, nil
 }
 

@@ -21,26 +21,39 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	CableService_IsOnline_FullMethodName      = "/pb.CableService/IsOnline"
 	CableService_KickUser_FullMethodName      = "/pb.CableService/KickUser"
+	CableService_KickNode_FullMethodName      = "/pb.CableService/KickNode"
 	CableService_SendToAll_FullMethodName     = "/pb.CableService/SendToAll"
 	CableService_SendToUser_FullMethodName    = "/pb.CableService/SendToUser"
 	CableService_SendToChannel_FullMethodName = "/pb.CableService/SendToChannel"
 	CableService_JoinChannel_FullMethodName   = "/pb.CableService/JoinChannel"
 	CableService_LeaveChannel_FullMethodName  = "/pb.CableService/LeaveChannel"
-	CableService_GetChannels_FullMethodName   = "/pb.CableService/GetChannels"
+	CableService_ListChannels_FullMethodName  = "/pb.CableService/ListChannels"
 )
 
 // CableServiceClient is the client API for CableService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
+//
+// CableService is the service definition for the Cable API.
 type CableServiceClient interface {
+	// IsOnline checks whether a user is online.
 	IsOnline(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*OnlineResp, error)
+	// KickUser kicks a user from the cluster.
 	KickUser(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*EmptyResp, error)
+	// KickNode kicks a node from the cluster.
+	KickNode(ctx context.Context, in *KickNodeReq, opts ...grpc.CallOption) (*EmptyResp, error)
+	// SendToAll sends a message to all users.
 	SendToAll(ctx context.Context, in *ToAllReq, opts ...grpc.CallOption) (*MsgResp, error)
+	// SendToUser sends a message to a specific user.
 	SendToUser(ctx context.Context, in *ToUserReq, opts ...grpc.CallOption) (*MsgResp, error)
+	// SendToChannel sends a message to a specific channel.
 	SendToChannel(ctx context.Context, in *ToChannelReq, opts ...grpc.CallOption) (*MsgResp, error)
+	// JoinChannel joins a user to a specific channel.
 	JoinChannel(ctx context.Context, in *JoinReq, opts ...grpc.CallOption) (*EmptyResp, error)
+	// LeaveChannel leaves a user from a specific channel.
 	LeaveChannel(ctx context.Context, in *JoinReq, opts ...grpc.CallOption) (*EmptyResp, error)
-	GetChannels(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*ChannelsResp, error)
+	// ListChannels lists all channels a user is joined.
+	ListChannels(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*ChannelsResp, error)
 }
 
 type cableServiceClient struct {
@@ -65,6 +78,16 @@ func (c *cableServiceClient) KickUser(ctx context.Context, in *UserReq, opts ...
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(EmptyResp)
 	err := c.cc.Invoke(ctx, CableService_KickUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *cableServiceClient) KickNode(ctx context.Context, in *KickNodeReq, opts ...grpc.CallOption) (*EmptyResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EmptyResp)
+	err := c.cc.Invoke(ctx, CableService_KickNode_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -121,10 +144,10 @@ func (c *cableServiceClient) LeaveChannel(ctx context.Context, in *JoinReq, opts
 	return out, nil
 }
 
-func (c *cableServiceClient) GetChannels(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*ChannelsResp, error) {
+func (c *cableServiceClient) ListChannels(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*ChannelsResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ChannelsResp)
-	err := c.cc.Invoke(ctx, CableService_GetChannels_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, CableService_ListChannels_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -134,15 +157,27 @@ func (c *cableServiceClient) GetChannels(ctx context.Context, in *UserReq, opts 
 // CableServiceServer is the server API for CableService service.
 // All implementations must embed UnimplementedCableServiceServer
 // for forward compatibility.
+//
+// CableService is the service definition for the Cable API.
 type CableServiceServer interface {
+	// IsOnline checks whether a user is online.
 	IsOnline(context.Context, *UserReq) (*OnlineResp, error)
+	// KickUser kicks a user from the cluster.
 	KickUser(context.Context, *UserReq) (*EmptyResp, error)
+	// KickNode kicks a node from the cluster.
+	KickNode(context.Context, *KickNodeReq) (*EmptyResp, error)
+	// SendToAll sends a message to all users.
 	SendToAll(context.Context, *ToAllReq) (*MsgResp, error)
+	// SendToUser sends a message to a specific user.
 	SendToUser(context.Context, *ToUserReq) (*MsgResp, error)
+	// SendToChannel sends a message to a specific channel.
 	SendToChannel(context.Context, *ToChannelReq) (*MsgResp, error)
+	// JoinChannel joins a user to a specific channel.
 	JoinChannel(context.Context, *JoinReq) (*EmptyResp, error)
+	// LeaveChannel leaves a user from a specific channel.
 	LeaveChannel(context.Context, *JoinReq) (*EmptyResp, error)
-	GetChannels(context.Context, *UserReq) (*ChannelsResp, error)
+	// ListChannels lists all channels a user is joined.
+	ListChannels(context.Context, *UserReq) (*ChannelsResp, error)
 	mustEmbedUnimplementedCableServiceServer()
 }
 
@@ -159,6 +194,9 @@ func (UnimplementedCableServiceServer) IsOnline(context.Context, *UserReq) (*Onl
 func (UnimplementedCableServiceServer) KickUser(context.Context, *UserReq) (*EmptyResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method KickUser not implemented")
 }
+func (UnimplementedCableServiceServer) KickNode(context.Context, *KickNodeReq) (*EmptyResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method KickNode not implemented")
+}
 func (UnimplementedCableServiceServer) SendToAll(context.Context, *ToAllReq) (*MsgResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method SendToAll not implemented")
 }
@@ -174,8 +212,8 @@ func (UnimplementedCableServiceServer) JoinChannel(context.Context, *JoinReq) (*
 func (UnimplementedCableServiceServer) LeaveChannel(context.Context, *JoinReq) (*EmptyResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method LeaveChannel not implemented")
 }
-func (UnimplementedCableServiceServer) GetChannels(context.Context, *UserReq) (*ChannelsResp, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetChannels not implemented")
+func (UnimplementedCableServiceServer) ListChannels(context.Context, *UserReq) (*ChannelsResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListChannels not implemented")
 }
 func (UnimplementedCableServiceServer) mustEmbedUnimplementedCableServiceServer() {}
 func (UnimplementedCableServiceServer) testEmbeddedByValue()                      {}
@@ -230,6 +268,24 @@ func _CableService_KickUser_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CableServiceServer).KickUser(ctx, req.(*UserReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CableService_KickNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(KickNodeReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CableServiceServer).KickNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CableService_KickNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CableServiceServer).KickNode(ctx, req.(*KickNodeReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -324,20 +380,20 @@ func _CableService_LeaveChannel_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
-func _CableService_GetChannels_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _CableService_ListChannels_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(UserReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(CableServiceServer).GetChannels(ctx, in)
+		return srv.(CableServiceServer).ListChannels(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: CableService_GetChannels_FullMethodName,
+		FullMethod: CableService_ListChannels_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(CableServiceServer).GetChannels(ctx, req.(*UserReq))
+		return srv.(CableServiceServer).ListChannels(ctx, req.(*UserReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -356,6 +412,10 @@ var CableService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "KickUser",
 			Handler:    _CableService_KickUser_Handler,
+		},
+		{
+			MethodName: "KickNode",
+			Handler:    _CableService_KickNode_Handler,
 		},
 		{
 			MethodName: "SendToAll",
@@ -378,8 +438,8 @@ var CableService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _CableService_LeaveChannel_Handler,
 		},
 		{
-			MethodName: "GetChannels",
-			Handler:    _CableService_GetChannels_Handler,
+			MethodName: "ListChannels",
+			Handler:    _CableService_ListChannels_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

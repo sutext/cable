@@ -114,7 +114,7 @@ func newBooter(config *config) *booter {
 		cluster.WithListeners(liss),
 	)
 	b.grpcApi = newGRPC(b)
-	b.httpApi = newHTTP(b.broker, b.config.HTTPPort)
+	b.httpApi = newHTTP(b)
 	return b
 }
 func (b *booter) Start() {
@@ -246,13 +246,24 @@ func (b *booter) Shutdown(ctx context.Context) error {
 	}
 	return b.broker.Shutdown(ctx)
 }
-func (b *booter) OnConnect(c *packet.Connect) packet.ConnectCode {
+func (b *booter) ListChannels(ctx context.Context, uid string) (map[string]string, error) {
+	if b.redis == nil {
+		return nil, fmt.Errorf("redis client not initialized")
+	}
+	return b.redis.HGetAll(ctx, b.userKey(uid)).Result()
+}
+func (b *booter) userKey(uid string) string {
+	return fmt.Sprintf("%s:%s", b.config.Redis.UserPrefix, uid)
+}
+
+// -- Handler methods --
+func (b *booter) OnUserConnect(c *packet.Connect) packet.ConnectCode {
 	return packet.ConnectAccepted
 }
-func (b *booter) OnClosed(id *packet.Identity) {
+func (b *booter) OnUserClosed(id *packet.Identity) {
 
 }
-func (b *booter) OnMessage(m *packet.Message, id *packet.Identity) error {
+func (b *booter) OnUserMessage(m *packet.Message, id *packet.Identity) error {
 	// Record incoming message counter and start timer for rate
 	kindStr := fmt.Sprintf("%d", m.Kind)
 	messageUpCounter.WithLabelValues(b.brokerIDStr, kindStr).Inc()
@@ -385,7 +396,7 @@ func (b *booter) OnMessage(m *packet.Message, id *packet.Identity) error {
 			sendDuration := time.Since(sendStartTime).Seconds()
 
 			// Record metrics for each sent message
-			for i := int32(0); i < success; i++ {
+			for range success {
 				messageDownCounter.WithLabelValues(b.brokerIDStr, kindStr, targetType).Inc()
 			}
 			messageDownRate.WithLabelValues(b.brokerIDStr, kindStr, targetType).Observe(sendDuration)
@@ -468,13 +479,6 @@ func (b *booter) OnMessage(m *packet.Message, id *packet.Identity) error {
 
 	return nil
 }
-
-func (b *booter) GetChannels(uid string) (map[string]string, error) {
-	if b.redis == nil {
-		return nil, fmt.Errorf("redis client not initialized")
-	}
-	return b.redis.HGetAll(context.Background(), b.userKey(uid)).Result()
-}
-func (b *booter) userKey(uid string) string {
-	return fmt.Sprintf("%s:%s", b.config.Redis.UserPrefix, uid)
+func (b *booter) GetUserChannels(uid string) (map[string]string, error) {
+	return b.ListChannels(context.Background(), uid)
 }

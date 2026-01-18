@@ -114,11 +114,24 @@ type Broker interface {
 	// - int32: Number of successful sends
 	// - error: Error if sending fails, nil otherwise
 	SendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success int32, err error)
+	// ListUsers lists all users connected to the broker.
+	//
+	// Parameters:
+	// - ctx: Context for the operation
+	// - brokerID: ID of the broker to list users from
+	//
+	// Returns:
+	// - map[string]map[string]string: Map of user IDs to map of client IDs to network protocols
+	// - error: Error if listing fails, nil otherwise
+	ListUsers(ctx context.Context, brokerID uint64) (map[string]map[string]string, error)
 	// HandleRequest registers a handler for a specific request method.
 	//
 	// Parameters:
 	// - method: Request method to handle
 	// - handler: Handler function for the request method
+	//
+	// Returns:
+	// - error: Error if registration fails, nil otherwise
 	HandleRequest(method string, handler server.RequestHandler)
 }
 
@@ -447,6 +460,18 @@ func (b *broker) LeaveChannel(ctx context.Context, uid string, channels map[stri
 	}
 	return b.cluster.SubmitOperation(ctx, op)
 }
+func (b *broker) ListUsers(ctx context.Context, brokerID uint64) (map[string]map[string]string, error) {
+	userClients, ok := b.userClients.Get(brokerID)
+	if !ok {
+		return nil, xerr.PeerNotReady
+	}
+	users := make(map[string]map[string]string)
+	userClients.Range(func(s string, m *safe.Map[string, string]) bool {
+		users[s] = m.Load()
+		return true
+	})
+	return users, nil
+}
 
 // HandleRequest registers a handler for a specific request method.
 //
@@ -470,7 +495,7 @@ func (b *broker) onUserClosed(id *packet.Identity) {
 	if err := b.cluster.SubmitOperation(context.Background(), op); err != nil {
 		b.logger.Error("Failed to submit user disconnect op", xlog.Err(err))
 	}
-	b.handler.OnClosed(id)
+	b.handler.OnUserClosed(id)
 }
 
 // onUserConnect handles user connect events.
@@ -484,7 +509,7 @@ func (b *broker) onUserClosed(id *packet.Identity) {
 // Returns:
 // - packet.ConnectCode: Connect result code
 func (b *broker) onUserConnect(p *packet.Connect, net string) packet.ConnectCode {
-	code := b.handler.OnConnect(p)
+	code := b.handler.OnUserConnect(p)
 	if code != packet.ConnectAccepted {
 		return code
 	}
@@ -510,7 +535,7 @@ func (b *broker) onUserConnect(p *packet.Connect, net string) packet.ConnectCode
 		}
 		return true
 	})
-	chs, err := b.handler.GetChannels(p.Identity.UserID)
+	chs, err := b.handler.GetUserChannels(p.Identity.UserID)
 	if err != nil {
 		b.logger.Error("get channels failed", xlog.Err(err))
 	}
@@ -538,7 +563,7 @@ func (b *broker) onUserConnect(p *packet.Connect, net string) packet.ConnectCode
 // Returns:
 // - error: Error if message handling fails, nil otherwise
 func (b *broker) onUserMessage(p *packet.Message, id *packet.Identity) error {
-	return b.handler.OnMessage(p, id)
+	return b.handler.OnUserMessage(p, id)
 }
 
 // onUserRequest handles user request events.
@@ -575,6 +600,47 @@ func (b *broker) isActive(targets map[string]string) bool {
 		}
 	}
 	return false
+}
+
+// inspect returns the status of the local broker.
+// It includes information about user count, channel count, and Raft status.
+//
+// Returns:
+// - *pb.Status: Status information of the local broker
+func (b *broker) inspect() *pb.Status {
+	userCount := make(map[uint64]int32)
+	b.userClients.Range(func(key uint64, value *safe.KeyMap[string]) bool {
+		userCount[key] = value.Len()
+		return true
+	})
+	channelCount := make(map[uint64]int32)
+	b.channelClients.Range(func(key uint64, value *safe.KeyMap[string]) bool {
+		channelCount[key] = value.Len()
+		return true
+	})
+	status, _ := b.cluster.Status()
+	progress := make(map[uint64]*pb.RaftProgress)
+	if status.Progress != nil {
+		for id, p := range status.Progress {
+			progress[id] = &pb.RaftProgress{
+				Match: p.Match,
+				Next:  p.Next,
+				State: p.State.String(),
+			}
+		}
+	}
+	return &pb.Status{
+		Id:           b.id,
+		UserCount:    userCount,
+		ClientCount:  b.clientChannels.Len(),
+		ClusterSize:  b.cluster.size,
+		ChannelCount: channelCount,
+		RaftState:    status.RaftState.String(),
+		RaftTerm:     status.Term,
+		RaftLogSize:  b.cluster.RaftLogSize(),
+		RaftApplied:  status.Applied,
+		RaftProgress: progress,
+	}
 }
 
 // kickConn kicks the given targets from their respective listeners.
@@ -634,47 +700,6 @@ func (b *broker) sendToTargets(ctx context.Context, m *packet.Message, targets m
 		}
 	}
 	return total, success
-}
-
-// inspect returns the status of the local broker.
-// It includes information about user count, channel count, and Raft status.
-//
-// Returns:
-// - *pb.Status: Status information of the local broker
-func (b *broker) inspect() *pb.Status {
-	userCount := make(map[uint64]int32)
-	b.userClients.Range(func(key uint64, value *safe.KeyMap[string]) bool {
-		userCount[key] = value.Len()
-		return true
-	})
-	channelCount := make(map[uint64]int32)
-	b.channelClients.Range(func(key uint64, value *safe.KeyMap[string]) bool {
-		channelCount[key] = value.Len()
-		return true
-	})
-	status, _ := b.cluster.Status()
-	progress := make(map[uint64]*pb.RaftProgress)
-	if status.Progress != nil {
-		for id, p := range status.Progress {
-			progress[id] = &pb.RaftProgress{
-				Match: p.Match,
-				Next:  p.Next,
-				State: p.State.String(),
-			}
-		}
-	}
-	return &pb.Status{
-		Id:           b.id,
-		UserCount:    userCount,
-		ClientCount:  b.clientChannels.Len(),
-		ClusterSize:  b.cluster.size,
-		ChannelCount: channelCount,
-		RaftState:    status.RaftState.String(),
-		RaftTerm:     status.Term,
-		RaftLogSize:  b.cluster.RaftLogSize(),
-		RaftApplied:  status.Applied,
-		RaftProgress: progress,
-	}
 }
 
 // userOpenedOp processes user opened operations.

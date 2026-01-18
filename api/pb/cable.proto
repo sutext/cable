@@ -4,9 +4,11 @@ option go_package = "./pb";
 
 package pb;
 
+// EmptyResp is a response message that does not contain any data.
 message EmptyResp{
 }
 
+// ToAllReq is a request message to send a message to all users.
 message ToAllReq{
     int32 qos = 1;
     int32 kind = 2;
@@ -14,50 +16,65 @@ message ToAllReq{
 
 }
 
+// ToUserReq is a request message to send a message to a specific user.
 message ToUserReq{
     string uid = 1;
     int32  qos = 2;
     int32  kind = 3;
     bytes  message = 4;
 }
-
+// ToChannelReq is a request message to send a message to a specific channel.
 message ToChannelReq{
     string channel = 1;
     int32 qos = 2;
     int32 kind = 3;
     bytes message = 4;
 }
-
+// MsgResp is a response message to indicate the result of a message sending operation.
 message MsgResp{
     int32 total = 1;
     int32 success = 2;
 }
-
+// JoinReq is a request message to join a specific channel.
 message JoinReq{
     string uid = 1;
     map<string,string> channels = 2;
 }
-
+// UserReq is a request message to identify a specific user.
 message UserReq{
     string uid = 1;
 }
+// KickNodeReq is a request message to kick a specific node from the cluster.
+message KickNodeReq{
+    uint64 brokerID = 1;
+}
 
+// OnlineResp is a response message to indicate whether a user is online.
 message OnlineResp{
     bool ok = 1;
 }
-
+// ChannelsResp is a response message to list all channels a user is joined.
 message ChannelsResp{
     map<string,string> channels = 1;
 }
-
+// CableService is the service definition for the Cable API.
 service CableService{
-    
+    // IsOnline checks whether a user is online.
     rpc IsOnline(UserReq) returns (OnlineResp){}
+    // KickUser kicks a user from the cluster.
     rpc KickUser(UserReq) returns (EmptyResp){}
+    // KickNode kicks a node from the cluster.
+    rpc KickNode(KickNodeReq) returns (EmptyResp){}
+    // SendToAll sends a message to all users.
     rpc SendToAll(ToAllReq) returns (MsgResp){}
+    // SendToUser sends a message to a specific user.
     rpc SendToUser(ToUserReq) returns (MsgResp){}
+    // SendToChannel sends a message to a specific channel.
     rpc SendToChannel(ToChannelReq) returns (MsgResp){}
+    // JoinChannel joins a user to a specific channel.
     rpc JoinChannel(JoinReq) returns (EmptyResp){}
+    // LeaveChannel leaves a user from a specific channel.
     rpc LeaveChannel(JoinReq) returns (EmptyResp){}
-    rpc GetChannels(UserReq) returns (ChannelsResp){}
+    // ListChannels lists all channels a user is joined.
+    rpc ListChannels(UserReq) returns (ChannelsResp){}
 }

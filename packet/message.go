@@ -10,6 +10,8 @@ import (
 	"bytes"
 	"fmt"
 	"maps"
+	"strconv"
+	"strings"
 
 	"sutext.github.io/cable/coder"
 )
@@ -35,6 +37,29 @@ const (
 	MessageKindToUser    MessageKind = 2 // Broker will auto resend message to a specific user. The userID exsits in the props map.
 	MessageKindToChannel MessageKind = 3 // Broker will auto resend message to a specific channel. The channel exsits in the props map.
 )
+
+func ParseQos(q string) (qos MessageQos, err error) {
+	q = strings.TrimSpace(q)
+	i, err := strconv.ParseInt(q, 10, 32)
+	if err != nil {
+		return qos, fmt.Errorf("invalid message qos: %s", q)
+	}
+	if i < 0 || i > int64(MessageQos1) {
+		return qos, fmt.Errorf("invalid message qos: %s", q)
+	}
+	return MessageQos(i), nil
+}
+func ParseKind(k string) (kind MessageKind, err error) {
+	k = strings.TrimSpace(k)
+	i, err := strconv.ParseInt(k, 10, 32)
+	if err != nil {
+		return kind, fmt.Errorf("invalid message kind: %s", k)
+	}
+	if i < 0 || i > int64(kindMask) {
+		return kind, fmt.Errorf("invalid message kind: %s", k)
+	}
+	return MessageKind(i), nil
+}
 
 // Bitmask constants for message flags.
 const (
