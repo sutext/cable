@@ -64,6 +64,8 @@ spec:
       containers:
         - name: otel-collector
           image: otel/opentelemetry-collector:latest
+          args:
+            - "--config=/etc/otelcol-config.yaml"
           ports:
             - name: otlp-grpc
               containerPort: 4317

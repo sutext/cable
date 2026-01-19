@@ -15,13 +15,6 @@ data:
         isDefault: true
         version: 1
         editable: true
-      - name: OpenTelemetry
-        type: otel-datasource
-        url: http://otel-collector:4318
-        access: proxy
-        isDefault: false
-        version: 1
-        editable: true
 ---
 apiVersion: apps/v1
 kind: Deployment
