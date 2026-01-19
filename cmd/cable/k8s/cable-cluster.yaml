@@ -17,7 +17,7 @@ data:
     brokerid: 0
 
     # Initial size of cluster
-    clusterSize: 1
+    clusterSize: 3
 
     # gRPC Server Port for API
     grpcPort: 8880
@@ -41,7 +41,7 @@ data:
     # Trace Configuration
     trace:
       enabled: true
-      otlpEndpoint: localhost:4317
+      otlpEndpoint: otel-collector:4317
       serviceName: cable
       samplerRatio: 0.1
 
@@ -129,7 +129,7 @@ spec:
           imagePullPolicy: Never
           volumeMounts:
             - name: cable-config-volume
-              mountPath: /app/config.yaml
+              mountPath: /config.yaml
               subPath: config.yaml
           livenessProbe:
             httpGet:
