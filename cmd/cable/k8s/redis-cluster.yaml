@@ -59,6 +59,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
+      volumes:
+        - name: redis-config
+          configMap:
+            name: redis-config
   volumeClaimTemplates:
     - metadata:
         name: redis-data
@@ -67,10 +71,6 @@ spec:
         resources:
           requests:
             storage: 1Gi
-  volumeMounts:
-    - name: redis-config
-      configMap:
-        name: redis-config
 
 ---
 apiVersion: v1

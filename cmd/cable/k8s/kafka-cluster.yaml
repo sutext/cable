@@ -110,6 +110,10 @@ spec:
               value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
             - name: KAFKA_KRAFT_CLUSTER_ID
               value: "MkU3OEVBNTcwNTJENDM2Qk"
+      volumes:
+        - name: kafka-config
+          configMap:
+            name: kafka-config
   volumeClaimTemplates:
     - metadata:
         name: kafka-data
@@ -118,7 +122,3 @@ spec:
         resources:
           requests:
             storage: 2Gi
-  volumeMounts:
-    - name: kafka-config
-      configMap:
-        name: kafka-config

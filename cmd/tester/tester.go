@@ -138,8 +138,6 @@ func (t *Tester) addClient() *Client {
 	endpoint := os.Getenv("ENDPOINT")
 	if endpoint == "" {
 		endpoint = statefulSetEndpoint()
-		// endpoint = "tcp://localhost:1683"
-		endpoint = "ws://localhost:1688"
 	}
 	strs := strings.Split(endpoint, "://")
 	if len(strs) != 2 {
