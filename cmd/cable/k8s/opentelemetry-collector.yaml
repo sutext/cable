@@ -24,25 +24,26 @@ data:
         endpoint: 0.0.0.0:8889
         resource_to_telemetry_conversion:
           enabled: true
-      logging:
-        loglevel: debug
+      debug:
+        verbosity: detailed
     service:
       pipelines:
         traces:
           receivers: [otlp]
           processors: [batch]
-          exporters: [logging]
+          exporters: [debug]
         metrics:
           receivers: [otlp]
           processors: [batch]
-          exporters: [prometheus, logging]
+          exporters: [prometheus, debug]
         logs:
           receivers: [otlp]
           processors: [batch]
-          exporters: [logging]
+          exporters: [debug]
       telemetry:
         metrics:
-          address: 0.0.0.0:8888
+          http:
+            endpoint: 0.0.0.0:8888
 ---
 apiVersion: apps/v1
 kind: Deployment
