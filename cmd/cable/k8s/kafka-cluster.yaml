@@ -11,7 +11,7 @@ data:
     listeners=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
     advertised.listeners=PLAINTEXT://kafka-broker-$(KAFKA_NODE_ID).kafka-broker:9092
     controller.quorum.voters=0@kafka-broker-0.kafka-broker:9093,1@kafka-broker-1.kafka-broker:9093,2@kafka-broker-2.kafka-broker:9093
-    log.dirs=/tmp/kafka-logs
+    log.dirs=/var/lib/kafka/data
     num.partitions=3
     default.replication.factor=2
     offsets.topic.replication.factor=2
@@ -22,18 +22,6 @@ data:
     inter.broker.listener.name=PLAINTEXT
     listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
     group.initial.rebalance.delay.ms=0
-  kraft-init.sh: |
-    #!/bin/bash
-    # Initialize Kafka with KRaft
-    echo "Initializing Kafka with KRaft..."
-    if [ ! -f "/tmp/kafka-logs/meta.properties" ]; then
-      KAFKA_CLUSTER_ID="MkU3OEVBNTcwNTJENDM2Qk"
-      echo "Using cluster ID: $KAFKA_CLUSTER_ID"
-      # Format storage
-      /opt/kafka/bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c /opt/kafka/config/server.properties
-    else
-      echo "Kafka storage already formatted, skipping..."
-    fi
 ---
 apiVersion: v1
 kind: Service
@@ -83,26 +71,9 @@ spec:
       labels:
         app: kafka-broker
     spec:
-      initContainers:
-        - name: kraft-format
-          image: apache/kafka:latest
-          command: ["/bin/bash", "/opt/kafka/config/kraft-init.sh"]
-          volumeMounts:
-            - name: kafka-data
-              mountPath: /tmp/kafka-logs
-            - name: kafka-config
-              mountPath: /opt/kafka/config/server.properties
-              subPath: server.properties
-            - name: kafka-config
-              mountPath: /opt/kafka/config/kraft-init.sh
-              subPath: kraft-init.sh
-              readOnly: true
-          env:
-            - name: KAFKA_NODE_ID
-              value: "$(hostname | awk -F'-' '{print $NF}')"
       containers:
         - name: kafka-broker
-          image: apache/kafka:latest
+          image: apache/kafka:3.6.0
           ports:
             - containerPort: 9092
               name: client
@@ -110,10 +81,7 @@ spec:
               name: controller
           volumeMounts:
             - name: kafka-data
-              mountPath: /tmp/kafka-logs
-            - name: kafka-config
-              mountPath: /opt/kafka/config/server.properties
-              subPath: server.properties
+              mountPath: /var/lib/kafka/data
           env:
             - name: KAFKA_NODE_ID
               value: "$(hostname | awk -F'-' '{print $NF}')"
@@ -132,19 +100,39 @@ spec:
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
               value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
             - name: KAFKA_LOG_DIRS
-              value: "/tmp/kafka-logs"
+              value: "/var/lib/kafka/data"
             - name: KAFKA_NUM_PARTITIONS
               value: "3"
             - name: KAFKA_DEFAULT_REPLICATION_FACTOR
               value: "2"
+            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
+              value: "2"
+            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
+              value: "2"
+            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
+              value: "2"
+            - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
+              value: "true"
+            - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
+              value: "0"
+            - name: KAFKA_KRAFT_CLUSTER_ID
+              value: "MkU3OEVBNTcwNTJENDM2Qk"
+          # Use the built-in startup script with environment variables
           command:
-            - "/opt/kafka/bin/kafka-server-start.sh"
+            - "/bin/bash"
+            - "-c"
           args:
-            - "/opt/kafka/config/server.properties"
-      volumes:
-        - name: kafka-config
-          configMap:
-            name: kafka-config
+            - |
+              # Check if storage is already formatted
+              if [ ! -f "/var/lib/kafka/data/meta.properties" ]; then
+                echo "Formatting Kafka storage..."
+                /opt/kafka/bin/kafka-storage.sh format -t ${KAFKA_KRAFT_CLUSTER_ID} -c /opt/kafka/config/kraft/server.properties --ignore-formatted
+              else
+                echo "Kafka storage already formatted, skipping..."
+              fi
+              # Start Kafka server
+              echo "Starting Kafka server..."
+              exec /opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/kraft/server.properties
   volumeClaimTemplates:
     - metadata:
         name: kafka-data
