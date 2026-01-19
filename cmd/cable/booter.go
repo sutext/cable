@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -24,19 +25,19 @@ import (
 )
 
 type booter struct {
-	redis              *redis.ClusterClient
-	config             *config
-	broker             cluster.Broker
-	kafka              sarama.Client
-	grpcApi            *grpcServer
-	httpApi            *httpServer
-	producer           sarama.SyncProducer
-	brokerIDStr        string
-	tracerProvider     *tracesdk.TracerProvider
-	messageUpRate      *prometheus.HistogramVec
-	messageDownRate    *prometheus.HistogramVec
-	messageUpCounter   *prometheus.CounterVec
-	messageDownCounter *prometheus.CounterVec
+	brokerID            string
+	redis               *redis.ClusterClient
+	config              *config
+	broker              cluster.Broker
+	kafka               sarama.Client
+	grpcApi             *grpcServer
+	httpApi             *httpServer
+	producer            sarama.SyncProducer
+	tracerProvider      *tracesdk.TracerProvider
+	messageUpCounter    *prometheus.CounterVec
+	messageDownCounter  *prometheus.CounterVec
+	messageUpDuration   *prometheus.HistogramVec
+	messageDownDuration *prometheus.HistogramVec
 }
 
 func bool2byte(b bool) byte {
@@ -46,10 +47,7 @@ func bool2byte(b bool) byte {
 	return 0
 }
 func newBooter(config *config) *booter {
-	b := &booter{
-		config:      config,
-		brokerIDStr: fmt.Sprintf("%d", config.BrokerID),
-	}
+	b := &booter{config: config}
 	// kafka := sarama.NewClient(config.KafkaBrokers, sarama.NewConfig())
 	liss := make([]*cluster.Listener, len(config.Listeners))
 	for i, l := range config.Listeners {
@@ -81,6 +79,7 @@ func newBooter(config *config) *booter {
 		cluster.WithClusterSize(config.ClusterSize),
 		cluster.WithListeners(liss),
 	)
+	b.brokerID = fmt.Sprintf("%d", b.broker.ID())
 	b.grpcApi = newGRPC(b)
 	b.httpApi = newHTTP(b)
 	return b
@@ -198,7 +197,7 @@ func (b *booter) initMetrics() {
 	)
 
 	// messageUpRate tracks incoming message rate
-	b.messageUpRate = prometheus.NewHistogramVec(
+	b.messageUpDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "cable_messages_up_duration_seconds",
 			Help:    "Duration of message processing for incoming messages",
@@ -208,7 +207,7 @@ func (b *booter) initMetrics() {
 	)
 
 	// messageDownRate tracks outgoing message rate
-	b.messageDownRate = prometheus.NewHistogramVec(
+	b.messageDownDuration = prometheus.NewHistogramVec(
 		prometheus.HistogramOpts{
 			Name:    "cable_messages_down_duration_seconds",
 			Help:    "Duration of message processing for outgoing messages",
@@ -220,8 +219,8 @@ func (b *booter) initMetrics() {
 	prometheus.MustRegister(
 		b.messageUpCounter,
 		b.messageDownCounter,
-		b.messageUpRate,
-		b.messageDownRate,
+		b.messageUpDuration,
+		b.messageDownDuration,
 	)
 	b.httpApi.Handle(b.config.Metrics.Path, promhttp.Handler())
 }
@@ -253,38 +252,32 @@ func (b *booter) OnUserClosed(id *packet.Identity) {
 func (b *booter) OnUserMessage(m *packet.Message, id *packet.Identity) error {
 	// Record incoming message counter and start timer for rate
 	kindStr := fmt.Sprintf("%d", m.Kind)
-	b.messageUpCounter.WithLabelValues(b.brokerIDStr, kindStr).Inc()
+	b.messageUpCounter.WithLabelValues(b.brokerID, kindStr).Inc()
 	startTime := time.Now()
 	defer func() {
-		b.messageUpRate.WithLabelValues(b.brokerIDStr, kindStr).Observe(time.Since(startTime).Seconds())
+		b.messageUpDuration.WithLabelValues(b.brokerID, kindStr).Observe(time.Since(startTime).Seconds())
 	}()
-
-	// Get tracer
 	tracer := otel.Tracer(b.config.Trace.ServiceName)
-
-	// Create root span for message processing
 	ctx, span := tracer.Start(context.Background(), "message.process")
 	span.SetAttributes(
 		attribute.Int("message.kind", int(m.Kind)),
 		attribute.String("message.id", fmt.Sprintf("%d", m.ID)),
 	)
 	defer span.End()
-
-	// Get route configuration for this message kind
 	route, exists := b.config.MessageRoute[m.Kind]
 	if !exists || !route.Enabled {
-		// No route configured, do nothing
 		span.SetAttributes(attribute.Bool("route.exists", false))
 		return nil
 	}
 	span.SetAttributes(attribute.Bool("route.exists", true))
-
+	wg := &sync.WaitGroup{}
 	toUserID := ""
 	toChannel := ""
-	// Handle message resend based on resendType
 	switch route.ResendType {
 	case resendToAll:
-		go b.SendToAll(ctx, m)
+		wg.Go(func() {
+			go b.SendToAll(ctx, m)
+		})
 	case resendToUser:
 		uid, ok := m.Get(packet.PropertyUserID)
 		if !ok {
@@ -292,17 +285,18 @@ func (b *booter) OnUserMessage(m *packet.Message, id *packet.Identity) error {
 			return nil
 		}
 		toUserID = uid
-		// Get user ID from message properties or use the sender's user ID
-		// Send message to specified user asynchronously
-		go b.SendToUser(ctx, uid, m)
+		wg.Go(func() {
+			b.SendToUser(ctx, uid, m)
+		})
 	case resendToChannel:
 		channel, ok := m.Get(packet.PropertyChannel)
 		if !ok {
 			return nil
 		}
 		toChannel = channel
-		// Send message to specified channel asynchronously
-		go b.SendToChannel(ctx, channel, m)
+		wg.Go(func() {
+			b.SendToChannel(ctx, channel, m)
+		})
 	case resendNone:
 		// Do not resend, just process Kafka
 	default:
@@ -317,50 +311,11 @@ func (b *booter) OnUserMessage(m *packet.Message, id *packet.Identity) error {
 	}
 	// Send message to Kafka if topic is configured
 	if route.KafkaTopic != "" && b.producer != nil {
-		_, kafkaSpan := tracer.Start(ctx, "message.send.kafka")
-		kafkaSpan.SetAttributes(attribute.String("kafka.topic", route.KafkaTopic))
-		headers := []sarama.RecordHeader{
-			{Key: []byte("messageQos"), Value: []byte{byte(m.Qos)}},
-			{Key: []byte("messageDup"), Value: []byte{bool2byte(m.Dup)}},
-			{Key: []byte("messageKind"), Value: []byte{byte(m.Kind)}},
-		}
-		if toUserID != "" {
-			headers = append(headers, sarama.RecordHeader{Key: []byte("toUser"), Value: []byte(toUserID)})
-		}
-		if toChannel != "" {
-			headers = append(headers, sarama.RecordHeader{Key: []byte("toChannel"), Value: []byte(toChannel)})
-		}
-		if id != nil {
-			headers = append(headers,
-				sarama.RecordHeader{Key: []byte("fromUser"), Value: []byte(id.UserID)},
-				sarama.RecordHeader{Key: []byte("fromClient"), Value: []byte(id.ClientID)})
-		}
-		kafkaMsg := &sarama.ProducerMessage{
-			Topic:   route.KafkaTopic,
-			Value:   sarama.ByteEncoder(m.Payload),
-			Headers: headers,
-		}
-		partition, offset, err := b.producer.SendMessage(kafkaMsg)
-		if err != nil {
-			xlog.Error("Failed to send message to Kafka",
-				xlog.Err(err),
-				xlog.Str("topic", route.KafkaTopic),
-				xlog.Int("kind", int(m.Kind)))
-			kafkaSpan.RecordError(err)
-		} else {
-			xlog.Debug("Sent message to Kafka",
-				xlog.Str("topic", route.KafkaTopic),
-				xlog.I32("partition", partition),
-				xlog.I64("offset", offset),
-				xlog.Int("kind", int(m.Kind)))
-			kafkaSpan.SetAttributes(
-				attribute.Int("kafka.partition", int(partition)),
-				attribute.Int64("kafka.offset", offset),
-			)
-		}
-		kafkaSpan.End()
+		wg.Go(func() {
+			b.SendToKafka(ctx, route.KafkaTopic, toUserID, toChannel, id, m)
+		})
 	}
-
+	wg.Wait()
 	return nil
 }
 
@@ -386,9 +341,9 @@ func (b *booter) SendToAll(ctx context.Context, m *packet.Message) (int32, int32
 	total, success, err := b.broker.SendToAll(resendCtx, m)
 	sendDuration := time.Since(sendStartTime).Seconds()
 	for range success {
-		b.messageDownCounter.WithLabelValues(b.brokerIDStr, kindStr, targetType).Inc()
+		b.messageDownCounter.WithLabelValues(b.brokerID, kindStr, targetType).Inc()
 	}
-	b.messageDownRate.WithLabelValues(b.brokerIDStr, kindStr, targetType).Observe(sendDuration)
+	b.messageDownDuration.WithLabelValues(b.brokerID, kindStr, targetType).Observe(sendDuration)
 
 	if err != nil {
 		xlog.Error("Failed to send message to all", xlog.Err(err))
@@ -416,9 +371,9 @@ func (b *booter) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 	total, success, err := b.broker.SendToUser(resendCtx, uid, m)
 	sendDuration := time.Since(sendStartTime).Seconds()
 	for range success {
-		b.messageDownCounter.WithLabelValues(b.brokerIDStr, kindStr, targetType).Inc()
+		b.messageDownCounter.WithLabelValues(b.brokerID, kindStr, targetType).Inc()
 	}
-	b.messageDownRate.WithLabelValues(b.brokerIDStr, kindStr, targetType).Observe(sendDuration)
+	b.messageDownDuration.WithLabelValues(b.brokerID, kindStr, targetType).Observe(sendDuration)
 	if err != nil {
 		xlog.Error("Failed to send message to user",
 			xlog.Err(err),
@@ -449,9 +404,9 @@ func (b *booter) SendToChannel(ctx context.Context, channel string, m *packet.Me
 	total, success, err := b.broker.SendToChannel(resendCtx, channel, m)
 	sendDuration := time.Since(sendStartTime).Seconds()
 	for range success {
-		b.messageDownCounter.WithLabelValues(b.brokerIDStr, kindStr, targetType).Inc()
+		b.messageDownCounter.WithLabelValues(b.brokerID, kindStr, targetType).Inc()
 	}
-	b.messageDownRate.WithLabelValues(b.brokerIDStr, kindStr, targetType).Observe(sendDuration)
+	b.messageDownDuration.WithLabelValues(b.brokerID, kindStr, targetType).Observe(sendDuration)
 	if err != nil {
 		xlog.Error("Failed to send message to channel",
 			xlog.Err(err),
@@ -471,4 +426,49 @@ func (b *booter) SendToChannel(ctx context.Context, channel string, m *packet.Me
 	}
 	resendSpan.End()
 	return total, success, err
+}
+func (b *booter) SendToKafka(ctx context.Context, topic, toUserID, toChannel string, id *packet.Identity, m *packet.Message) {
+	tracer := otel.Tracer(b.config.Trace.ServiceName)
+	_, kafkaSpan := tracer.Start(ctx, "message.send.kafka")
+	kafkaSpan.SetAttributes(attribute.String("kafka.topic", topic))
+	headers := []sarama.RecordHeader{
+		{Key: []byte("messageQos"), Value: []byte{byte(m.Qos)}},
+		{Key: []byte("messageDup"), Value: []byte{bool2byte(m.Dup)}},
+		{Key: []byte("messageKind"), Value: []byte{byte(m.Kind)}},
+	}
+	if toUserID != "" {
+		headers = append(headers, sarama.RecordHeader{Key: []byte("toUser"), Value: []byte(toUserID)})
+	}
+	if toChannel != "" {
+		headers = append(headers, sarama.RecordHeader{Key: []byte("toChannel"), Value: []byte(toChannel)})
+	}
+	if id != nil {
+		headers = append(headers,
+			sarama.RecordHeader{Key: []byte("fromUser"), Value: []byte(id.UserID)},
+			sarama.RecordHeader{Key: []byte("fromClient"), Value: []byte(id.ClientID)})
+	}
+	kafkaMsg := &sarama.ProducerMessage{
+		Topic:   topic,
+		Value:   sarama.ByteEncoder(m.Payload),
+		Headers: headers,
+	}
+	partition, offset, err := b.producer.SendMessage(kafkaMsg)
+	if err != nil {
+		xlog.Error("Failed to send message to Kafka",
+			xlog.Err(err),
+			xlog.Str("topic", topic),
+			xlog.Int("kind", int(m.Kind)))
+		kafkaSpan.RecordError(err)
+	} else {
+		xlog.Debug("Sent message to Kafka",
+			xlog.Str("topic", topic),
+			xlog.I32("partition", partition),
+			xlog.I64("offset", offset),
+			xlog.Int("kind", int(m.Kind)))
+		kafkaSpan.SetAttributes(
+			attribute.Int("kafka.partition", int(partition)),
+			attribute.Int64("kafka.offset", offset),
+		)
+	}
+	kafkaSpan.End()
 }

@@ -4,7 +4,7 @@
 
 Cable 集群使用 Prometheus 进行分布式指标收集和聚合：
 
-1. **每个 broker 节点**独立暴露 metrics 端口（默认 9090）
+1. **每个 broker 节点**独立暴露 metrics 端口（默认 8888)
 2. **Prometheus** 定期抓取所有节点的指标数据
 3. **PromQL 查询**聚合计算集群总吞吐量
 

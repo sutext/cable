@@ -17,16 +17,11 @@ data:
         editable: true
       - name: OpenTelemetry
         type: otel-datasource
-        url: http://otel-collector:4317
+        url: http://otel-collector:4318
         access: proxy
         isDefault: false
         version: 1
         editable: true
-        jsonData:
-          httpMethod: grpc
-          tracesQueryTimeout: 60s
-          metricsQueryTimeout: 60s
-          logsQueryTimeout: 60s
 ---
 apiVersion: apps/v1
 kind: Deployment

@@ -19,6 +19,7 @@ import (
 // Broker defines the interface for the cluster broker.
 // It provides methods for managing clients, channels, and message routing.
 type Broker interface {
+	ID() uint64
 	// Start starts the broker and all its components.
 	//
 	Start()
@@ -182,6 +183,9 @@ func NewBroker(opts ...Option) Broker {
 	b.cluster = newCluster(b, options.clusterSize, options.peerPort)
 	b.peerServer = newPeerServer(b, fmt.Sprintf(":%d", options.peerPort))
 	return b
+}
+func (b *broker) ID() uint64 {
+	return b.id
 }
 
 // Start starts the broker and all its components.

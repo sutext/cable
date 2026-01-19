@@ -94,6 +94,10 @@ func (m *mockCluster) AddBroker(ctx context.Context, id uint64, addr string) err
 	return nil
 }
 
+func (m *mockBroker) ID() uint64 {
+	return 1
+}
+
 func (m *mockBroker) Cluster() cluster.Cluster {
 	return &mockCluster{ready: m.isReady}
 }
