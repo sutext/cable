@@ -48,18 +48,17 @@ type traceConfig struct {
 
 type metricsConfig struct {
 	Enabled bool   `yaml:"enabled"`
-	Port    uint16 `yaml:"port"`
 	Path    string `yaml:"path"`
 }
 
 type config struct {
 	Pprof        bool                         `yaml:"pprof"`
 	BrokerID     uint64                       `yaml:"brokerid"`
-	InitSize     int32                        `yaml:"initSize"`
 	GrpcPort     uint16                       `yaml:"grpcPort"`
 	HTTPPort     uint16                       `yaml:"httpPort"`
 	PeerPort     uint16                       `yaml:"peerPort"`
 	LogLevel     string                       `yaml:"logLevel"`
+	ClusterSize  int32                        `yaml:"clusterSize"`
 	Redis        redisConfig                  `yaml:"redis"`
 	Trace        traceConfig                  `yaml:"trace"`
 	Metrics      metricsConfig                `yaml:"metrics"`

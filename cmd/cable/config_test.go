@@ -84,8 +84,8 @@ listeners:
 	if cfg.BrokerID != 123 {
 		t.Errorf("Expected BrokerID to be 123, got %d", cfg.BrokerID)
 	}
-	if cfg.InitSize != 10 {
-		t.Errorf("Expected InitSize to be 10, got %d", cfg.InitSize)
+	if cfg.ClusterSize != 10 {
+		t.Errorf("Expected InitSize to be 10, got %d", cfg.ClusterSize)
 	}
 	if cfg.HTTPPort != 8080 {
 		t.Errorf("Expected HTTPPort to be 8080, got %d", cfg.HTTPPort)
@@ -191,17 +191,17 @@ func TestYamlMarshalUnmarshal(t *testing.T) {
 		},
 		Pprof:        true,
 		BrokerID:     1,
-		InitSize:     5,
+		ClusterSize:  5,
 		HTTPPort:     8888,
 		PeerPort:     4567,
 		LogLevel:     "info",
 		KafkaBrokers: []string{"localhost:9092"},
 		MessageRoute: map[packet.MessageKind]route{
-			packet.MessageKindToUser: {
+			1: {
 				ResendType: resendToUser,
 				KafkaTopic: "user-topic",
 			},
-			packet.MessageKindToChannel: {
+			2: {
 				ResendType: resendToChannel,
 				KafkaTopic: "group-topic",
 			},

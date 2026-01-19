@@ -17,6 +17,7 @@ import (
 
 // Cluster defines the interface for cluster management operations.
 type Cluster interface {
+	Size() int32
 	// IsReady checks if the cluster is ready for operations.
 	//
 	// Returns:
@@ -103,6 +104,9 @@ func (c *cluster) Start() {
 		}
 	}()
 	time.AfterFunc(time.Millisecond*100, c.autoDiscovery)
+}
+func (c *cluster) Size() int32 {
+	return c.size
 }
 
 // Status returns the current status of the Raft node.

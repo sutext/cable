@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"net/http"
 	"time"
 
 	"github.com/IBM/sarama"
@@ -24,59 +23,28 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
-// Message metrics definitions
-var (
-	// messageUpCounter counts incoming messages
-	messageUpCounter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "cable_messages_up_total",
-			Help: "Total number of incoming messages",
-		},
-		[]string{"broker_id", "kind"},
-	)
-
-	// messageDownCounter counts outgoing messages
-	messageDownCounter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "cable_messages_down_total",
-			Help: "Total number of outgoing messages",
-		},
-		[]string{"broker_id", "kind", "target_type"},
-	)
-
-	// messageUpRate tracks incoming message rate
-	messageUpRate = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "cable_messages_up_duration_seconds",
-			Help:    "Duration of message processing for incoming messages",
-			Buckets: prometheus.DefBuckets,
-		},
-		[]string{"broker_id", "kind"},
-	)
-
-	// messageDownRate tracks outgoing message rate
-	messageDownRate = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "cable_messages_down_duration_seconds",
-			Help:    "Duration of message processing for outgoing messages",
-			Buckets: prometheus.DefBuckets,
-		},
-		[]string{"broker_id", "kind", "target_type"},
-	)
-)
-
 type booter struct {
-	redis          *redis.Client
-	config         *config
-	broker         cluster.Broker
-	kafka          sarama.Client
-	grpcApi        *grpcServer
-	httpApi        *httpServer
-	producer       sarama.SyncProducer
-	tracerProvider *tracesdk.TracerProvider
-	brokerIDStr    string
+	redis              *redis.Client
+	config             *config
+	broker             cluster.Broker
+	kafka              sarama.Client
+	grpcApi            *grpcServer
+	httpApi            *httpServer
+	producer           sarama.SyncProducer
+	brokerIDStr        string
+	tracerProvider     *tracesdk.TracerProvider
+	messageUpRate      *prometheus.HistogramVec
+	messageDownRate    *prometheus.HistogramVec
+	messageUpCounter   *prometheus.CounterVec
+	messageDownCounter *prometheus.CounterVec
 }
 
+func bool2byte(b bool) byte {
+	if b {
+		return 1
+	}
+	return 0
+}
 func newBooter(config *config) *booter {
 	b := &booter{
 		config:      config,
@@ -110,7 +78,7 @@ func newBooter(config *config) *booter {
 	b.broker = cluster.NewBroker(
 		cluster.WithBrokerID(b.config.BrokerID),
 		cluster.WithHandler(b),
-		cluster.WithInitSize(config.InitSize),
+		cluster.WithClusterSize(config.ClusterSize),
 		cluster.WithListeners(liss),
 	)
 	b.grpcApi = newGRPC(b)
@@ -211,23 +179,52 @@ func (b *booter) initTracing() {
 }
 
 func (b *booter) initMetrics() {
-	// Register metrics with default registry
-	prometheus.MustRegister(
-		messageUpCounter,
-		messageDownCounter,
-		messageUpRate,
-		messageDownRate,
+
+	// messageUpCounter counts incoming messages
+	b.messageUpCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "cable_messages_up_total",
+			Help: "Total number of incoming messages",
+		},
+		[]string{"broker_id", "kind"},
 	)
 
-	// Start metrics HTTP server
-	metricsAddr := fmt.Sprintf(":%d", b.config.Metrics.Port)
-	go func() {
-		b.httpApi.Handle("/metrics", promhttp.Handler())
-		xlog.Info("Metrics server started", xlog.Str("address", metricsAddr))
-		if err := http.ListenAndServe(metricsAddr, nil); err != nil {
-			xlog.Error("Failed to start metrics server", xlog.Err(err))
-		}
-	}()
+	// messageDownCounter counts outgoing messages
+	b.messageDownCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "cable_messages_down_total",
+			Help: "Total number of outgoing messages",
+		},
+		[]string{"broker_id", "kind", "target_type"},
+	)
+
+	// messageUpRate tracks incoming message rate
+	b.messageUpRate = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "cable_messages_up_duration_seconds",
+			Help:    "Duration of message processing for incoming messages",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"broker_id", "kind"},
+	)
+
+	// messageDownRate tracks outgoing message rate
+	b.messageDownRate = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "cable_messages_down_duration_seconds",
+			Help:    "Duration of message processing for outgoing messages",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"broker_id", "kind", "target_type"},
+	)
+
+	prometheus.MustRegister(
+		b.messageUpCounter,
+		b.messageDownCounter,
+		b.messageUpRate,
+		b.messageDownRate,
+	)
+	b.httpApi.Handle(b.config.Metrics.Path, promhttp.Handler())
 }
 func (b *booter) Shutdown(ctx context.Context) error {
 	if b.redis != nil {
@@ -246,15 +243,6 @@ func (b *booter) Shutdown(ctx context.Context) error {
 	}
 	return b.broker.Shutdown(ctx)
 }
-func (b *booter) ListChannels(ctx context.Context, uid string) (map[string]string, error) {
-	if b.redis == nil {
-		return nil, fmt.Errorf("redis client not initialized")
-	}
-	return b.redis.HGetAll(ctx, b.userKey(uid)).Result()
-}
-func (b *booter) userKey(uid string) string {
-	return fmt.Sprintf("%s:%s", b.config.Redis.UserPrefix, uid)
-}
 
 // -- Handler methods --
 func (b *booter) OnUserConnect(c *packet.Connect) packet.ConnectCode {
@@ -266,10 +254,10 @@ func (b *booter) OnUserClosed(id *packet.Identity) {
 func (b *booter) OnUserMessage(m *packet.Message, id *packet.Identity) error {
 	// Record incoming message counter and start timer for rate
 	kindStr := fmt.Sprintf("%d", m.Kind)
-	messageUpCounter.WithLabelValues(b.brokerIDStr, kindStr).Inc()
+	b.messageUpCounter.WithLabelValues(b.brokerIDStr, kindStr).Inc()
 	startTime := time.Now()
 	defer func() {
-		messageUpRate.WithLabelValues(b.brokerIDStr, kindStr).Observe(time.Since(startTime).Seconds())
+		b.messageUpRate.WithLabelValues(b.brokerIDStr, kindStr).Observe(time.Since(startTime).Seconds())
 	}()
 
 	// Get tracer
@@ -297,39 +285,7 @@ func (b *booter) OnUserMessage(m *packet.Message, id *packet.Identity) error {
 	// Handle message resend based on resendType
 	switch route.ResendType {
 	case resendToAll:
-		// Send message to all clients asynchronously
-		go func() {
-			resendCtx, resendSpan := tracer.Start(ctx, "message.resend.all")
-
-			// Record outgoing message metrics
-			kindStr := fmt.Sprintf("%d", m.Kind)
-			targetType := "all"
-			sendStartTime := time.Now()
-
-			total, success, err := b.broker.SendToAll(resendCtx, m)
-			sendDuration := time.Since(sendStartTime).Seconds()
-
-			// Record metrics for each sent message
-			for i := int32(0); i < success; i++ {
-				messageDownCounter.WithLabelValues(b.brokerIDStr, kindStr, targetType).Inc()
-			}
-			messageDownRate.WithLabelValues(b.brokerIDStr, kindStr, targetType).Observe(sendDuration)
-
-			if err != nil {
-				xlog.Error("Failed to send message to all", xlog.Err(err))
-				resendSpan.RecordError(err)
-			} else {
-				xlog.Debug("Sent message to all clients",
-					xlog.I32("total", total),
-					xlog.I32("success", success),
-					xlog.Any("kind", uint8(m.Kind)))
-				resendSpan.SetAttributes(
-					attribute.Int("clients.total", int(total)),
-					attribute.Int("clients.success", int(success)),
-				)
-			}
-			resendSpan.End()
-		}()
+		go b.SendToAll(ctx, m)
 	case resendToUser:
 		uid, ok := m.Get(packet.PropertyUserID)
 		if !ok {
@@ -339,43 +295,7 @@ func (b *booter) OnUserMessage(m *packet.Message, id *packet.Identity) error {
 		toUserID = uid
 		// Get user ID from message properties or use the sender's user ID
 		// Send message to specified user asynchronously
-		go func() {
-			resendCtx, resendSpan := tracer.Start(ctx, "message.resend.user")
-			resendSpan.SetAttributes(attribute.String("user.id", uid))
-
-			// Record outgoing message metrics
-			kindStr := fmt.Sprintf("%d", m.Kind)
-			targetType := "user"
-			sendStartTime := time.Now()
-
-			total, success, err := b.broker.SendToUser(resendCtx, uid, m)
-			sendDuration := time.Since(sendStartTime).Seconds()
-
-			// Record metrics for each sent message
-			for i := int32(0); i < success; i++ {
-				messageDownCounter.WithLabelValues(b.brokerIDStr, kindStr, targetType).Inc()
-			}
-			messageDownRate.WithLabelValues(b.brokerIDStr, kindStr, targetType).Observe(sendDuration)
-
-			if err != nil {
-				xlog.Error("Failed to send message to user",
-					xlog.Err(err),
-					xlog.Uid(uid),
-					xlog.Any("kind", uint8(m.Kind)))
-				resendSpan.RecordError(err)
-			} else {
-				xlog.Info("Sent message to user",
-					xlog.Uid(uid),
-					xlog.I32("total", total),
-					xlog.I32("success", success),
-					xlog.Any("kind", uint8(m.Kind)))
-				resendSpan.SetAttributes(
-					attribute.Int("clients.total", int(total)),
-					attribute.Int("clients.success", int(success)),
-				)
-			}
-			resendSpan.End()
-		}()
+		go b.SendToUser(ctx, uid, m)
 	case resendToChannel:
 		channel, ok := m.Get(packet.PropertyChannel)
 		if !ok {
@@ -383,44 +303,7 @@ func (b *booter) OnUserMessage(m *packet.Message, id *packet.Identity) error {
 		}
 		toChannel = channel
 		// Send message to specified channel asynchronously
-		go func() {
-			resendCtx, resendSpan := tracer.Start(ctx, "message.resend.channel")
-			resendSpan.SetAttributes(attribute.String("channel.name", channel))
-
-			// Record outgoing message metrics
-			kindStr := fmt.Sprintf("%d", m.Kind)
-			targetType := "channel"
-			sendStartTime := time.Now()
-
-			total, success, err := b.broker.SendToChannel(resendCtx, channel, m)
-			sendDuration := time.Since(sendStartTime).Seconds()
-
-			// Record metrics for each sent message
-			for range success {
-				messageDownCounter.WithLabelValues(b.brokerIDStr, kindStr, targetType).Inc()
-			}
-			messageDownRate.WithLabelValues(b.brokerIDStr, kindStr, targetType).Observe(sendDuration)
-
-			if err != nil {
-				xlog.Error("Failed to send message to channel",
-					xlog.Err(err),
-					xlog.Str("channel", channel),
-					xlog.Any("kind", uint8(m.Kind)))
-				resendSpan.RecordError(err)
-			} else {
-				xlog.Info("Sent message to channel",
-					xlog.Str("channel", channel),
-					xlog.I32("total", total),
-					xlog.I32("success", success),
-					xlog.Any("kind", uint8(m.Kind)))
-				resendSpan.SetAttributes(
-					attribute.Int("clients.total", int(total)),
-					attribute.Int("clients.success", int(success)),
-				)
-			}
-			resendSpan.End()
-		}()
-
+		go b.SendToChannel(ctx, channel, m)
 	case resendNone:
 		// Do not resend, just process Kafka
 	default:
@@ -433,13 +316,15 @@ func (b *booter) OnUserMessage(m *packet.Message, id *packet.Identity) error {
 			attribute.Bool("resend.valid", false),
 		)
 	}
-
 	// Send message to Kafka if topic is configured
 	if route.KafkaTopic != "" && b.producer != nil {
 		_, kafkaSpan := tracer.Start(ctx, "message.send.kafka")
 		kafkaSpan.SetAttributes(attribute.String("kafka.topic", route.KafkaTopic))
-
-		headers := []sarama.RecordHeader{{Key: []byte("messageKind"), Value: []byte{byte(m.Kind)}}}
+		headers := []sarama.RecordHeader{
+			{Key: []byte("messageQos"), Value: []byte{byte(m.Qos)}},
+			{Key: []byte("messageDup"), Value: []byte{bool2byte(m.Dup)}},
+			{Key: []byte("messageKind"), Value: []byte{byte(m.Kind)}},
+		}
 		if toUserID != "" {
 			headers = append(headers, sarama.RecordHeader{Key: []byte("toUser"), Value: []byte(toUserID)})
 		}
@@ -479,6 +364,112 @@ func (b *booter) OnUserMessage(m *packet.Message, id *packet.Identity) error {
 
 	return nil
 }
+
 func (b *booter) GetUserChannels(uid string) (map[string]string, error) {
 	return b.ListChannels(context.Background(), uid)
+}
+
+func (b *booter) userKey(uid string) string {
+	return fmt.Sprintf("%s:%s", b.config.Redis.UserPrefix, uid)
+}
+func (b *booter) ListChannels(ctx context.Context, uid string) (map[string]string, error) {
+	if b.redis == nil {
+		return nil, fmt.Errorf("redis client not initialized")
+	}
+	return b.redis.HGetAll(ctx, b.userKey(uid)).Result()
+}
+func (b *booter) SendToAll(ctx context.Context, m *packet.Message) (int32, int32, error) {
+	tracer := otel.Tracer(b.config.Trace.ServiceName)
+	resendCtx, resendSpan := tracer.Start(ctx, "message.resend.all")
+	kindStr := fmt.Sprintf("%d", m.Kind)
+	targetType := "all"
+	sendStartTime := time.Now()
+	total, success, err := b.broker.SendToAll(resendCtx, m)
+	sendDuration := time.Since(sendStartTime).Seconds()
+	for range success {
+		b.messageDownCounter.WithLabelValues(b.brokerIDStr, kindStr, targetType).Inc()
+	}
+	b.messageDownRate.WithLabelValues(b.brokerIDStr, kindStr, targetType).Observe(sendDuration)
+
+	if err != nil {
+		xlog.Error("Failed to send message to all", xlog.Err(err))
+		resendSpan.RecordError(err)
+	} else {
+		xlog.Debug("Sent message to all clients",
+			xlog.I32("total", total),
+			xlog.I32("success", success),
+			xlog.Any("kind", uint8(m.Kind)))
+		resendSpan.SetAttributes(
+			attribute.Int("clients.total", int(total)),
+			attribute.Int("clients.success", int(success)),
+		)
+	}
+	resendSpan.End()
+	return total, success, err
+}
+func (b *booter) SendToUser(ctx context.Context, uid string, m *packet.Message) (int32, int32, error) {
+	tracer := otel.Tracer(b.config.Trace.ServiceName)
+	resendCtx, resendSpan := tracer.Start(ctx, "message.resend.user")
+	resendSpan.SetAttributes(attribute.String("user.id", uid))
+	kindStr := fmt.Sprintf("%d", m.Kind)
+	targetType := "user"
+	sendStartTime := time.Now()
+	total, success, err := b.broker.SendToUser(resendCtx, uid, m)
+	sendDuration := time.Since(sendStartTime).Seconds()
+	for range success {
+		b.messageDownCounter.WithLabelValues(b.brokerIDStr, kindStr, targetType).Inc()
+	}
+	b.messageDownRate.WithLabelValues(b.brokerIDStr, kindStr, targetType).Observe(sendDuration)
+	if err != nil {
+		xlog.Error("Failed to send message to user",
+			xlog.Err(err),
+			xlog.Uid(uid),
+			xlog.Any("kind", uint8(m.Kind)))
+		resendSpan.RecordError(err)
+	} else {
+		xlog.Info("Sent message to user",
+			xlog.Uid(uid),
+			xlog.I32("total", total),
+			xlog.I32("success", success),
+			xlog.Any("kind", uint8(m.Kind)))
+		resendSpan.SetAttributes(
+			attribute.Int("clients.total", int(total)),
+			attribute.Int("clients.success", int(success)),
+		)
+	}
+	resendSpan.End()
+	return total, success, err
+}
+func (b *booter) SendToChannel(ctx context.Context, channel string, m *packet.Message) (int32, int32, error) {
+	tracer := otel.Tracer(b.config.Trace.ServiceName)
+	resendCtx, resendSpan := tracer.Start(ctx, "message.resend.channel")
+	resendSpan.SetAttributes(attribute.String("channel.name", channel))
+	kindStr := fmt.Sprintf("%d", m.Kind)
+	targetType := "channel"
+	sendStartTime := time.Now()
+	total, success, err := b.broker.SendToChannel(resendCtx, channel, m)
+	sendDuration := time.Since(sendStartTime).Seconds()
+	for range success {
+		b.messageDownCounter.WithLabelValues(b.brokerIDStr, kindStr, targetType).Inc()
+	}
+	b.messageDownRate.WithLabelValues(b.brokerIDStr, kindStr, targetType).Observe(sendDuration)
+	if err != nil {
+		xlog.Error("Failed to send message to channel",
+			xlog.Err(err),
+			xlog.Str("channel", channel),
+			xlog.Any("kind", uint8(m.Kind)))
+		resendSpan.RecordError(err)
+	} else {
+		xlog.Info("Sent message to channel",
+			xlog.Str("channel", channel),
+			xlog.I32("total", total),
+			xlog.I32("success", success),
+			xlog.Any("kind", uint8(m.Kind)))
+		resendSpan.SetAttributes(
+			attribute.Int("clients.total", int(total)),
+			attribute.Int("clients.success", int(success)),
+		)
+	}
+	resendSpan.End()
+	return total, success, err
 }

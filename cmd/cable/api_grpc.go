@@ -18,19 +18,18 @@ type grpcServer struct {
 	pb.UnimplementedCableServiceServer
 	booter   *booter
 	broker   cluster.Broker
-	address  string
 	listener net.Listener
 }
 
 func newGRPC(booter *booter) *grpcServer {
 	return &grpcServer{
-		booter:  booter,
-		broker:  booter.broker,
-		address: fmt.Sprintf(":%d", booter.config.GrpcPort)}
+		booter: booter,
+		broker: booter.broker,
+	}
 }
 
 func (s *grpcServer) Serve() error {
-	lis, err := net.Listen("tcp", s.address)
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", s.booter.config.GrpcPort))
 	if err != nil {
 		return err
 	}
@@ -62,7 +61,7 @@ func (s *grpcServer) SendToAll(ctx context.Context, req *pb.ToAllReq) (*pb.MsgRe
 		Kind:    packet.MessageKind(req.Kind),
 		Payload: req.Message,
 	}
-	total, success, err := s.broker.SendToAll(ctx, msg)
+	total, success, err := s.booter.SendToAll(ctx, msg)
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +76,7 @@ func (s *grpcServer) SendToUser(ctx context.Context, req *pb.ToUserReq) (*pb.Msg
 		Kind:    packet.MessageKind(req.Kind),
 		Payload: req.Message,
 	}
-	total, success, err := s.broker.SendToUser(ctx, req.Uid, msg)
+	total, success, err := s.booter.SendToUser(ctx, req.Uid, msg)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +91,7 @@ func (s *grpcServer) SendToChannel(ctx context.Context, req *pb.ToChannelReq) (*
 		Kind:    packet.MessageKind(req.Kind),
 		Payload: req.Message,
 	}
-	total, success, err := s.broker.SendToChannel(ctx, req.Channel, msg)
+	total, success, err := s.booter.SendToChannel(ctx, req.Channel, msg)
 	if err != nil {
 		return nil, err
 	}

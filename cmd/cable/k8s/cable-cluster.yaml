@@ -10,21 +10,6 @@ data:
   config.yaml: |
     # Cable Server Configuration
 
-    # Redis Configuration
-    redis:
-      db: 0
-      address: "localhost:6379"
-      password: ""
-
-    # Kafka Configuration
-    kafka:
-      brokers:
-        - "localhost:9092"
-      userUpTopic: "cable-upstream-user"
-      groupUpTopic: "cable-upstream-group"
-      userDownTopic: "cable-downstream-user"
-      groupDownTopic: "cable-downstream-group"
-
     # Pprof Debugging
     pprof: false
 
@@ -32,9 +17,12 @@ data:
     brokerid: 0
 
     # Initial size of cluster
-    initSize: 1
+    clusterSize: 1
 
-    # HTTP Server Port for Admin API
+    # gRPC Server Port for API
+    grpcPort: 8880
+
+    # HTTP Server Port for API
     httpPort: 8888
 
     # Peer Port for Cluster Communication
@@ -42,6 +30,29 @@ data:
 
     # Log Level: debug, info, warn, error
     logLevel: "info"
+
+    # Redis Configuration
+    redis:
+      db: 0
+      address: "redis-cluster:6379"
+      password: ""
+      userPrefix: "cable-user-channels:"
+
+    # Trace Configuration
+    trace:
+      enabled: true
+      otlpEndpoint: localhost:4317
+      serviceName: cable
+      samplerRatio: 0.1
+
+    # Metrics Configuration
+    metrics:
+      enabled: true
+      path: /metrics
+
+    # Kafka Brokers Configuration
+    kafkaBrokers:
+      - "kafka-cluster:9092"
 
     # Listeners Configuration
     listeners:
@@ -78,6 +89,18 @@ data:
         tls:
           certFile: "cert.pem"
           keyFile: "key.pem"
+
+    # Message Route Configuration
+    messageRoute:
+      # Example message routes, adjust based on your actual message types
+      0: 
+        enabled: true
+        resendType: "user"
+        kafkaTopic: "cable-upstream-user"
+      1:
+        enabled: true
+        resendType: "channel"
+        kafkaTopic: "cable-upstream-group"
 
 ---
 kind: StatefulSet
@@ -172,6 +195,10 @@ spec:
       port: 6060
       targetPort: 6060
     - protocol: TCP
-      name: admin
+      name: grpc_api
+      port: 8880
+      targetPort: 8880
+    - protocol: TCP
+      name: http_api
       port: 8888
       targetPort: 8888

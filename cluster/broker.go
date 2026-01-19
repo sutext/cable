@@ -179,7 +179,7 @@ func NewBroker(opts ...Option) Broker {
 		)
 		b.listeners[l.network] = l
 	}
-	b.cluster = newCluster(b, options.initSize, options.peerPort)
+	b.cluster = newCluster(b, options.clusterSize, options.peerPort)
 	b.peerServer = newPeerServer(b, fmt.Sprintf(":%d", options.peerPort))
 	return b
 }

@@ -71,11 +71,11 @@ func (h *emptyHandler) GetUserChannels(uid string) (channels map[string]string, 
 
 // options holds the configuration for the cluster.
 type options struct {
-	handler   Handler     // Handler for cluster events
-	brokerID  uint64      // Unique ID for the broker
-	peerPort  uint16      // Port for peer-to-peer communication
-	initSize  int32       // Initial cluster size
-	listeners []*Listener // List of listeners for client connections
+	handler     Handler     // Handler for cluster events
+	brokerID    uint64      // Unique ID for the broker
+	peerPort    uint16      // Port for peer-to-peer communication
+	listeners   []*Listener // List of listeners for client connections
+	clusterSize int32       // Initial cluster size
 }
 
 // newOptions creates a new options instance with default values and applies the given options.
@@ -87,9 +87,9 @@ type options struct {
 // - *options: A new options instance with the given options applied
 func newOptions(opts ...Option) *options {
 	options := &options{
-		handler:  &emptyHandler{},
-		peerPort: 4567,
-		initSize: 3,
+		handler:     &emptyHandler{},
+		peerPort:    4567,
+		clusterSize: 3,
 	}
 	for _, opt := range opts {
 		opt.f(options)
@@ -154,16 +154,16 @@ func WithBrokerID(id uint64) Option {
 	}}
 }
 
-// WithInitSize sets the initial cluster size.
+// WithClusterSize sets the initial cluster size.
 //
 // Parameters:
 // - size: Initial cluster size
 //
 // Returns:
 // - Option: Configuration option for the cluster
-func WithInitSize(size int32) Option {
+func WithClusterSize(size int32) Option {
 	return Option{func(o *options) {
-		o.initSize = size
+		o.clusterSize = size
 	}}
 }
 

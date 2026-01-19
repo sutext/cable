@@ -79,6 +79,9 @@ type mockCluster struct {
 	ready bool
 }
 
+func (m *mockCluster) Size() int32 {
+	return 1
+}
 func (m *mockCluster) IsReady() bool {
 	return m.ready
 }

@@ -7,7 +7,7 @@ pprof: false
 brokerid: 0
 
 # Initial size of cluster
-initSize: 1
+clusterSize: 1
 
 # gRPC Server Port for API
 grpcPort: 8880
@@ -88,5 +88,4 @@ trace:
 
 metrics:
   enabled: true
-  port: 9090
   path: /metrics

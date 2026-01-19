@@ -76,7 +76,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: redis-cluster
+  name: redis-node
   namespace: default
 spec:
   selector:
@@ -94,7 +94,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: redis-cluster-loadbalancer
+  name: redis-cluster
   namespace: default
 spec:
   selector:

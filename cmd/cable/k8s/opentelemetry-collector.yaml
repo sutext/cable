@@ -1,0 +1,112 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector-config
+  namespace: default
+  labels:
+    app: otel-collector
+data:
+  otel-collector-config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317
+          http:
+            endpoint: 0.0.0.0:4318
+    processors:
+      batch:
+        timeout: 1s
+        send_batch_size: 1024
+    exporters:
+      prometheus:
+        endpoint: 0.0.0.0:8889
+        resource_to_telemetry_conversion:
+          enabled: true
+      logging:
+        loglevel: debug
+    service:
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [logging]
+        metrics:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [prometheus, logging]
+        logs:
+          receivers: [otlp]
+          processors: [batch]
+          exporters: [logging]
+      telemetry:
+        metrics:
+          address: 0.0.0.0:8888
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: default
+  labels:
+    app: otel-collector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: otel-collector
+  template:
+    metadata:
+      labels:
+        app: otel-collector
+    spec:
+      containers:
+        - name: otel-collector
+          image: otel/opentelemetry-collector:latest
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+            - name: prometheus
+              containerPort: 8889
+            - name: metrics
+              containerPort: 8888
+          volumeMounts:
+            - name: otel-collector-config
+              mountPath: /etc/otelcol-config.yaml
+              subPath: otel-collector-config.yaml
+      volumes:
+        - name: otel-collector-config
+          configMap:
+            name: otel-collector-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: default
+  labels:
+    app: otel-collector
+spec:
+  selector:
+    app: otel-collector
+  ports:
+    - name: otlp-grpc
+      protocol: TCP
+      port: 4317
+      targetPort: 4317
+    - name: otlp-http
+      protocol: TCP
+      port: 4318
+      targetPort: 4318
+    - name: prometheus
+      protocol: TCP
+      port: 8889
+      targetPort: 8889
+    - name: metrics
+      protocol: TCP
+      port: 8888
+      targetPort: 8888
+  type: ClusterIP
