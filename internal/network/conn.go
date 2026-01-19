@@ -62,16 +62,17 @@ type conn struct {
 	requestLock  sync.Mutex
 	messageLock  sync.Mutex
 	closeHandler func()
-
 	messageTasks map[uint16]chan *packet.Messack
 	requestTasks map[uint16]chan *packet.Response
 }
 
 func newConn(raw rawconn, logger *xlog.Logger, queueCapacity int32) Conn {
 	c := &conn{
-		raw:       raw,
-		logger:    logger,
-		sendQueue: queue.New(int32(queueCapacity)),
+		raw:          raw,
+		logger:       logger,
+		sendQueue:    queue.New(int32(queueCapacity)),
+		messageTasks: make(map[uint16]chan *packet.Messack),
+		requestTasks: make(map[uint16]chan *packet.Response),
 	}
 	return c
 }
