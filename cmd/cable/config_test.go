@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"slices"
 	"testing"
 
 	"sutext.github.io/cable/packet"
@@ -19,8 +20,8 @@ httpPort: 8080
 peerPort: 9090
 logLevel: "debug"
 redis:
-  db: 1
-  address: "localhost:6379"
+  address: 
+    - "localhost:6379"
   password: "testpass"
 kafkaBrokers:
   - "kafka1:9092"
@@ -66,12 +67,8 @@ listeners:
 		t.Fatalf("Failed to read config: %v", err)
 	}
 
-	// Test Redis config
-	if cfg.Redis.DB != 1 {
-		t.Errorf("Expected Redis DB to be 1, got %d", cfg.Redis.DB)
-	}
-	if cfg.Redis.Address != "localhost:6379" {
-		t.Errorf("Expected Redis Address to be 'localhost:6379', got '%s'", cfg.Redis.Address)
+	if cfg.Redis.Addresses[0] != "localhost:6379" {
+		t.Errorf("Expected Redis Address to be 'localhost:6379', got '%s'", cfg.Redis.Addresses[0])
 	}
 	if cfg.Redis.Password != "testpass" {
 		t.Errorf("Expected Redis Password to be 'testpass', got '%s'", cfg.Redis.Password)
@@ -185,9 +182,8 @@ func TestYamlMarshalUnmarshal(t *testing.T) {
 	// Test that yaml marshal/unmarshal works correctly with our structs
 	originalCfg := &config{
 		Redis: redisConfig{
-			DB:       0,
-			Address:  "localhost:6379",
-			Password: "",
+			Password:  "",
+			Addresses: []string{"localhost:6379"},
 		},
 		Pprof:        true,
 		BrokerID:     1,
@@ -229,8 +225,8 @@ func TestYamlMarshalUnmarshal(t *testing.T) {
 	}
 
 	// Verify the results
-	if unmarshaledCfg.Redis.Address != originalCfg.Redis.Address {
-		t.Errorf("Expected Redis Address to be %s, got %s", originalCfg.Redis.Address, unmarshaledCfg.Redis.Address)
+	if slices.Equal(originalCfg.Redis.Addresses, unmarshaledCfg.Redis.Addresses) {
+		t.Errorf("Expected Redis Address to be %s, got %s", originalCfg.Redis.Addresses, unmarshaledCfg.Redis.Addresses)
 	}
 	if unmarshaledCfg.Pprof != originalCfg.Pprof {
 		t.Errorf("Expected Pprof to be %v, got %v", originalCfg.Pprof, unmarshaledCfg.Pprof)

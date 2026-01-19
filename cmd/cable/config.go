@@ -20,10 +20,9 @@ type listener struct {
 	TLS       *tlsConfig `yaml:"tls"`
 }
 type redisConfig struct {
-	DB         int    `yaml:"db"`
-	Address    string `yaml:"address"`
-	Password   string `yaml:"password"`
-	UserPrefix string `yaml:"userPrefix"`
+	Password   string   `yaml:"password"`
+	Addresses  []string `yaml:"addresses"`
+	UserPrefix string   `yaml:"userPrefix"`
 }
 type resendType string
 

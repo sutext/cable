@@ -23,9 +23,9 @@ logLevel: "info"
 
 # Redis Configuration
 redis:
-  db: 0
-  address: "localhost:6379"
   password: ""
+  addresses: 
+    - "localhost:6379"
   userPrefix: "cable-user-channels:"
 
 # Listeners Configuration

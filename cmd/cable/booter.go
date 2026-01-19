@@ -24,7 +24,7 @@ import (
 )
 
 type booter struct {
-	redis              *redis.Client
+	redis              *redis.ClusterClient
 	config             *config
 	broker             cluster.Broker
 	kafka              sarama.Client
@@ -88,10 +88,9 @@ func newBooter(config *config) *booter {
 func (b *booter) Start() {
 	// Initialize Redis
 	rconfg := b.config.Redis
-	b.redis = redis.NewClient(&redis.Options{
-		Addr:     rconfg.Address,
+	b.redis = redis.NewClusterClient(&redis.ClusterOptions{
+		Addrs:    rconfg.Addresses,
 		Password: rconfg.Password, // no password set
-		DB:       rconfg.DB,       // use default DB
 	})
 
 	// Initialize Kafka client if configured

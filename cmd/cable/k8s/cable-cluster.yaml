@@ -33,9 +33,11 @@ data:
 
     # Redis Configuration
     redis:
-      db: 0
-      address: "redis-cluster:6379"
       password: ""
+      addresses: 
+        - "redis-cluster-0.redis-cluster:6379"
+        - "redis-cluster-1.redis-cluster:6379"
+        - "redis-cluster-2.redis-cluster:6379"
       userPrefix: "cable-user-channels:"
 
     # Trace Configuration
