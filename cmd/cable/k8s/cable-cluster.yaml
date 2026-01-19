@@ -97,11 +97,11 @@ data:
     # Message Route Configuration
     messageRoute:
       # Example message routes, adjust based on your actual message types
-      0: 
+      1: 
         enabled: true
         resendType: "user"
         kafkaTopic: "cable-upstream-user"
-      1:
+      2:
         enabled: true
         resendType: "channel"
         kafkaTopic: "cable-upstream-group"

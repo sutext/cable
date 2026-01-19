@@ -79,7 +79,7 @@ data:
           - targets: ['otel-collector:8889']
       - job_name: 'cable-metrics'
         static_configs:
-          - targets: ['cable-cluster-0.cable-clustter:8888', 'cable-cluster-1.cable-clustter:8888', 'cable-cluster-2.cable-clustter:8888']
+          - targets: ['cable-cluster-0.cable-cluster:8888', 'cable-cluster-1.cable-cluster:8888', 'cable-cluster-2.cable-cluster:8888']
 ---
 apiVersion: apps/v1
 kind: Deployment
