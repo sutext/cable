@@ -64,8 +64,6 @@ spec:
               value: "admin"
             - name: GF_USERS_ALLOW_SIGN_UP
               value: "false"
-            - name: GF_INSTALL_PLUGINS
-              value: "grafana-opentelemetry-datasource"
           resources:
             requests:
               memory: 256Mi
