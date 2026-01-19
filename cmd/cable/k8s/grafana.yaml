@@ -15,6 +15,13 @@ data:
         isDefault: true
         version: 1
         editable: true
+      - name: Tempo
+        type: Tempo
+        url: http://tempo:3200
+        access: proxy
+        isDefault: false
+        version: 1
+        editable: true
 ---
 apiVersion: apps/v1
 kind: Deployment

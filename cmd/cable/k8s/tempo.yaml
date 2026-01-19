@@ -1,0 +1,48 @@
+# tempo-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tempo
+spec:
+  selector:
+    matchLabels:
+      app: tempo
+  template:
+    metadata:
+      labels:
+        app: tempo
+    spec:
+      containers:
+      - name: tempo
+        image: grafana/tempo:latest
+        args: ["-config.file=/etc/tempo.yaml"]
+        ports:
+        - containerPort: 3200
+        - containerPort: 4317
+        volumeMounts:
+        - name: config
+          mountPath: /etc/tempo.yaml
+          subPath: tempo.yaml
+        - name: data
+          mountPath: /tmp/tempo
+      volumes:
+      - name: config
+        configMap:
+          name: tempo-config
+      - name: data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tempo
+spec:
+  selector:
+    app: tempo
+  ports:
+  - name: otlp-grpc
+    port: 4317
+    targetPort: 4317
+  - name: http
+    port: 3200
+    targetPort: 3200
