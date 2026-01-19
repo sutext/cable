@@ -59,17 +59,25 @@ spec:
             - name: kafka-data
               mountPath: /tmp/kafka-logs
           env:
-            - name: NODE_ID
-              value: "$(hostname | awk -F'-' '{print $NF}')"
             - name: CLUSTER_ID
               value: "MkU3OEVBNTcwNTJENDM2Qk"
             - name: CONTROLLER_QUORUM_VOTERS
               value: "0@kafka-broker-0.kafka-broker:9093,1@kafka-broker-1.kafka-broker:9093,2@kafka-broker-2.kafka-broker:9093"
+            # Use Downward API to get pod ordinal as node ID
+            - name: NODE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
           command:
             - "/bin/bash"
             - "-c"
           args:
             - |
+              # Extract ordinal from pod name (format: kafka-broker-0)
+              POD_NAME=${NODE_ID}
+              NODE_ID=$(echo $POD_NAME | cut -d'-' -f3)
+              echo "Pod name: $POD_NAME, Node ID: $NODE_ID"
+              
               # Set up basic configuration
               mkdir -p /tmp/kafka-config
               
