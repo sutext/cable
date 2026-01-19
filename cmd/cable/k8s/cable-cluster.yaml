@@ -52,7 +52,9 @@ data:
 
     # Kafka Brokers Configuration
     kafkaBrokers:
-      - "kafka-cluster:9092"
+      - "kafka-broker-0.kafka-broker::9092"
+      - "kafka-broker-1.kafka-broker::9092"
+      - "kafka-broker-2.kafka-broker::9092"
 
     # Listeners Configuration
     listeners:
@@ -195,10 +197,10 @@ spec:
       port: 6060
       targetPort: 6060
     - protocol: TCP
-      name: grpc_api
+      name: grpc-api
       port: 8880
       targetPort: 8880
     - protocol: TCP
-      name: http_api
+      name: http-api
       port: 8888
       targetPort: 8888
