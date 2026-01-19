@@ -1,29 +1,5 @@
 ---
 apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: kafka-config
-  namespace: default
-data:
-  server.properties: |
-    # Kafka Configuration with KRaft
-    process.roles=broker,controller
-    listeners=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
-    advertised.listeners=PLAINTEXT://kafka-broker-$(KAFKA_NODE_ID).kafka-broker:9092
-    controller.quorum.voters=0@kafka-broker-0.kafka-broker:9093,1@kafka-broker-1.kafka-broker:9093,2@kafka-broker-2.kafka-broker:9093
-    log.dirs=/var/lib/kafka/data
-    num.partitions=3
-    default.replication.factor=2
-    offsets.topic.replication.factor=2
-    transaction.state.log.replication.factor=2
-    transaction.state.log.min.isr=2
-    auto.create.topics.enable=true
-    controller.listener.names=CONTROLLER
-    inter.broker.listener.name=PLAINTEXT
-    listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
-    group.initial.rebalance.delay.ms=0
----
-apiVersion: v1
 kind: Service
 metadata:
   name: kafka-broker
@@ -73,7 +49,7 @@ spec:
     spec:
       containers:
         - name: kafka-broker
-          image: apache/kafka:3.6.0
+          image: apache/kafka:latest
           ports:
             - containerPort: 9092
               name: client
@@ -81,58 +57,55 @@ spec:
               name: controller
           volumeMounts:
             - name: kafka-data
-              mountPath: /var/lib/kafka/data
+              mountPath: /tmp/kafka-logs
           env:
-            - name: KAFKA_NODE_ID
+            - name: NODE_ID
               value: "$(hostname | awk -F'-' '{print $NF}')"
-            - name: KAFKA_PROCESS_ROLES
-              value: "broker,controller"
-            - name: KAFKA_LISTENERS
-              value: "PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093"
-            - name: KAFKA_ADVERTISED_LISTENERS
-              value: "PLAINTEXT://kafka-broker-$(hostname | awk -F'-' '{print $NF}').kafka-broker:9092"
-            - name: KAFKA_CONTROLLER_QUORUM_VOTERS
-              value: "0@kafka-broker-0.kafka-broker:9093,1@kafka-broker-1.kafka-broker:9093,2@kafka-broker-2.kafka-broker:9093"
-            - name: KAFKA_CONTROLLER_LISTENER_NAMES
-              value: "CONTROLLER"
-            - name: KAFKA_INTER_BROKER_LISTENER_NAME
-              value: "PLAINTEXT"
-            - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
-              value: "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"
-            - name: KAFKA_LOG_DIRS
-              value: "/var/lib/kafka/data"
-            - name: KAFKA_NUM_PARTITIONS
-              value: "3"
-            - name: KAFKA_DEFAULT_REPLICATION_FACTOR
-              value: "2"
-            - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR
-              value: "2"
-            - name: KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR
-              value: "2"
-            - name: KAFKA_TRANSACTION_STATE_LOG_MIN_ISR
-              value: "2"
-            - name: KAFKA_AUTO_CREATE_TOPICS_ENABLE
-              value: "true"
-            - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
-              value: "0"
-            - name: KAFKA_KRAFT_CLUSTER_ID
+            - name: CLUSTER_ID
               value: "MkU3OEVBNTcwNTJENDM2Qk"
-          # Use the built-in startup script with environment variables
+            - name: CONTROLLER_QUORUM_VOTERS
+              value: "0@kafka-broker-0.kafka-broker:9093,1@kafka-broker-1.kafka-broker:9093,2@kafka-broker-2.kafka-broker:9093"
           command:
             - "/bin/bash"
             - "-c"
           args:
             - |
-              # Check if storage is already formatted
-              if [ ! -f "/var/lib/kafka/data/meta.properties" ]; then
+              # Set up basic configuration
+              mkdir -p /tmp/kafka-config
+              
+              cat > /tmp/kafka-config/server.properties << EOF
+              process.roles=broker,controller
+              node.id=${NODE_ID}
+              listeners=PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+              advertised.listeners=PLAINTEXT://kafka-broker-${NODE_ID}.kafka-broker:9092
+              controller.quorum.voters=${CONTROLLER_QUORUM_VOTERS}
+              log.dirs=/tmp/kafka-logs
+              num.partitions=3
+              default.replication.factor=2
+              offsets.topic.replication.factor=2
+              transaction.state.log.replication.factor=2
+              transaction.state.log.min.isr=2
+              auto.create.topics.enable=true
+              controller.listener.names=CONTROLLER
+              inter.broker.listener.name=PLAINTEXT
+              listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+              group.initial.rebalance.delay.ms=0
+              EOF
+              
+              echo "Generated Kafka configuration:"
+              cat /tmp/kafka-config/server.properties
+              
+              # Format storage if needed
+              if [ ! -f /tmp/kafka-logs/meta.properties ]; then
                 echo "Formatting Kafka storage..."
-                /opt/kafka/bin/kafka-storage.sh format -t ${KAFKA_KRAFT_CLUSTER_ID} -c /opt/kafka/config/kraft/server.properties --ignore-formatted
+                /opt/kafka/bin/kafka-storage.sh format -t ${CLUSTER_ID} -c /tmp/kafka-config/server.properties --ignore-formatted
               else
                 echo "Kafka storage already formatted, skipping..."
               fi
+              
               # Start Kafka server
               echo "Starting Kafka server..."
-              exec /opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/kraft/server.properties
+              exec /opt/kafka/bin/kafka-server-start.sh /tmp/kafka-config/server.properties
   volumeClaimTemplates:
     - metadata:
         name: kafka-data
