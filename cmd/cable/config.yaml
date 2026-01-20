@@ -82,10 +82,10 @@ messageRoute:
   
 trace:
   enabled: true
-  otlpEndpoint: localhost:4317
   serviceName: cable
-  samplerRatio: 0.1
+  otlpEndpoint: localhost:4317
 
 metrics:
   enabled: true
-  path: /metrics
+  serviceName: cable
+  otlpEndpoint: localhost:4317

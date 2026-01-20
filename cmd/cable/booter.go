@@ -8,13 +8,14 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
+	metricsdk "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"golang.org/x/net/quic"
@@ -34,10 +35,12 @@ type booter struct {
 	httpApi             *httpServer
 	producer            sarama.SyncProducer
 	tracerProvider      *tracesdk.TracerProvider
-	messageUpCounter    *prometheus.CounterVec
-	messageDownCounter  *prometheus.CounterVec
-	messageUpDuration   *prometheus.HistogramVec
-	messageDownDuration *prometheus.HistogramVec
+	meterProvider       *metricsdk.MeterProvider
+	meter               metric.Meter
+	messageUpCounter    metric.Int64Counter
+	messageDownCounter  metric.Int64Counter
+	messageUpDuration   metric.Float64Histogram
+	messageDownDuration metric.Float64Histogram
 }
 
 func bool2byte(b bool) byte {
@@ -149,7 +152,6 @@ func (b *booter) initTracing() {
 	r, err := resource.New(ctx, resource.WithAttributes(
 		attribute.String("service.name", b.config.Trace.ServiceName),
 		attribute.String("service.instance.id", fmt.Sprintf("%d", b.config.BrokerID)),
-		attribute.String("resource.name", b.config.Trace.ServiceName),
 	))
 	if err != nil {
 		xlog.Error("Failed to create resource", xlog.Err(err))
@@ -177,53 +179,98 @@ func (b *booter) initTracing() {
 }
 
 func (b *booter) initMetrics() {
+	// Initialize OTel metrics
+	ctx := context.Background()
 
-	// messageUpCounter counts incoming messages
-	b.messageUpCounter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "cable_messages_up_total",
-			Help: "Total number of incoming messages",
-		},
-		[]string{"broker_id", "kind"},
+	// Create resource with service name
+	r, err := resource.New(ctx, resource.WithAttributes(
+		attribute.String("service.name", b.config.Metrics.ServiceName),
+		attribute.String("service.instance.id", fmt.Sprintf("%d", b.config.BrokerID)),
+	))
+	if err != nil {
+		xlog.Error("Failed to create resource for metrics", xlog.Err(err))
+		return
+	}
+
+	// Create OTLP metrics exporter (for Grafana Mimir)
+	otlpExporter, err := otlpmetricgrpc.New(ctx,
+		otlpmetricgrpc.WithEndpoint(b.config.Metrics.OTLPEndpoint),
+		otlpmetricgrpc.WithInsecure(), // Remove this in production
+		otlpmetricgrpc.WithTimeout(5*time.Second))
+	if err != nil {
+		xlog.Error("Failed to create OTLP metrics exporter for Mimir", xlog.Err(err))
+		return
+	}
+
+	// Create meter provider with OTLP exporter for Mimir
+	reader := metricsdk.NewPeriodicReader(otlpExporter,
+		metricsdk.WithInterval(30*time.Second),
+		metricsdk.WithTimeout(10*time.Second),
 	)
 
-	// messageDownCounter counts outgoing messages
-	b.messageDownCounter = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "cable_messages_down_total",
-			Help: "Total number of outgoing messages",
-		},
-		[]string{"broker_id", "kind", "target_type"},
+	b.meterProvider = metricsdk.NewMeterProvider(
+		metricsdk.WithResource(r),
+		metricsdk.WithReader(reader),
 	)
 
-	// messageUpRate tracks incoming message rate
-	b.messageUpDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "cable_messages_up_duration_seconds",
-			Help:    "Duration of message processing for incoming messages",
-			Buckets: prometheus.DefBuckets,
-		},
-		[]string{"broker_id", "kind"},
+	// Set global meter provider
+	otel.SetMeterProvider(b.meterProvider)
+	// Get meter from provider
+	b.meter = b.meterProvider.Meter(
+		b.config.Trace.ServiceName,
+		metric.WithInstrumentationVersion("1.0.0"),
 	)
 
-	// messageDownRate tracks outgoing message rate
-	b.messageDownDuration = prometheus.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "cable_messages_down_duration_seconds",
-			Help:    "Duration of message processing for outgoing messages",
-			Buckets: prometheus.DefBuckets,
-		},
-		[]string{"broker_id", "kind", "target_type"},
+	// Create metrics instruments
+	b.messageUpCounter, err = b.meter.Int64Counter(
+		"messages_up_total",
+		metric.WithDescription("Total number of incoming messages"),
+		metric.WithUnit("{message}"),
 	)
+	if err != nil {
+		xlog.Error("Failed to create message up counter", xlog.Err(err))
+		return
+	}
 
-	prometheus.MustRegister(
-		b.messageUpCounter,
-		b.messageDownCounter,
-		b.messageUpDuration,
-		b.messageDownDuration,
+	b.messageDownCounter, err = b.meter.Int64Counter(
+		"messages_down_total",
+		metric.WithDescription("Total number of outgoing messages"),
+		metric.WithUnit("{message}"),
 	)
-	b.httpApi.Handle(b.config.Metrics.Path, promhttp.Handler())
+	if err != nil {
+		xlog.Error("Failed to create message down counter", xlog.Err(err))
+		return
+	}
+
+	b.messageUpDuration, err = b.meter.Float64Histogram(
+		"messages_up_duration_seconds",
+		metric.WithDescription("Duration of message processing for incoming messages"),
+		metric.WithUnit("s"),
+		metric.WithExplicitBucketBoundaries(0.001, 0.01, 0.1, 1.0, 10.0),
+	)
+	if err != nil {
+		xlog.Error("Failed to create message up duration histogram", xlog.Err(err))
+		return
+	}
+
+	b.messageDownDuration, err = b.meter.Float64Histogram(
+		"messages_down_duration_seconds",
+		metric.WithDescription("Duration of message processing for outgoing messages"),
+		metric.WithUnit("s"),
+		metric.WithExplicitBucketBoundaries(0.001, 0.01, 0.1, 1.0, 10.0),
+	)
+	if err != nil {
+		xlog.Error("Failed to create message down duration histogram", xlog.Err(err))
+		return
+	}
+
+	// Note: No Prometheus endpoint needed as we're exporting directly to Mimir
+
+	xlog.Info("OTel metrics initialized for Mimir",
+		xlog.Str("otlp_endpoint", b.config.Metrics.OTLPEndpoint),
+	)
 }
+
 func (b *booter) Shutdown(ctx context.Context) error {
 	if b.redis != nil {
 		b.redis.Close()
@@ -239,6 +286,11 @@ func (b *booter) Shutdown(ctx context.Context) error {
 			xlog.Error("Failed to shutdown tracer provider", xlog.Err(err))
 		}
 	}
+	if b.meterProvider != nil {
+		if err := b.meterProvider.Shutdown(ctx); err != nil {
+			xlog.Error("Failed to shutdown meter provider", xlog.Err(err))
+		}
+	}
 	return b.broker.Shutdown(ctx)
 }
 
@@ -252,10 +304,19 @@ func (b *booter) OnUserClosed(id *packet.Identity) {
 func (b *booter) OnUserMessage(m *packet.Message, id *packet.Identity) error {
 	// Record incoming message counter and start timer for rate
 	kindStr := fmt.Sprintf("%d", m.Kind)
-	b.messageUpCounter.WithLabelValues(b.brokerID, kindStr).Inc()
+	b.messageUpCounter.Add(context.Background(), 1,
+		metric.WithAttributes(
+			attribute.String("broker_id", b.brokerID),
+			attribute.String("kind", kindStr),
+		))
 	startTime := time.Now()
 	defer func() {
-		b.messageUpDuration.WithLabelValues(b.brokerID, kindStr).Observe(time.Since(startTime).Seconds())
+		elapsed := time.Since(startTime).Seconds()
+		b.messageUpDuration.Record(context.Background(), elapsed,
+			metric.WithAttributes(
+				attribute.String("broker_id", b.brokerID),
+				attribute.String("kind", kindStr),
+			))
 	}()
 	tracer := otel.Tracer(b.config.Trace.ServiceName)
 	ctx, span := tracer.Start(context.Background(), "message.process")
@@ -340,10 +401,18 @@ func (b *booter) SendToAll(ctx context.Context, m *packet.Message) (int32, int32
 	sendStartTime := time.Now()
 	total, success, err := b.broker.SendToAll(resendCtx, m)
 	sendDuration := time.Since(sendStartTime).Seconds()
-	for range success {
-		b.messageDownCounter.WithLabelValues(b.brokerID, kindStr, targetType).Inc()
-	}
-	b.messageDownDuration.WithLabelValues(b.brokerID, kindStr, targetType).Observe(sendDuration)
+	b.messageDownCounter.Add(context.Background(), int64(success),
+		metric.WithAttributes(
+			attribute.String("broker_id", b.brokerID),
+			attribute.String("kind", kindStr),
+			attribute.String("target_type", targetType),
+		))
+	b.messageDownDuration.Record(context.Background(), sendDuration,
+		metric.WithAttributes(
+			attribute.String("broker_id", b.brokerID),
+			attribute.String("kind", kindStr),
+			attribute.String("target_type", targetType),
+		))
 
 	if err != nil {
 		xlog.Error("Failed to send message to all", xlog.Err(err))
@@ -370,10 +439,18 @@ func (b *booter) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 	sendStartTime := time.Now()
 	total, success, err := b.broker.SendToUser(resendCtx, uid, m)
 	sendDuration := time.Since(sendStartTime).Seconds()
-	for range success {
-		b.messageDownCounter.WithLabelValues(b.brokerID, kindStr, targetType).Inc()
-	}
-	b.messageDownDuration.WithLabelValues(b.brokerID, kindStr, targetType).Observe(sendDuration)
+	b.messageDownCounter.Add(context.Background(), int64(success),
+		metric.WithAttributes(
+			attribute.String("broker_id", b.brokerID),
+			attribute.String("kind", kindStr),
+			attribute.String("target_type", targetType),
+		))
+	b.messageDownDuration.Record(context.Background(), sendDuration,
+		metric.WithAttributes(
+			attribute.String("broker_id", b.brokerID),
+			attribute.String("kind", kindStr),
+			attribute.String("target_type", targetType),
+		))
 	if err != nil {
 		xlog.Error("Failed to send message to user",
 			xlog.Err(err),
@@ -403,10 +480,18 @@ func (b *booter) SendToChannel(ctx context.Context, channel string, m *packet.Me
 	sendStartTime := time.Now()
 	total, success, err := b.broker.SendToChannel(resendCtx, channel, m)
 	sendDuration := time.Since(sendStartTime).Seconds()
-	for range success {
-		b.messageDownCounter.WithLabelValues(b.brokerID, kindStr, targetType).Inc()
-	}
-	b.messageDownDuration.WithLabelValues(b.brokerID, kindStr, targetType).Observe(sendDuration)
+	b.messageDownCounter.Add(context.Background(), int64(success),
+		metric.WithAttributes(
+			attribute.String("broker_id", b.brokerID),
+			attribute.String("kind", kindStr),
+			attribute.String("target_type", targetType),
+		))
+	b.messageDownDuration.Record(context.Background(), sendDuration,
+		metric.WithAttributes(
+			attribute.String("broker_id", b.brokerID),
+			attribute.String("kind", kindStr),
+			attribute.String("target_type", targetType),
+		))
 	if err != nil {
 		xlog.Error("Failed to send message to channel",
 			xlog.Err(err),

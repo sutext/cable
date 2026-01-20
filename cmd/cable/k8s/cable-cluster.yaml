@@ -45,12 +45,12 @@ data:
       enabled: true
       otlpEndpoint: otel-collector:4317
       serviceName: cable
-      samplerRatio: 0.1
 
     # Metrics Configuration
     metrics:
       enabled: true
-      path: /metrics
+      otlpEndpoint: otel-collector:4317
+      serviceName: cable
 
     # Kafka Brokers Configuration
     kafkaBrokers:

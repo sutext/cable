@@ -39,15 +39,15 @@ type route struct {
 	KafkaTopic string     `yaml:"kafkaTopic"`
 }
 type traceConfig struct {
-	Enabled      bool    `yaml:"enabled"`
-	OTLPEndpoint string  `yaml:"otlpEndpoint"`
-	ServiceName  string  `yaml:"serviceName"`
-	SamplerRatio float64 `yaml:"samplerRatio"`
+	Enabled      bool   `yaml:"enabled"`
+	ServiceName  string `yaml:"serviceName"`
+	OTLPEndpoint string `yaml:"otlpEndpoint"`
 }
 
 type metricsConfig struct {
-	Enabled bool   `yaml:"enabled"`
-	Path    string `yaml:"path"`
+	Enabled      bool   `yaml:"enabled"`
+	ServiceName  string `yaml:"serviceName"`
+	OTLPEndpoint string `yaml:"otlpEndpoint"`
 }
 
 type config struct {
