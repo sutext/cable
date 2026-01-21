@@ -1,0 +1,169 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: default
+data:
+  redis.conf: |
+    # Redis Configuration
+    bind 0.0.0.0
+    port 6379
+    requirepass ""
+    appendonly yes
+    dir /data
+    cluster-enabled yes
+    cluster-config-file nodes.conf
+    cluster-node-timeout 5000
+    cluster-announce-port 6379
+    cluster-announce-bus-port 16379
+  cluster-init.sh: |
+    #!/bin/bash
+    # Wait for all nodes to be ready
+    echo "Waiting for Redis nodes to be ready..."
+    sleep 10
+    
+    # Get pod IP
+    POD_IP=$(hostname -i)
+    echo "Pod IP: $POD_IP"
+    
+    # Update redis.conf with pod IP
+    sed -i "s/cluster-announce-ip.*/cluster-announce-ip $POD_IP/" /usr/local/etc/redis/redis.conf
+    
+    # Check if this is the first pod (redis-cluster-0)
+    if [ "$(hostname)" = "redis-cluster-0" ]; then
+      echo "Initializing Redis cluster..."
+      # Wait a bit more for all pods to be ready
+      sleep 10
+      
+      # Get all node addresses
+      NODES=""
+      for i in 0 1 2; do
+        NODE_IP=$(getent hosts redis-cluster-$i.redis-cluster | awk '{print $1}')
+        NODES="$NODES $NODE_IP:6379"
+      done
+      
+      echo "Found nodes: $NODES"
+      
+      # Create cluster
+      echo "Creating Redis cluster with nodes: $NODES"
+      redis-cli --cluster create $NODES --cluster-replicas 0 --cluster-yes
+      
+      echo "Redis cluster created successfully!"
+    else
+      echo "Not the first node, skipping cluster initialization."
+    fi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cluster
+  namespace: default
+spec:
+  selector:
+    app: redis-cluster
+  ports:
+    - port: 6379
+      targetPort: 6379
+      name: client
+    - port: 16379
+      targetPort: 16379
+      name: gossip
+  clusterIP: None
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cluster-external
+  namespace: default
+spec:
+  selector:
+    app: redis-cluster
+  ports:
+    - protocol: TCP
+      port: 6379
+      targetPort: 6379
+      name: client
+  type: LoadBalancer
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-cluster
+  namespace: default
+spec:
+  serviceName: redis-cluster
+  replicas: 3
+  selector:
+    matchLabels:
+      app: redis-cluster
+  template:
+    metadata:
+      labels:
+        app: redis-cluster
+    spec:
+      containers:
+        - name: redis
+          image: redis:7.0.5-alpine
+          ports:
+            - containerPort: 6379
+              name: client
+            - containerPort: 16379
+              name: gossip
+          volumeMounts:
+            - name: redis-data
+              mountPath: /data
+            - name: redis-config
+              mountPath: /usr/local/etc/redis/redis.conf
+              subPath: redis.conf
+            - name: redis-config
+              mountPath: /usr/local/bin/cluster-init.sh
+              subPath: cluster-init.sh
+              readOnly: true
+          command:
+            - /bin/sh
+            - -c
+          args:
+            - |
+              # Update redis.conf with pod IP
+              POD_IP=$(hostname -i)
+              sed -i "s/cluster-announce-ip.*/cluster-announce-ip $POD_IP/" /usr/local/etc/redis/redis.conf
+              
+              # Start Redis server
+              redis-server /usr/local/etc/redis/redis.conf &
+              
+              # Wait for Redis to start
+              sleep 5
+              
+              # Initialize cluster if this is the first node
+              if [ "$(hostname)" = "redis-cluster-0" ]; then
+                echo "Initializing Redis cluster..."
+                sleep 15
+                
+                # Get all node addresses
+                NODES=""
+                for i in 0 1 2; do
+                  NODE_IP=$(getent hosts redis-cluster-$i.redis-cluster | awk '{print $1}')
+                  NODES="$NODES $NODE_IP:6379"
+                done
+                
+                echo "Found nodes: $NODES"
+                
+                # Create cluster
+                redis-cli --cluster create $NODES --cluster-replicas 0 --cluster-yes
+              fi
+              
+              # Wait for Redis server to exit
+              wait
+      volumes:
+        - name: redis-config
+          configMap:
+            name: redis-config
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
