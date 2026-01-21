@@ -46,6 +46,7 @@ type traceConfig struct {
 
 type metricsConfig struct {
 	Enabled      bool   `yaml:"enabled"`
+	Interval     int    `yaml:"interval"`
 	ServiceName  string `yaml:"serviceName"`
 	OTLPEndpoint string `yaml:"otlpEndpoint"`
 }

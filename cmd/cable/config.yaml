@@ -87,5 +87,6 @@ trace:
 
 metrics:
   enabled: true
+  interval: 10
   serviceName: cable
   otlpEndpoint: localhost:4317

@@ -109,8 +109,8 @@ func (b *booter) Start() {
 		Password: b.config.Redis.Password, // no password set
 	})
 	b.starKafka()
-	b.startTracer()
 	b.startMeter()
+	b.startTracer()
 	go func() {
 		if err := b.grpcApi.Serve(); err != nil {
 			xlog.Error("Failed to start API server", xlog.Err(err))
@@ -195,14 +195,6 @@ func (b *booter) startMeter() {
 		return
 	}
 	ctx := context.Background()
-	r, err := resource.New(ctx, resource.WithAttributes(
-		attribute.String("service.name", b.config.Metrics.ServiceName),
-		attribute.String("service.instance.id", fmt.Sprintf("%d", b.config.BrokerID)),
-	))
-	if err != nil {
-		xlog.Error("Failed to create resource for metrics", xlog.Err(err))
-		return
-	}
 	// Create OTLP metrics exporter (for Grafana Mimir)
 	otlpExporter, err := otlpmetricgrpc.New(ctx,
 		otlpmetricgrpc.WithEndpoint(b.config.Metrics.OTLPEndpoint),
@@ -214,12 +206,20 @@ func (b *booter) startMeter() {
 	}
 	// Create meter provider with OTLP exporter for Mimir
 	reader := metricsdk.NewPeriodicReader(otlpExporter,
-		metricsdk.WithInterval(30*time.Second),
-		metricsdk.WithTimeout(10*time.Second),
+		metricsdk.WithInterval(time.Duration(b.config.Metrics.Interval)*time.Second),
+		metricsdk.WithTimeout(5*time.Second),
 	)
+	r, err := resource.New(ctx, resource.WithAttributes(
+		attribute.String("service.name", b.config.Metrics.ServiceName),
+		attribute.String("service.instance.id", fmt.Sprintf("%d", b.config.BrokerID)),
+	))
+	if err != nil {
+		xlog.Error("Failed to create resource for metrics", xlog.Err(err))
+		return
+	}
 	b.meterProvider = metricsdk.NewMeterProvider(
-		metricsdk.WithResource(r),
 		metricsdk.WithReader(reader),
+		metricsdk.WithResource(r),
 	)
 	// Set global meter provider
 	otel.SetMeterProvider(b.meterProvider)

@@ -49,6 +49,7 @@ data:
     # Metrics Configuration
     metrics:
       enabled: true
+      interval: 10
       otlpEndpoint: otel-collector:4317
       serviceName: cable
 
