@@ -1,0 +1,55 @@
+configmapReload:
+  prometheus:
+    enabled: false
+alertmanager:
+  enabled: false
+
+kube-state-metrics:
+  enabled: true
+
+prometheus-node-exporter:
+  ## If false, node-exporter will not be installed
+  ##
+  enabled: true
+
+prometheus-pushgateway:
+  ## If false, pushgateway will not be installed
+  ##
+  enabled: false
+  
+server:
+  persistentVolume:
+    enabled: true
+    storageClass: "local-path"
+    size: 10Gi
+
+  retention: "7d"
+
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 200m
+    limits:
+      memory: 1Gi
+      cpu: 500m
+
+  global:
+    external_labels:
+      cluster: "k3s-dev"
+
+
+extraScrapeConfigs: |
+    - job_name: 'otel-collector-metrics'
+      kubernetes_sd_configs:
+        - role: endpoints
+          namespaces:
+            names: [observability]
+      relabel_configs:
+        - source_labels: [__meta_kubernetes_service_name]
+          action: keep
+          regex: otel-collector
+        - source_labels: [__meta_kubernetes_endpoint_port_name]
+          action: keep
+          regex: metrics
+        - target_label: __address__
+          replacement: otel-collector:8889

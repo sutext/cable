@@ -1,0 +1,58 @@
+image:
+  repository: "otel/opentelemetry-collector-contrib"
+
+mode: deployment
+
+config:
+  processors:
+    batch:
+      timeout: 5s
+      send_batch_size: 10000
+      send_batch_max_size: 12000
+  exporters:
+    otlp/tempo:
+      endpoint: "tempo:4317"
+      tls:
+        insecure: true
+
+    prometheus:
+      endpoint: "0.0.0.0:8889"
+
+  service:
+    pipelines:
+      traces:
+        receivers: [otlp]
+        processors: [batch]
+        exporters: [otlp/tempo]
+
+      metrics:
+        receivers: [otlp]
+        processors: [batch]
+        exporters: [prometheus]
+
+      metrics/internal:
+        receivers: [prometheus]
+        exporters: [prometheus]
+
+ports:
+  metrics:
+    enabled: true
+    containerPort: 8888
+    servicePort: 8888
+    protocol: TCP
+  otel-metrics:
+    enabled: true
+    containerPort: 8889
+    servicePort: 8889
+    protocol: TCP
+
+service:
+  type: ClusterIP
+
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 200m
+  limits:
+    memory: 512Mi
+    cpu: 1000m

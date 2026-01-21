@@ -1,0 +1,38 @@
+# Tempo Helm values (单体模式)
+tempo:
+  config:
+    storage:
+      trace:
+        backend: s3
+        s3:
+          bucket: "tempo-data"
+          endpoint: "minio:9000"
+          access_key: "minioadmin"
+          secret_key: "minioadmin"
+          insecure: true
+    server:
+      http_listen_port: 3200
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc:
+              endpoint: 0.0.0.0:4317
+            http:
+              endpoint: 0.0.0.0:4318
+
+service:
+  ports:
+    http: 3200
+    grpc: 4317
+
+ingress:
+  enabled: false
+
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 100m
+  limits:
+    memory: 1Gi
+    cpu: 500m
