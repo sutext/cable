@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	_ "github.com/swaggo/files/v2"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 
 	"sutext.github.io/cable/cluster"
 	"sutext.github.io/cable/packet"
@@ -86,7 +87,7 @@ func newHTTP(booter *booter) *httpServer {
 					url: "/swagger/swagger.json",
 					dom_id: '#swagger-ui',
 				
-deepLinking: true,
+				deepLinking: true,
 					docExpansion: 'list',
 					presets: [
 						SwaggerUIBundle.presets.apis,
@@ -103,8 +104,11 @@ deepLinking: true,
 	s.mux.HandleFunc("/swagger/index.html", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/swagger", http.StatusMovedPermanently)
 	})
-
-	s.hs = &http.Server{Addr: fmt.Sprintf(":%d", booter.config.HTTPPort), Handler: s.mux}
+	var handler http.Handler = s.mux
+	if s.booter.config.Metrics.Enabled || s.booter.config.Trace.Enabled {
+		handler = otelhttp.NewHandler(s.mux, "http-api")
+	}
+	s.hs = &http.Server{Addr: fmt.Sprintf(":%d", booter.config.HTTPPort), Handler: handler}
 	return s
 }
 
