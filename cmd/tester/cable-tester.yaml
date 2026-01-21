@@ -24,7 +24,7 @@ spec:
     spec:
       containers:
         - name: cable-tester
-          imagePullPolicy: Never 
+          imagePullPolicy: Always 
           image: sutext/cable-tester:latest
           env:
             - name: ENDPOINT

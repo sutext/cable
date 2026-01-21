@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
+	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 	"sutext.github.io/cable/api/pb"
@@ -34,12 +35,20 @@ func (s *grpcServer) Serve() error {
 		return err
 	}
 	s.listener = lis
+	h := otelgrpc.NewServerHandler(
+		otelgrpc.WithSpanAttributes(
+			attribute.String("grpc.serve.type", "api"),
+		),
+		otelgrpc.WithMetricAttributes(
+			attribute.String("grpc.serve.type", "api"),
+		),
+	)
 	gs := grpc.NewServer(
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
 			MinTime:             time.Second * 20,
 			PermitWithoutStream: true,
 		}),
-		grpc.StatsHandler(otelgrpc.NewServerHandler()),
+		grpc.StatsHandler(h),
 	)
 	pb.RegisterCableServiceServer(gs, s)
 	return gs.Serve(lis)

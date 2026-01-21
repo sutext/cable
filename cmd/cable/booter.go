@@ -9,6 +9,7 @@ import (
 
 	"github.com/IBM/sarama"
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
@@ -19,6 +20,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"golang.org/x/net/quic"
+	"google.golang.org/grpc/stats"
 	"sutext.github.io/cable/cluster"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
@@ -76,52 +78,43 @@ func newBooter(config *config) *booter {
 		)
 		liss[i] = lis
 	}
+	if b.config.Trace.Enabled {
+		b.initTracing()
+	}
+	if b.config.Metrics.Enabled {
+		b.initMetrics()
+	}
+	var h stats.Handler
+	if b.config.Trace.Enabled || b.config.Metrics.Enabled {
+		h = otelgrpc.NewServerHandler(
+			otelgrpc.WithTracerProvider(b.tracerProvider),
+			otelgrpc.WithMeterProvider(b.meterProvider),
+			otelgrpc.WithSpanAttributes(
+				attribute.String("grpc.serve.type", "peer"),
+			),
+			otelgrpc.WithMetricAttributes(
+				attribute.String("grpc.serve.type", "peer"),
+			),
+		)
+	}
 	b.broker = cluster.NewBroker(
 		cluster.WithBrokerID(b.config.BrokerID),
 		cluster.WithHandler(b),
 		cluster.WithClusterSize(config.ClusterSize),
 		cluster.WithListeners(liss),
+		cluster.WithGrpcStatsHandler(h),
 	)
+	b.initKafka()
+	b.redis = redis.NewClusterClient(&redis.ClusterOptions{
+		Addrs:    b.config.Redis.Addresses,
+		Password: b.config.Redis.Password, // no password set
+	})
 	b.brokerID = fmt.Sprintf("%d", b.broker.ID())
 	b.grpcApi = newGRPC(b)
 	b.httpApi = newHTTP(b)
 	return b
 }
 func (b *booter) Start() {
-	// Initialize Redis
-	rconfg := b.config.Redis
-	b.redis = redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs:    rconfg.Addresses,
-		Password: rconfg.Password, // no password set
-	})
-
-	// Initialize Kafka client if configured
-	if len(b.config.KafkaBrokers) > 0 {
-		kafkaConfig := sarama.NewConfig()
-		kafkaConfig.Producer.Return.Successes = true
-		kafkaConfig.Producer.RequiredAcks = sarama.WaitForAll
-		kafkaConfig.Producer.Partitioner = sarama.NewRandomPartitioner
-		var err error
-		b.kafka, err = sarama.NewClient(b.config.KafkaBrokers, kafkaConfig)
-		if err != nil {
-			xlog.Error("Failed to initialize Kafka client", xlog.Err(err))
-		} else {
-			b.producer, err = sarama.NewSyncProducerFromClient(b.kafka)
-			if err != nil {
-				xlog.Error("Failed to initialize Kafka producer", xlog.Err(err))
-			}
-		}
-	}
-
-	// Initialize tracing
-	if b.config.Trace.Enabled {
-		b.initTracing()
-	}
-
-	// Initialize metrics and start metrics server
-	if b.config.Metrics.Enabled {
-		b.initMetrics()
-	}
 	// Start API server
 	go func() {
 		if err := b.grpcApi.Serve(); err != nil {
@@ -136,9 +129,27 @@ func (b *booter) Start() {
 	b.broker.Start()
 }
 
+func (b *booter) initKafka() {
+	if len(b.config.KafkaBrokers) == 0 {
+		return
+	}
+	kafkaConfig := sarama.NewConfig()
+	kafkaConfig.Producer.Return.Successes = true
+	kafkaConfig.Producer.RequiredAcks = sarama.WaitForAll
+	kafkaConfig.Producer.Partitioner = sarama.NewRandomPartitioner
+	var err error
+	b.kafka, err = sarama.NewClient(b.config.KafkaBrokers, kafkaConfig)
+	if err != nil {
+		xlog.Error("Failed to initialize Kafka client", xlog.Err(err))
+	} else {
+		b.producer, err = sarama.NewSyncProducerFromClient(b.kafka)
+		if err != nil {
+			xlog.Error("Failed to initialize Kafka producer", xlog.Err(err))
+		}
+	}
+}
 func (b *booter) initTracing() {
 	ctx := context.Background()
-
 	// Create OTLP exporter
 	exporter, err := otlptracegrpc.New(ctx, otlptracegrpc.WithEndpoint(b.config.Trace.OTLPEndpoint),
 		otlptracegrpc.WithInsecure(), // Remove this in production
@@ -147,7 +158,6 @@ func (b *booter) initTracing() {
 		xlog.Error("Failed to create OTLP exporter", xlog.Err(err))
 		return
 	}
-
 	// Create resource with service name
 	r, err := resource.New(ctx, resource.WithAttributes(
 		attribute.String("service.name", b.config.Trace.ServiceName),
@@ -173,7 +183,6 @@ func (b *booter) initTracing() {
 		propagation.TraceContext{},
 		propagation.Baggage{},
 	))
-
 	b.tracerProvider = tracerProvider
 	xlog.Info("Tracing initialized", xlog.Str("serviceName", b.config.Trace.ServiceName))
 }
@@ -191,7 +200,6 @@ func (b *booter) initMetrics() {
 		xlog.Error("Failed to create resource for metrics", xlog.Err(err))
 		return
 	}
-
 	// Create OTLP metrics exporter (for Grafana Mimir)
 	otlpExporter, err := otlpmetricgrpc.New(ctx,
 		otlpmetricgrpc.WithEndpoint(b.config.Metrics.OTLPEndpoint),
@@ -201,7 +209,6 @@ func (b *booter) initMetrics() {
 		xlog.Error("Failed to create OTLP metrics exporter for Mimir", xlog.Err(err))
 		return
 	}
-
 	// Create meter provider with OTLP exporter for Mimir
 	reader := metricsdk.NewPeriodicReader(otlpExporter,
 		metricsdk.WithInterval(30*time.Second),
@@ -212,7 +219,6 @@ func (b *booter) initMetrics() {
 		metricsdk.WithResource(r),
 		metricsdk.WithReader(reader),
 	)
-
 	// Set global meter provider
 	otel.SetMeterProvider(b.meterProvider)
 	// Get meter from provider
@@ -220,7 +226,6 @@ func (b *booter) initMetrics() {
 		b.config.Trace.ServiceName,
 		metric.WithInstrumentationVersion("1.0.0"),
 	)
-
 	// Create metrics instruments
 	b.messageUpCounter, err = b.meter.Int64Counter(
 		"messages_up_total",
@@ -263,9 +268,6 @@ func (b *booter) initMetrics() {
 		xlog.Error("Failed to create message down duration histogram", xlog.Err(err))
 		return
 	}
-
-	// Note: No Prometheus endpoint needed as we're exporting directly to Mimir
-
 	xlog.Info("OTel metrics initialized for Mimir",
 		xlog.Str("otlp_endpoint", b.config.Metrics.OTLPEndpoint),
 	)

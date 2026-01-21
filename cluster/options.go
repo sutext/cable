@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"google.golang.org/grpc/stats"
 	"sutext.github.io/cable/packet"
 )
 
@@ -71,11 +72,12 @@ func (h *emptyHandler) GetUserChannels(uid string) (channels map[string]string, 
 
 // options holds the configuration for the cluster.
 type options struct {
-	handler     Handler     // Handler for cluster events
-	brokerID    uint64      // Unique ID for the broker
-	peerPort    uint16      // Port for peer-to-peer communication
-	listeners   []*Listener // List of listeners for client connections
-	clusterSize int32       // Initial cluster size
+	handler          Handler       // Handler for cluster events
+	brokerID         uint64        // Unique ID for the broker
+	peerPort         uint16        // Port for peer-to-peer communication
+	listeners        []*Listener   // List of listeners for client connections
+	clusterSize      int32         // Initial cluster size
+	grpcStatsHandler stats.Handler // gRPC stats handler for the cluster
 }
 
 // newOptions creates a new options instance with default values and applies the given options.
@@ -164,6 +166,19 @@ func WithBrokerID(id uint64) Option {
 func WithClusterSize(size int32) Option {
 	return Option{func(o *options) {
 		o.clusterSize = size
+	}}
+}
+
+// WithGrpcStatsHandler sets the gRPC stats handler for the cluster.
+//
+// Parameters:
+// - handler: gRPC stats handler
+//
+// Returns:
+// - Option: Configuration option for the cluster
+func WithGrpcStatsHandler(handler stats.Handler) Option {
+	return Option{func(o *options) {
+		o.grpcStatsHandler = handler
 	}}
 }
 

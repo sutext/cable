@@ -29,7 +29,7 @@ data:
     peerPort: 4567
 
     # Log Level: debug, info, warn, error
-    logLevel: "info"
+    logLevel: "error"
 
     # Redis Configuration
     redis:
@@ -128,7 +128,7 @@ spec:
       containers:
         - name: cable
           image: sutext/cable:latest
-          imagePullPolicy: Never
+          imagePullPolicy: Always
           volumeMounts:
             - name: cable-config-volume
               mountPath: /config.yaml

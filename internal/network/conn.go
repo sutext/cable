@@ -210,7 +210,7 @@ func (c *conn) RecvMessack(p *packet.Messack) {
 	}
 	c.messageLock.Unlock()
 	if !ok {
-		c.logger.Error("response task not found", xlog.U16("id", p.ID()))
+		c.logger.Error("message task not found", xlog.U16("id", p.ID()))
 	}
 }
 func (c *conn) RecvResponse(p *packet.Response) {

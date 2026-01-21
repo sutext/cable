@@ -10,6 +10,7 @@ import (
 	"go.etcd.io/raft/v3/raftpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/stats"
 	"sutext.github.io/cable/cluster/pb"
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
@@ -21,7 +22,7 @@ type peerServer struct {
 	pb.UnimplementedPeerServiceServer              // Embeds unimplemented gRPC server for forward compatibility
 	broker                            *broker      // Reference to the parent broker
 	address                           string       // Address to listen on
-	listener                          net.Listener // Network listener
+	server                            *grpc.Server // Network listener
 }
 
 // newPeerServer creates a new peer server instance.
@@ -32,8 +33,18 @@ type peerServer struct {
 //
 // Returns:
 // - *peerServer: A new peer server instance
-func newPeerServer(broker *broker, address string) *peerServer {
-	return &peerServer{broker: broker, address: address}
+func newPeerServer(broker *broker, address string, handler stats.Handler) *peerServer {
+	return &peerServer{
+		broker:  broker,
+		address: address,
+		server: grpc.NewServer(
+			grpc.StatsHandler(handler),
+			grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+				MinTime:             time.Second * 20,
+				PermitWithoutStream: true,
+			}),
+		),
+	}
 }
 
 // Serve starts the gRPC server and begins listening for incoming requests.
@@ -45,15 +56,8 @@ func (s *peerServer) Serve() error {
 	if err != nil {
 		return err
 	}
-	s.listener = lis
-	gs := grpc.NewServer(
-		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
-			MinTime:             time.Second * 20,
-			PermitWithoutStream: true,
-		}),
-	)
-	pb.RegisterPeerServiceServer(gs, s)
-	return gs.Serve(lis)
+	pb.RegisterPeerServiceServer(s.server, s)
+	return s.server.Serve(lis)
 }
 
 // Shutdown shuts down the gRPC server and closes the listener.
@@ -64,10 +68,8 @@ func (s *peerServer) Serve() error {
 // Returns:
 // - error: Error if shutting down the server fails, nil otherwise
 func (s *peerServer) Shutdown(ctx context.Context) error {
-	if s.listener == nil {
-		return nil
-	}
-	return s.listener.Close()
+	s.server.GracefulStop()
+	return nil
 }
 
 // Inspect returns the status of the broker.
