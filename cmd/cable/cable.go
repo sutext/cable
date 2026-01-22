@@ -25,7 +25,13 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	xlog.SetDefault(xlog.WithLevel(conf.Level()))
+	var logger *xlog.Logger
+	if conf.LogFormat == "json" {
+		logger = xlog.NewJSON(conf.Level().Level())
+	} else {
+		logger = xlog.NewText(conf.Level().Level())
+	}
+	xlog.SetDefault(logger)
 	ctx := context.Background()
 	ctx, cancel := context.WithCancelCause(ctx)
 	sigs := make(chan os.Signal, 1)

@@ -10,10 +10,10 @@ brokerid: 0
 clusterSize: 1
 
 # gRPC Server Port for API
-grpcPort: 8880
+grpcPort: 1888
 
 # HTTP Server Port for API
-httpPort: 8888
+httpPort: 1889
 
 # Peer Port for Cluster Communication
 peerPort: 4567
@@ -21,12 +21,55 @@ peerPort: 4567
 # Log Level: debug, info, warn, error
 logLevel: "info"
 
+# Log Format: text, json
+logFormat: "text"
+
+# Trace Configuration
+trace:
+  enabled: true
+  serviceName: cable
+  otlpEndpoint: 172.16.2.123:4317
+
+# Metrics Configuration
+metrics:
+  enabled: true
+  interval: 10
+  serviceName: cable
+  otlpEndpoint: http://mimir.local/otlp/v1/metrics
+
+# Kafka Configuration
+kafka:
+  enabled: true
+  brokers:
+    - "localhost:9092"
 # Redis Configuration
+# redis and redisCluster are mutually exclusive, only one can be enabled at a time.
 redis:
+  enabled: false
+  db : 0
+  address: "localhost:6379"
+  password: ""
+  userPrefix: "cable-user-channels:"
+# Redis Cluster Configuration
+# redis and redisCluster are mutually exclusive, only one can be enabled at a time.
+redisCluster:
+  enabled: true
   password: ""
   addresses: 
     - "localhost:6379"
   userPrefix: "cable-user-channels:"
+# Message Route Configuration
+messageRoute:
+  # Example message routes, adjust based on your actual message types
+  0: 
+    enabled: true
+    resendType: "user"
+    kafkaTopic: "cable-upstream-user"
+  1:
+    enabled: true
+    resendType: "channel"
+    kafkaTopic: "cable-upstream-group"
+
 
 # Listeners Configuration
 listeners:
@@ -64,29 +107,3 @@ listeners:
       certFile: "cert.pem"
       keyFile: "key.pem"
 
-# Kafka Brokers Configuration
-kafkaBrokers:
-  - "localhost:9092"
-
-# Message Route Configuration
-messageRoute:
-  # Example message routes, adjust based on your actual message types
-  0: 
-    enabled: true
-    resendType: "user"
-    kafkaTopic: "cable-upstream-user"
-  1:
-    enabled: true
-    resendType: "channel"
-    kafkaTopic: "cable-upstream-group"
-  
-trace:
-  enabled: true
-  serviceName: cable
-  otlpEndpoint: localhost:4317
-
-metrics:
-  enabled: true
-  interval: 10
-  serviceName: cable
-  otlpEndpoint: localhost:4317

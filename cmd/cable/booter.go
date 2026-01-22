@@ -12,7 +12,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/propagation"
@@ -28,9 +28,15 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
+type RedisClient interface {
+	Close() error
+	HDel(ctx context.Context, key string, fields ...string) *redis.IntCmd
+	HSet(ctx context.Context, key string, values ...interface{}) *redis.IntCmd
+	HGetAll(ctx context.Context, key string) *redis.MapStringStringCmd
+}
 type booter struct {
 	brokerID            string
-	redis               *redis.ClusterClient
+	redis               RedisClient
 	config              *config
 	broker              cluster.Broker
 	kafka               sarama.Client
@@ -104,11 +110,8 @@ func newBooter(config *config) *booter {
 	return b
 }
 func (b *booter) Start() {
-	b.redis = redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs:    b.config.Redis.Addresses,
-		Password: b.config.Redis.Password, // no password set
-	})
-	b.starKafka()
+	b.startRedis()
+	b.startKafka()
 	b.startMeter()
 	b.startTracer()
 	go func() {
@@ -123,9 +126,24 @@ func (b *booter) Start() {
 	}()
 	b.broker.Start()
 }
-
-func (b *booter) starKafka() {
-	if len(b.config.KafkaBrokers) == 0 {
+func (b *booter) startRedis() {
+	if b.config.Redis.Enabled {
+		b.redis = redis.NewClient(&redis.Options{
+			Addr:     b.config.Redis.Address,
+			Password: b.config.Redis.Password,
+			DB:       b.config.Redis.DB,
+		})
+		return
+	}
+	if b.config.RedisCluster.Enabled {
+		b.redis = redis.NewClusterClient(&redis.ClusterOptions{
+			Addrs:    b.config.RedisCluster.Addresses,
+			Password: b.config.RedisCluster.Password,
+		})
+	}
+}
+func (b *booter) startKafka() {
+	if !b.config.Kafka.Enabled {
 		return
 	}
 	kafkaConfig := sarama.NewConfig()
@@ -133,7 +151,7 @@ func (b *booter) starKafka() {
 	kafkaConfig.Producer.RequiredAcks = sarama.WaitForAll
 	kafkaConfig.Producer.Partitioner = sarama.NewRandomPartitioner
 	var err error
-	b.kafka, err = sarama.NewClient(b.config.KafkaBrokers, kafkaConfig)
+	b.kafka, err = sarama.NewClient(b.config.Kafka.Brokers, kafkaConfig)
 	if err != nil {
 		xlog.Error("Failed to initialize Kafka client", xlog.Err(err))
 	} else {
@@ -154,12 +172,7 @@ func (b *booter) startTracer() {
 		otlptracegrpc.WithInsecure(), // Remove this in production
 		otlptracegrpc.WithTimeout(5*time.Second))
 	if err != nil {
-		xlog.Error("Failed to create OTLP exporter", xlog.Err(err))
-		return
-	}
-	err = exporter.Start(ctx)
-	if err != nil {
-		xlog.Error("Failed to start OTLP exporter", xlog.Err(err))
+		xlog.Error("Failed to create OTLP tracer exporter", xlog.Err(err))
 		return
 	}
 	// Create resource with service name
@@ -196,12 +209,12 @@ func (b *booter) startMeter() {
 	}
 	ctx := context.Background()
 	// Create OTLP metrics exporter (for Grafana Mimir)
-	otlpExporter, err := otlpmetricgrpc.New(ctx,
-		otlpmetricgrpc.WithEndpoint(b.config.Metrics.OTLPEndpoint),
-		otlpmetricgrpc.WithInsecure(), // Remove this in production
-		otlpmetricgrpc.WithTimeout(5*time.Second))
+	otlpExporter, err := otlpmetrichttp.New(ctx,
+		otlpmetrichttp.WithEndpointURL(b.config.Metrics.OTLPEndpoint),
+		otlpmetrichttp.WithInsecure(), // Remove this in production
+		otlpmetrichttp.WithTimeout(5*time.Second))
 	if err != nil {
-		xlog.Error("Failed to create OTLP metrics exporter for Mimir", xlog.Err(err))
+		xlog.Error("Failed to create OTLP metrics exporter", xlog.Err(err))
 		return
 	}
 	// Create meter provider with OTLP exporter for Mimir
@@ -303,8 +316,8 @@ func (b *booter) OnUserClosed(id *packet.Identity) {
 
 }
 func (b *booter) OnUserMessage(m *packet.Message, id *packet.Identity) error {
-	route, exists := b.config.MessageRoute[m.Kind]
-	if !exists || !route.Enabled {
+	route, ok := b.config.MessageRoute[m.Kind]
+	if !ok || !route.Enabled {
 		return nil
 	}
 	ctx := context.Background()
@@ -332,7 +345,8 @@ func (b *booter) OnUserMessage(m *packet.Message, id *packet.Identity) error {
 	}
 	if b.tracerProvider != nil {
 		tracer := otel.Tracer(b.config.Trace.ServiceName)
-		_, span := tracer.Start(ctx, "message.process")
+		var span trace.Span
+		ctx, span = tracer.Start(ctx, "message.process")
 		span.SetAttributes(
 			attribute.String("message.kind", kindStr),
 			attribute.String("message.id", msgid),
@@ -397,12 +411,32 @@ func (b *booter) ListChannels(ctx context.Context, uid string) (map[string]strin
 	}
 	return b.redis.HGetAll(ctx, b.userKey(uid)).Result()
 }
+func (b *booter) JoinChannel(ctx context.Context, uid string, channels map[string]string) error {
+	if b.redis != nil {
+		_, err := b.redis.HSet(ctx, b.userKey(uid), "channels", channels).Result()
+		if err != nil {
+			return err
+		}
+	}
+	return b.broker.JoinChannel(ctx, uid, channels)
+
+}
+func (b *booter) LeaveChannel(ctx context.Context, uid string, channels map[string]string) error {
+	if b.redis != nil {
+		_, err := b.redis.HSet(ctx, b.userKey(uid), "channels", channels).Result()
+		if err != nil {
+			return err
+		}
+	}
+	return b.broker.LeaveChannel(ctx, uid, channels)
+}
+
 func (b *booter) SendToAll(ctx context.Context, m *packet.Message) (int32, int32, error) {
 	kindStr := fmt.Sprintf("%d", m.Kind)
 	targetType := "all"
 	msgid := fmt.Sprintf("%d", m.ID)
 	var resendSpan trace.Span
-	if b.tracerProvider == nil {
+	if b.tracerProvider != nil {
 		tracer := otel.Tracer(b.config.Trace.ServiceName)
 		ctx, resendSpan = tracer.Start(ctx, "message.resend.all")
 		resendSpan.SetAttributes(attribute.String("message.id", msgid))
@@ -412,7 +446,7 @@ func (b *booter) SendToAll(ctx context.Context, m *packet.Message) (int32, int32
 	sendStartTime := time.Now()
 	total, success, err := b.broker.SendToAll(ctx, m)
 	if b.messageDownCounter != nil {
-		b.messageDownCounter.Add(context.Background(), int64(success),
+		b.messageDownCounter.Add(ctx, int64(success),
 			metric.WithAttributes(
 				attribute.String("broker_id", b.brokerID),
 				attribute.String("message_kind", kindStr),
@@ -421,7 +455,7 @@ func (b *booter) SendToAll(ctx context.Context, m *packet.Message) (int32, int32
 			))
 	}
 	if b.messageDownDuration != nil {
-		b.messageDownDuration.Record(context.Background(), time.Since(sendStartTime).Seconds(),
+		b.messageDownDuration.Record(ctx, time.Since(sendStartTime).Seconds(),
 			metric.WithAttributes(
 				attribute.String("broker_id", b.brokerID),
 				attribute.String("message_kind", kindStr),
@@ -454,7 +488,7 @@ func (b *booter) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 	targetType := "user"
 	msgid := fmt.Sprintf("%d", m.ID)
 	var resendSpan trace.Span
-	if b.tracerProvider == nil {
+	if b.tracerProvider != nil {
 		tracer := otel.Tracer(b.config.Trace.ServiceName)
 		ctx, resendSpan = tracer.Start(ctx, "message.resend.user")
 		resendSpan.SetAttributes(attribute.String("user.id", uid))
@@ -465,7 +499,7 @@ func (b *booter) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 	sendStartTime := time.Now()
 	total, success, err := b.broker.SendToUser(ctx, uid, m)
 	if b.messageDownCounter != nil {
-		b.messageDownCounter.Add(context.Background(), int64(success),
+		b.messageDownCounter.Add(ctx, int64(success),
 			metric.WithAttributes(
 				attribute.String("broker_id", b.brokerID),
 				attribute.String("message_kind", kindStr),
@@ -475,7 +509,7 @@ func (b *booter) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 			))
 	}
 	if b.messageDownDuration != nil {
-		b.messageDownDuration.Record(context.Background(), time.Since(sendStartTime).Seconds(),
+		b.messageDownDuration.Record(ctx, time.Since(sendStartTime).Seconds(),
 			metric.WithAttributes(
 				attribute.String("broker_id", b.brokerID),
 				attribute.String("message_kind", kindStr),
@@ -512,7 +546,7 @@ func (b *booter) SendToChannel(ctx context.Context, channel string, m *packet.Me
 	targetType := "channel"
 	msgid := fmt.Sprintf("%d", m.ID)
 	var resendSpan trace.Span
-	if b.tracerProvider == nil {
+	if b.tracerProvider != nil {
 		tracer := otel.Tracer(b.config.Trace.ServiceName)
 		ctx, resendSpan = tracer.Start(ctx, "message.resend.channel")
 		resendSpan.SetAttributes(attribute.String("channel.name", channel))
@@ -523,7 +557,7 @@ func (b *booter) SendToChannel(ctx context.Context, channel string, m *packet.Me
 	sendStartTime := time.Now()
 	total, success, err := b.broker.SendToChannel(ctx, channel, m)
 	if b.messageDownCounter != nil {
-		b.messageDownCounter.Add(context.Background(), int64(success),
+		b.messageDownCounter.Add(ctx, int64(success),
 			metric.WithAttributes(
 				attribute.String("broker_id", b.brokerID),
 				attribute.String("message_kind", kindStr),
@@ -533,7 +567,7 @@ func (b *booter) SendToChannel(ctx context.Context, channel string, m *packet.Me
 			))
 	}
 	if b.messageDownDuration != nil {
-		b.messageDownDuration.Record(context.Background(), time.Since(sendStartTime).Seconds(),
+		b.messageDownDuration.Record(ctx, time.Since(sendStartTime).Seconds(),
 			metric.WithAttributes(
 				attribute.String("broker_id", b.brokerID),
 				attribute.String("message_kind", kindStr),

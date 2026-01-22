@@ -5,10 +5,10 @@ tempo:
       trace:
         backend: s3
         s3:
-          bucket: "tempo-data"
-          endpoint: "minio:9000"
-          access_key: "minioadmin"
-          secret_key: "minioadmin"
+          bucket: tempo-data
+          endpoint: mimir-minio:9000
+          access_key: admin
+          secret_key: supersecret
           insecure: true
     server:
       http_listen_port: 3200
@@ -22,6 +22,7 @@ tempo:
               endpoint: 0.0.0.0:4318
 
 service:
+  type: LoadBalancer
   ports:
     http: 3200
     grpc: 4317

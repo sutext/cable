@@ -20,25 +20,16 @@ data:
     clusterSize: 3
 
     # gRPC Server Port for API
-    grpcPort: 8880
+    grpcPort: 1888
 
     # HTTP Server Port for API
-    httpPort: 8888
+    httpPort: 1889
 
     # Peer Port for Cluster Communication
     peerPort: 4567
 
     # Log Level: debug, info, warn, error
     logLevel: "error"
-
-    # Redis Configuration
-    redis:
-      password: ""
-      addresses: 
-        - "redis-cluster-0.redis-cluster:6379"
-        - "redis-cluster-1.redis-cluster:6379"
-        - "redis-cluster-2.redis-cluster:6379"
-      userPrefix: "cable-user-channels:"
 
     # Trace Configuration
     trace:
@@ -50,14 +41,46 @@ data:
     metrics:
       enabled: true
       interval: 10
-      otlpEndpoint: otel-collector:4317
+      otlpEndpoint: http://mimir-gateway/otlp/v1/metrics
       serviceName: cable
 
-    # Kafka Brokers Configuration
-    kafkaBrokers:
-      - "kafka-broker-0.kafka-broker:9092"
-      - "kafka-broker-1.kafka-broker:9092"
-      - "kafka-broker-2.kafka-broker:9092"
+    # Kafka Configuration
+    kafka:
+      enabled: true
+      brokers:
+        - "kafka-broker-0.kafka-broker:9092"
+        - "kafka-broker-1.kafka-broker:9092"
+        - "kafka-broker-2.kafka-broker:9092"
+
+    # Redis Configuration
+    redis:
+      db: 0
+      enabled: false
+      address: "redis-master:6379"
+      password: ""
+      userPrefix: "cable-user-channels:"
+
+    # Redis Cluster Configuration
+    redisCluster:
+      enabled: true
+      password: ""
+      addresses: 
+        - "redis-cluster-0.redis-cluster:6379"
+        - "redis-cluster-1.redis-cluster:6379"
+        - "redis-cluster-2.redis-cluster:6379"
+      userPrefix: "cable-user-channels:"
+
+    # Message Route Configuration
+    messageRoute:
+      # Example message routes, adjust based on your actual message types
+      1: 
+        enabled: true
+        resendType: "user"
+        kafkaTopic: "cable-upstream-user"
+      2:
+        enabled: true
+        resendType: "channel"
+        kafkaTopic: "cable-upstream-group"
 
     # Listeners Configuration
     listeners:
@@ -95,18 +118,6 @@ data:
           certFile: "cert.pem"
           keyFile: "key.pem"
 
-    # Message Route Configuration
-    messageRoute:
-      # Example message routes, adjust based on your actual message types
-      1: 
-        enabled: true
-        resendType: "user"
-        kafkaTopic: "cable-upstream-user"
-      2:
-        enabled: true
-        resendType: "channel"
-        kafkaTopic: "cable-upstream-group"
-
 ---
 kind: StatefulSet
 apiVersion: apps/v1
@@ -137,7 +148,7 @@ spec:
           livenessProbe:
             httpGet:
               path: /health
-              port: 8888
+              port: 1888
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 1
@@ -145,7 +156,7 @@ spec:
           readinessProbe:
             httpGet:
               path: /health
-              port: 8888
+              port: 1888
             initialDelaySeconds: 3
             periodSeconds: 5
             timeoutSeconds: 1
@@ -201,9 +212,9 @@ spec:
       targetPort: 6060
     - protocol: TCP
       name: grpc-api
-      port: 8880
+      port: 1888
       targetPort: 8880
     - protocol: TCP
       name: http-api
-      port: 8888
+      port: 1889
       targetPort: 8888

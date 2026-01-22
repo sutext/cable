@@ -114,20 +114,14 @@ func (s *grpcServer) SendToChannel(ctx context.Context, req *pb.ToChannelReq) (*
 	}, nil
 }
 func (s *grpcServer) JoinChannel(ctx context.Context, req *pb.JoinReq) (*pb.EmptyResp, error) {
-	if s.booter.redis != nil {
-		s.booter.redis.HSet(ctx, s.booter.userKey(req.Uid), "channels", req.Channels)
-	}
-	err := s.broker.JoinChannel(ctx, req.Uid, req.Channels)
+	err := s.booter.JoinChannel(ctx, req.Uid, req.Channels)
 	if err != nil {
 		return nil, err
 	}
 	return &pb.EmptyResp{}, nil
 }
 func (s *grpcServer) LeaveChannel(ctx context.Context, req *pb.JoinReq) (*pb.EmptyResp, error) {
-	if s.booter.redis != nil {
-		s.booter.redis.HDel(ctx, s.booter.userKey(req.Uid), "channels")
-	}
-	err := s.broker.LeaveChannel(ctx, req.Uid, req.Channels)
+	err := s.booter.LeaveChannel(ctx, req.Uid, req.Channels)
 	if err != nil {
 		return nil, err
 	}

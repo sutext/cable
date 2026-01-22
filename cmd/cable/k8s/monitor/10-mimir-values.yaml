@@ -1,0 +1,167 @@
+
+fullnameOverride: "mimir"
+
+minio:
+  enabled: true
+  mode: standalone
+  rootUser: admin
+  buckets:
+    - name: mimir-tsdb
+      policy: none
+      purge: false
+    - name: mimir-ruler
+      policy: none
+      purge: false
+  persistence:
+    size: 20Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  rootPassword: supersecret
+
+
+# 存储配置 - 使用已有的 MinIO
+storage:
+  backend: s3
+  s3:
+    endpoint: mimir-minio:9000
+    bucket_name: mimir-data
+    access_key_id: admin
+    secret_access_key: supersecret
+    insecure: true
+
+# 数据保留策略
+tenantLimits:
+  global:
+    ingestion_burst_size: 100000
+    ingestion_rate: 10000
+    max_series_per_metric: 10000
+    max_series_per_user: 1000000
+    retention_period: 7d
+
+# 组件配置 - 轻量级部署，单副本
+alertmanager:
+  enabled: false
+
+compactor:
+  replicas: 1
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+distributor:
+  replicas: 1
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+ingester:
+  replicas: 1
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 200m
+    limits:
+      memory: 1Gi
+      cpu: 1000m
+  persistence:
+    enabled: true
+    storageClass: local-path
+    size: 10Gi
+
+querier:
+  replicas: 1
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 200m
+    limits:
+      memory: 1Gi
+      cpu: 1000m
+
+queryFrontend:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 1Gi
+      cpu: 500m
+
+queryScheduler:
+  enabled: false
+
+ruler:
+  enabled: false
+
+storeGateway:
+  replicas: 1
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 1Gi
+      cpu: 500m
+  persistence:
+    enabled: true
+    storageClass: local-path
+    size: 5Gi
+
+# 禁用不必要的组件
+memcached:
+  enabled: false
+
+continuousTest:
+  enabled: false
+
+smokeTest:
+  enabled: false
+
+# 服务配置
+service:
+  type: ClusterIP
+  http:
+    port: 8080
+  grpc:
+    port: 9095
+  otlp:
+    http:
+      port: 4318
+    grpc:
+      port: 4317
+
+# OTLP 接收器配置 - 使用 Mimir 内置的 OTLP 支持
+# Mimir 默认启用 OTLP 接收器，无需额外配置
+# 只需要确保服务端口已正确暴露即可
+
+# 监控配置 - 与现有 Prometheus 兼容
+monitoring:
+  selfMonitoring:
+    enabled: true
+    grafanaAgent:
+      installOperator: false
+
+# 资源管理
+resources:
+  requests:
+    memory: 256Mi
+    cpu: 100m
+  limits:
+    memory: 1Gi
+    cpu: 500m
+
+# 持久卷配置
+persistence:
+  storageClass: local-path

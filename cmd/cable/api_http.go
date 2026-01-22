@@ -259,7 +259,7 @@ func (s *httpServer) handleSendToAll(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	total, success, err := s.broker.SendToAll(r.Context(), msg)
+	total, success, err := s.booter.SendToAll(r.Context(), msg)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -310,7 +310,7 @@ func (s *httpServer) handleSendToUser(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	total, success, err := s.broker.SendToUser(r.Context(), uid, msg)
+	total, success, err := s.booter.SendToUser(r.Context(), uid, msg)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -361,7 +361,7 @@ func (s *httpServer) handleSendToChannel(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	total, success, err := s.broker.SendToChannel(r.Context(), channel, msg)
+	total, success, err := s.booter.SendToChannel(r.Context(), channel, msg)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -418,7 +418,7 @@ func (s *httpServer) handleJoinChannel(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "channels is required", http.StatusBadRequest)
 		return
 	}
-	err = s.broker.JoinChannel(r.Context(), req.UID, req.Channels)
+	err = s.booter.JoinChannel(r.Context(), req.UID, req.Channels)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -461,7 +461,7 @@ func (s *httpServer) handleLeaveChannel(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "channels is required", http.StatusBadRequest)
 		return
 	}
-	err = s.broker.LeaveChannel(r.Context(), req.UID, req.Channels)
+	err = s.booter.LeaveChannel(r.Context(), req.UID, req.Channels)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -5,9 +5,9 @@ datasources:
   datasources.yaml:
     apiVersion: 1
     datasources:
-      - name: Prometheus
+      - name: Mimir
         type: prometheus
-        url: http://prometheus-server
+        url: http://mimir-gateway/prometheus
         access: proxy
         isDefault: true
       - name: Tempo
