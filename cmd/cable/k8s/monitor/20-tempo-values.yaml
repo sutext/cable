@@ -22,7 +22,7 @@ tempo:
               endpoint: 0.0.0.0:4318
 
 service:
-  type: LoadBalancer
+  type: ClusterIP
   ports:
     http: 3200
     grpc: 4317

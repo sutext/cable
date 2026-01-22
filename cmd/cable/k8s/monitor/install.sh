@@ -26,4 +26,7 @@ helm upgrade --install otel-collector open-telemetry/opentelemetry-collector -f 
 echo "📊 部署 Grafana..."
 helm upgrade --install grafana grafana/grafana -f 40-grafana-values.yaml
 
+echo "🚀 部署 Ingress..."
+kubectl apply -f ingress.yaml
+
 echo "✅ 所有组件已部署！"

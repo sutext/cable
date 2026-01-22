@@ -17,13 +17,3 @@ spec:
             name: grafana
             port:
               number: 80
-  - host: mimir.local
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: mimir-gateway
-            port:
-              number: 80

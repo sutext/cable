@@ -16,8 +16,11 @@ minio:
     size: 20Gi
   resources:
     requests:
-      cpu: 100m
-      memory: 128Mi
+      memory: 256Mi
+      cpu: 1000m
+    limits:
+      memory: 2Gi
+      cpu: 1000m
   rootPassword: supersecret
 
 
@@ -51,18 +54,18 @@ compactor:
       memory: 256Mi
       cpu: 100m
     limits:
-      memory: 512Mi
-      cpu: 500m
+      memory: 2Gi
+      cpu: 1000m
 
 distributor:
-  replicas: 1
+  replicas: 3
   resources:
     requests:
       memory: 256Mi
       cpu: 100m
     limits:
-      memory: 512Mi
-      cpu: 500m
+      memory: 2Gi
+      cpu: 1000m
 
 ingester:
   replicas: 1
@@ -71,7 +74,7 @@ ingester:
       memory: 512Mi
       cpu: 200m
     limits:
-      memory: 1Gi
+      memory: 2Gi
       cpu: 1000m
   persistence:
     enabled: true
@@ -82,10 +85,10 @@ querier:
   replicas: 1
   resources:
     requests:
-      memory: 512Mi
-      cpu: 200m
+      memory: 256Mi
+      cpu: 100m
     limits:
-      memory: 1Gi
+      memory: 2Gi
       cpu: 1000m
 
 queryFrontend:
@@ -96,8 +99,8 @@ queryFrontend:
       memory: 256Mi
       cpu: 100m
     limits:
-      memory: 1Gi
-      cpu: 500m
+      memory: 2Gi
+      cpu: 1000m
 
 queryScheduler:
   enabled: false
@@ -112,8 +115,8 @@ storeGateway:
       memory: 256Mi
       cpu: 100m
     limits:
-      memory: 1Gi
-      cpu: 500m
+      memory: 2Gi
+      cpu: 1000m
   persistence:
     enabled: true
     storageClass: local-path
@@ -159,8 +162,8 @@ resources:
     memory: 256Mi
     cpu: 100m
   limits:
-    memory: 1Gi
-    cpu: 500m
+    memory: 2Gi
+    cpu: 1000m
 
 # 持久卷配置
 persistence:

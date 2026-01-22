@@ -3,7 +3,6 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: cable-config
-  namespace: default
   labels:
     app: cable-cluster
 data:
@@ -20,28 +19,31 @@ data:
     clusterSize: 3
 
     # gRPC Server Port for API
-    grpcPort: 1888
+    grpcPort: 1887
 
     # HTTP Server Port for API
-    httpPort: 1889
+    httpPort: 1888
 
     # Peer Port for Cluster Communication
     peerPort: 4567
 
     # Log Level: debug, info, warn, error
-    logLevel: "error"
+    logLevel: "info"
+
+    # Log Format: text, json
+    logFormat: "text"
 
     # Trace Configuration
     trace:
-      enabled: true
+      enabled: false
       otlpEndpoint: otel-collector:4317
       serviceName: cable
 
     # Metrics Configuration
     metrics:
-      enabled: true
+      enabled: false
       interval: 10
-      otlpEndpoint: http://mimir-gateway/otlp/v1/metrics
+      otlpEndpoint: http://otel-collector:4318/v1/metrics
       serviceName: cable
 
     # Kafka Configuration
@@ -173,7 +175,6 @@ apiVersion: v1
 kind: Service
 
 metadata:
-  namespace: default
   name: cable-cluster
   labels:
     app: cable-cluster
@@ -212,9 +213,9 @@ spec:
       targetPort: 6060
     - protocol: TCP
       name: grpc-api
-      port: 1888
-      targetPort: 8880
+      port: 1887
+      targetPort: 1887
     - protocol: TCP
       name: http-api
-      port: 1889
-      targetPort: 8888
+      port: 1888
+      targetPort: 1888

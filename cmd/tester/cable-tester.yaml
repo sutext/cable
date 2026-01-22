@@ -30,4 +30,4 @@ spec:
             - name: ENDPOINT
               value: "tcp://cable-cluster:1883"
             - name: FREQ
-              value: "50"
+              value: "100"

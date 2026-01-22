@@ -13,6 +13,7 @@ import (
 	"google.golang.org/grpc/backoff"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/stats"
 	"sutext.github.io/cable/cluster/pb"
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
@@ -23,14 +24,15 @@ import (
 // peerClient represents a gRPC client for communicating with a peer broker.
 // It manages the connection lifecycle and provides methods for sending messages and Raft commands.
 type peerClient struct {
-	id     uint64               // Unique ID of the peer broker
-	mu     sync.Mutex           // Mutex for connection management
-	rpc    pb.PeerServiceClient // gRPC client for peer service
-	addr   string               // Address of the peer broker
-	port   string               // Port of the peer broker (currently unused)
-	conn   *grpc.ClientConn     // gRPC client connection
-	ready  atomic.Bool          // Atomic flag indicating if the client is ready
-	logger *xlog.Logger         // Logger for peer client events
+	id           uint64               // Unique ID of the peer broker
+	mu           sync.Mutex           // Mutex for connection management
+	rpc          pb.PeerServiceClient // gRPC client for peer service
+	addr         string               // Address of the peer broker
+	port         string               // Port of the peer broker (currently unused)
+	conn         *grpc.ClientConn     // gRPC client connection
+	ready        atomic.Bool          // Atomic flag indicating if the client is ready
+	logger       *xlog.Logger         // Logger for peer client events
+	statsHandler stats.Handler        // Stats handler for peer client
 }
 
 // newPeerClient creates a new peer client instance.
@@ -103,11 +105,12 @@ func (p *peerClient) reconnnect() error {
 		}),
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
 			Time:                30 * time.Second,
-			Timeout:             3 * time.Second,
+			Timeout:             5 * time.Second,
 			PermitWithoutStream: true,
 		}),
 		grpc.WithNoProxy(),
 		grpc.WithDefaultServiceConfig(config),
+		grpc.WithStatsHandler(p.statsHandler),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 	)
 	if err != nil {

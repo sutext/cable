@@ -10,10 +10,10 @@ brokerid: 0
 clusterSize: 1
 
 # gRPC Server Port for API
-grpcPort: 1888
+grpcPort: 1887
 
 # HTTP Server Port for API
-httpPort: 1889
+httpPort: 1888
 
 # Peer Port for Cluster Communication
 peerPort: 4567
@@ -26,28 +26,28 @@ logFormat: "text"
 
 # Trace Configuration
 trace:
-  enabled: true
+  enabled: false
   serviceName: cable
   otlpEndpoint: 172.16.2.123:4317
 
 # Metrics Configuration
 metrics:
-  enabled: true
+  enabled: false
   interval: 10
   serviceName: cable
-  otlpEndpoint: http://mimir.local/otlp/v1/metrics
+  otlpEndpoint: http://172.16.2.123:4318/v1/metrics
 
 # Kafka Configuration
 kafka:
   enabled: true
   brokers:
-    - "localhost:9092"
+    - "172.16.2.123:9092"
 # Redis Configuration
 # redis and redisCluster are mutually exclusive, only one can be enabled at a time.
 redis:
   enabled: false
   db : 0
-  address: "localhost:6379"
+  address: "172.16.2.123:6379"
   password: ""
   userPrefix: "cable-user-channels:"
 # Redis Cluster Configuration
@@ -56,7 +56,7 @@ redisCluster:
   enabled: true
   password: ""
   addresses: 
-    - "localhost:6379"
+    - "172.16.2.123:6379"
   userPrefix: "cable-user-channels:"
 # Message Route Configuration
 messageRoute:
