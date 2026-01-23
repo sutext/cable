@@ -41,14 +41,14 @@ data:
 
     # Metrics Configuration
     metrics:
-      enabled: false
+      enabled: true
       interval: 10
-      otlpEndpoint: http://otel-collector:4318/v1/metrics
+      otlpEndpoint: http://mimir-gateway/otlp/v1/metrics
       serviceName: cable
 
     # Kafka Configuration
     kafka:
-      enabled: true
+      enabled: false
       brokers:
         - "kafka-broker-0.kafka-broker:9092"
         - "kafka-broker-1.kafka-broker:9092"
@@ -64,7 +64,7 @@ data:
 
     # Redis Cluster Configuration
     redisCluster:
-      enabled: true
+      enabled: false
       password: ""
       addresses: 
         - "redis-cluster-0.redis-cluster:6379"

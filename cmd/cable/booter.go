@@ -88,22 +88,8 @@ func newBooter(config *config) *booter {
 	var serverHandler stats.Handler
 	var clientHandler stats.Handler
 	if b.config.Trace.Enabled || b.config.Metrics.Enabled {
-		serverHandler = otelgrpc.NewServerHandler(
-			otelgrpc.WithSpanAttributes(
-				attribute.String("grpc.serve.type", "peer"),
-			),
-			otelgrpc.WithMetricAttributes(
-				attribute.String("grpc.serve.type", "peer"),
-			),
-		)
-		clientHandler = otelgrpc.NewClientHandler(
-			otelgrpc.WithSpanAttributes(
-				attribute.String("grpc.client.type", "peer"),
-			),
-			otelgrpc.WithMetricAttributes(
-				attribute.String("grpc.client.type", "peer"),
-			),
-		)
+		serverHandler = otelgrpc.NewServerHandler()
+		clientHandler = otelgrpc.NewClientHandler()
 	}
 	b.broker = cluster.NewBroker(
 		cluster.WithBrokerID(b.config.BrokerID),
@@ -253,7 +239,7 @@ func (b *booter) startMeter() {
 	)
 	// Create metrics instruments
 	b.messageUpCounter, err = b.meter.Int64Counter(
-		"messages_up_total",
+		"cable_messages_up_total",
 		metric.WithDescription("Total number of incoming messages"),
 		metric.WithUnit("{message}"),
 	)
@@ -262,7 +248,7 @@ func (b *booter) startMeter() {
 		return
 	}
 	b.messageDownCounter, err = b.meter.Int64Counter(
-		"messages_down_total",
+		"cable_messages_down_total",
 		metric.WithDescription("Total number of outgoing messages"),
 		metric.WithUnit("{message}"),
 	)
@@ -271,7 +257,7 @@ func (b *booter) startMeter() {
 		return
 	}
 	b.messageUpDuration, err = b.meter.Float64Histogram(
-		"messages_up_duration_seconds",
+		"cable_messages_up_duration_seconds",
 		metric.WithDescription("Duration of message processing for incoming messages"),
 		metric.WithUnit("s"),
 		metric.WithExplicitBucketBoundaries(0.001, 0.01, 0.1, 1.0, 10.0),
@@ -281,7 +267,7 @@ func (b *booter) startMeter() {
 		return
 	}
 	b.messageDownDuration, err = b.meter.Float64Histogram(
-		"messages_down_duration_seconds",
+		"cable_messages_down_duration_seconds",
 		metric.WithDescription("Duration of message processing for outgoing messages"),
 		metric.WithUnit("s"),
 		metric.WithExplicitBucketBoundaries(0.001, 0.01, 0.1, 1.0, 10.0),
