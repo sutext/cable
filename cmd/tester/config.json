@@ -3,7 +3,7 @@
   "max_conns": 2500,
   "conn_speed": 1,
   "log_format": "text",
-  "endpoints": ["ws://172.16.2.123:1881"],
+  "endpoints": ["ws://localhost:1881"],
   "max_user_id": 100000,
   "max_client_id": 10000,
   "max_channel_id": 100000,

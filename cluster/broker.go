@@ -60,6 +60,12 @@ type Broker interface {
 	// - ctx: Context for the operation
 	// - uid: User ID to kick
 	KickUser(ctx context.Context, uid string)
+
+	// ConnCount returns the total number of active connections for each broker.
+	//
+	// Returns:
+	// - map[string]int32: Map of network to active connection count
+	ConnCount() map[string]int32
 	// SendToAll sends a message to all clients in the cluster.
 	//
 	// Parameters:
@@ -322,6 +328,15 @@ func (b *broker) KickUser(ctx context.Context, uid string) {
 		}
 		return true
 	})
+}
+func (b *broker) ConnCount() map[string]int32 {
+	connCount := make(map[string]int32)
+	for _, l := range b.listeners {
+		if l.ISStarted() {
+			connCount[l.network] = l.ConnCount()
+		}
+	}
+	return connCount
 }
 
 // SendToAll sends a message to all clients in the cluster.
@@ -618,11 +633,6 @@ func (b *broker) inspect() *pb.Status {
 		userCount[key] = value.Len()
 		return true
 	})
-	clientCount := make(map[uint64]int32)
-	b.clientChannels.Range(func(key uint64, value *safe.KeyMap[struct{}]) bool {
-		clientCount[key] = value.Len()
-		return true
-	})
 	channelCount := make(map[uint64]int32)
 	b.channelClients.Range(func(key uint64, value *safe.KeyMap[string]) bool {
 		channelCount[key] = value.Len()
@@ -642,7 +652,7 @@ func (b *broker) inspect() *pb.Status {
 	return &pb.Status{
 		Id:            b.id,
 		UserCount:     userCount,
-		ClientCount:   clientCount,
+		ClientCount:   b.ConnCount(),
 		ChannelCount:  channelCount,
 		RaftState:     status.RaftState.String(),
 		RaftTerm:      status.Term,
@@ -719,9 +729,9 @@ func (b *broker) sendToTargets(ctx context.Context, m *packet.Message, targets m
 // - op: User opened operation
 func (b *broker) userOpenedOp(op *userOpenedOp) {
 	userClients, _ := b.userClients.GetOrSet(op.nodeID, &safe.KeyMap[string]{})
-	userClients.SetKey(op.uid, op.cid, op.net)
 	channelClients, _ := b.channelClients.GetOrSet(op.nodeID, &safe.KeyMap[string]{})
 	clientChannels, _ := b.clientChannels.GetOrSet(op.nodeID, &safe.KeyMap[struct{}]{})
+	userClients.SetKey(op.uid, op.cid, op.net)
 	for ch := range op.channels {
 		clientChannels.SetKey(op.cid, ch, struct{}{})
 		channelClients.SetKey(ch, op.cid, op.net)
@@ -838,12 +848,12 @@ func (b *broker) makeSnapshot() ([]byte, error) {
 		})
 		return true
 	})
-	snapshot := snapshot{
+	snap := snapshot{
 		UserClients:    userClients,
 		ChannelClients: channelClients,
 		ClientChannels: clientChannels,
 	}
-	return json.Marshal(snapshot)
+	return json.Marshal(snap)
 }
 
 // recoverFromSnapshot recovers the cluster state from a snapshot.

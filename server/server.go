@@ -28,14 +28,16 @@ type Server interface {
 	Serve() error
 	// Network returns the network protocol used by the server.
 	Network() string
-	/// IsActive returns true if the client with the given CID is active.
-	IsActive(cid string) bool
-	// ConnInfo returns the connection information of a client by CID.
-	ConnInfo(cid string) (*ConnInfo, bool)
-	// KickConn kicks a client out of the server by CID.
-	KickConn(cid string) bool
 	// Shutdown shuts down the server and closes all connections.
 	Shutdown(ctx context.Context) error
+	/// IsActive returns true if the client with the given CID is active.
+	IsActive(cid string) bool
+	// KickConn kicks a client out of the server by CID.
+	KickConn(cid string) bool
+	// ConnInfo returns the connection information of a client by CID.
+	ConnInfo(cid string) (*ConnInfo, bool)
+	// ConnCount returns the total number of active connections.
+	ConnCount() int32
 	// Brodcast sends a message to all connected clients.
 	Brodcast(ctx context.Context, p *packet.Message) (total, success int32, err error)
 	// SendMessage sends a message to a specific client by CID.
@@ -133,6 +135,29 @@ func (s *server) Network() string {
 	return s.network
 }
 
+// KickConn kicks a client out of the server by CID.
+//
+// Parameters:
+// - cid: Client ID to kick
+//
+// Returns:
+// - bool: True if the client was kicked, false if not found
+func (s *server) KickConn(cid string) bool {
+	if c, ok := s.conns.Get(cid); ok {
+		c.CloseClode(packet.CloseKickedOut)
+		return true
+	}
+	return false
+}
+
+// ConnCount returns the total number of active connections.
+//
+// Returns:
+// - int32: Number of active connections
+func (s *server) ConnCount() int32 {
+	return s.conns.Len()
+}
+
 // ConnInfo returns the connection information for a client by CID.
 //
 // Parameters:
@@ -150,21 +175,6 @@ func (s *server) ConnInfo(cid string) (*ConnInfo, bool) {
 		}, true
 	}
 	return nil, false
-}
-
-// KickConn kicks a client out of the server by CID.
-//
-// Parameters:
-// - cid: Client ID to kick
-//
-// Returns:
-// - bool: True if the client was kicked, false if not found
-func (s *server) KickConn(cid string) bool {
-	if c, ok := s.conns.Get(cid); ok {
-		c.CloseClode(packet.CloseKickedOut)
-		return true
-	}
-	return false
 }
 
 // ExpelAllConns expels all connections from the server.

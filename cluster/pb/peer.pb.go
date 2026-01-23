@@ -416,7 +416,7 @@ type Status struct {
 	RaftLogSize   uint64                   `protobuf:"varint,5,opt,name=raft_log_size,json=raftLogSize,proto3" json:"raft_log_size,omitempty"`
 	RaftNodeCount int32                    `protobuf:"varint,6,opt,name=raft_node_count,json=raftNodeCount,proto3" json:"raft_node_count,omitempty"`
 	UserCount     map[uint64]int32         `protobuf:"bytes,7,rep,name=user_count,json=userCount,proto3" json:"user_count,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
-	ClientCount   map[uint64]int32         `protobuf:"bytes,8,rep,name=client_count,json=clientCount,proto3" json:"client_count,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	ClientCount   map[string]int32         `protobuf:"bytes,8,rep,name=client_count,json=clientCount,proto3" json:"client_count,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	ChannelCount  map[uint64]int32         `protobuf:"bytes,9,rep,name=channel_count,json=channelCount,proto3" json:"channel_count,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	RaftProgress  map[uint64]*RaftProgress `protobuf:"bytes,10,rep,name=raft_progress,json=raftProgress,proto3" json:"raft_progress,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
@@ -502,7 +502,7 @@ func (x *Status) GetUserCount() map[uint64]int32 {
 	return nil
 }
 
-func (x *Status) GetClientCount() map[uint64]int32 {
+func (x *Status) GetClientCount() map[string]int32 {
 	if x != nil {
 		return x.ClientCount
 	}
@@ -575,7 +575,7 @@ const file_cluster_pb_peer_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a>\n" +
 	"\x10ClientCountEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a?\n" +
 	"\x11ChannelCountEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +

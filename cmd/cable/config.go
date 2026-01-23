@@ -82,6 +82,10 @@ type config struct {
 	Listeners    []listener                   `yaml:"listeners"`
 }
 
+func (c *config) String() string {
+	data, _ := yaml.Marshal(c)
+	return string(data)
+}
 func readConfig(path string) (*config, error) {
 	// Read config file
 	data, err := os.ReadFile(path)
@@ -167,8 +171,8 @@ func (c *config) validate() error {
 		if k > 63 {
 			return fmt.Errorf("invalid message kind: %d", k)
 		}
-		if v.Enabled && v.KafkaTopic == "" {
-			return fmt.Errorf("route for message kind %d is enabled but kafka topic is empty", k)
+		if v.ResendType != resendNone && v.ResendType != resendToAll && v.ResendType != resendToUser && v.ResendType != resendToChannel {
+			return fmt.Errorf("invalid resend type: %s", v.ResendType)
 		}
 	}
 	if len(c.Listeners) == 0 {

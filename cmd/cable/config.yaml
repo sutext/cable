@@ -41,22 +41,22 @@ metrics:
 kafka:
   enabled: true
   brokers:
-    - "172.16.2.123:9092"
+    - "localhost:9092"
 # Redis Configuration
 # redis and redisCluster are mutually exclusive, only one can be enabled at a time.
 redis:
   enabled: false
   db : 0
-  address: "172.16.2.123:6379"
+  address: "localhost:6379"
   password: ""
   userPrefix: "cable-user-channels:"
 # Redis Cluster Configuration
 # redis and redisCluster are mutually exclusive, only one can be enabled at a time.
 redisCluster:
-  enabled: true
+  enabled: false
   password: ""
   addresses: 
-    - "172.16.2.123:6379"
+    - "localhost:6379"
   userPrefix: "cable-user-channels:"
 # Message Route Configuration
 messageRoute:
@@ -64,11 +64,11 @@ messageRoute:
   0: 
     enabled: true
     resendType: "user"
-    kafkaTopic: "cable-upstream-user"
+    kafkaTopic: ""
   1:
     enabled: true
     resendType: "channel"
-    kafkaTopic: "cable-upstream-group"
+    kafkaTopic: ""
 
 
 # Listeners Configuration

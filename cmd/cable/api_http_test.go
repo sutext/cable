@@ -122,7 +122,9 @@ func (m *mockBroker) Start() {
 func (m *mockBroker) Shutdown(ctx context.Context) error {
 	return nil
 }
-
+func (m *mockBroker) ConnCount() map[string]int32 {
+	return nil
+}
 func (m *mockBroker) SendToAll(ctx context.Context, msg *packet.Message) (int32, int32, error) {
 	return 0, 0, nil
 }
