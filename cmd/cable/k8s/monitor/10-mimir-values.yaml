@@ -145,10 +145,6 @@ service:
     grpc:
       port: 4317
 
-# OTLP 接收器配置 - 使用 Mimir 内置的 OTLP 支持
-# Mimir 默认启用 OTLP 接收器，无需额外配置
-# 只需要确保服务端口已正确暴露即可
-
 # 监控配置 - 与现有 Prometheus 兼容
 monitoring:
   selfMonitoring:

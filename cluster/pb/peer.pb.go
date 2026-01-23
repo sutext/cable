@@ -414,9 +414,9 @@ type Status struct {
 	RaftState     string                   `protobuf:"bytes,3,opt,name=raft_state,json=raftState,proto3" json:"raft_state,omitempty"`
 	RaftApplied   uint64                   `protobuf:"varint,4,opt,name=raft_applied,json=raftApplied,proto3" json:"raft_applied,omitempty"`
 	RaftLogSize   uint64                   `protobuf:"varint,5,opt,name=raft_log_size,json=raftLogSize,proto3" json:"raft_log_size,omitempty"`
-	ClientCount   int32                    `protobuf:"varint,6,opt,name=client_count,json=clientCount,proto3" json:"client_count,omitempty"`
-	ClusterSize   int32                    `protobuf:"varint,7,opt,name=cluster_size,json=clusterSize,proto3" json:"cluster_size,omitempty"`
-	UserCount     map[uint64]int32         `protobuf:"bytes,8,rep,name=user_count,json=userCount,proto3" json:"user_count,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	RaftNodeCount int32                    `protobuf:"varint,6,opt,name=raft_node_count,json=raftNodeCount,proto3" json:"raft_node_count,omitempty"`
+	UserCount     map[uint64]int32         `protobuf:"bytes,7,rep,name=user_count,json=userCount,proto3" json:"user_count,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	ClientCount   map[uint64]int32         `protobuf:"bytes,8,rep,name=client_count,json=clientCount,proto3" json:"client_count,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	ChannelCount  map[uint64]int32         `protobuf:"bytes,9,rep,name=channel_count,json=channelCount,proto3" json:"channel_count,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
 	RaftProgress  map[uint64]*RaftProgress `protobuf:"bytes,10,rep,name=raft_progress,json=raftProgress,proto3" json:"raft_progress,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
@@ -488,16 +488,9 @@ func (x *Status) GetRaftLogSize() uint64 {
 	return 0
 }
 
-func (x *Status) GetClientCount() int32 {
+func (x *Status) GetRaftNodeCount() int32 {
 	if x != nil {
-		return x.ClientCount
-	}
-	return 0
-}
-
-func (x *Status) GetClusterSize() int32 {
-	if x != nil {
-		return x.ClusterSize
+		return x.RaftNodeCount
 	}
 	return 0
 }
@@ -505,6 +498,13 @@ func (x *Status) GetClusterSize() int32 {
 func (x *Status) GetUserCount() map[uint64]int32 {
 	if x != nil {
 		return x.UserCount
+	}
+	return nil
+}
+
+func (x *Status) GetClientCount() map[uint64]int32 {
+	if x != nil {
+		return x.ClientCount
 	}
 	return nil
 }
@@ -556,22 +556,25 @@ const file_cluster_pb_peer_proto_rawDesc = "" +
 	"\fRaftProgress\x12\x14\n" +
 	"\x05match\x18\x01 \x01(\x04R\x05match\x12\x12\n" +
 	"\x04next\x18\x02 \x01(\x04R\x04next\x12\x14\n" +
-	"\x05state\x18\x03 \x01(\tR\x05state\"\xf3\x04\n" +
+	"\x05state\x18\x03 \x01(\tR\x05state\"\xd5\x05\n" +
 	"\x06Status\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1b\n" +
 	"\traft_term\x18\x02 \x01(\x04R\braftTerm\x12\x1d\n" +
 	"\n" +
 	"raft_state\x18\x03 \x01(\tR\traftState\x12!\n" +
 	"\fraft_applied\x18\x04 \x01(\x04R\vraftApplied\x12\"\n" +
-	"\rraft_log_size\x18\x05 \x01(\x04R\vraftLogSize\x12!\n" +
-	"\fclient_count\x18\x06 \x01(\x05R\vclientCount\x12!\n" +
-	"\fcluster_size\x18\a \x01(\x05R\vclusterSize\x128\n" +
+	"\rraft_log_size\x18\x05 \x01(\x04R\vraftLogSize\x12&\n" +
+	"\x0fraft_node_count\x18\x06 \x01(\x05R\rraftNodeCount\x128\n" +
 	"\n" +
-	"user_count\x18\b \x03(\v2\x19.pb.Status.UserCountEntryR\tuserCount\x12A\n" +
+	"user_count\x18\a \x03(\v2\x19.pb.Status.UserCountEntryR\tuserCount\x12>\n" +
+	"\fclient_count\x18\b \x03(\v2\x1b.pb.Status.ClientCountEntryR\vclientCount\x12A\n" +
 	"\rchannel_count\x18\t \x03(\v2\x1c.pb.Status.ChannelCountEntryR\fchannelCount\x12A\n" +
 	"\rraft_progress\x18\n" +
 	" \x03(\v2\x1c.pb.Status.RaftProgressEntryR\fraftProgress\x1a<\n" +
 	"\x0eUserCountEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a>\n" +
+	"\x10ClientCountEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1a?\n" +
 	"\x11ChannelCountEntry\x12\x10\n" +
@@ -601,7 +604,7 @@ func file_cluster_pb_peer_proto_rawDescGZIP() []byte {
 	return file_cluster_pb_peer_proto_rawDescData
 }
 
-var file_cluster_pb_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_cluster_pb_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
 var file_cluster_pb_peer_proto_goTypes = []any{
 	(*Empty)(nil),        // 0: pb.Empty
 	(*IsOnlineReq)(nil),  // 1: pb.IsOnlineReq
@@ -616,34 +619,36 @@ var file_cluster_pb_peer_proto_goTypes = []any{
 	nil,                  // 10: pb.MessageReq.TargetsEntry
 	nil,                  // 11: pb.KickConnReq.TargetsEntry
 	nil,                  // 12: pb.Status.UserCountEntry
-	nil,                  // 13: pb.Status.ChannelCountEntry
-	nil,                  // 14: pb.Status.RaftProgressEntry
+	nil,                  // 13: pb.Status.ClientCountEntry
+	nil,                  // 14: pb.Status.ChannelCountEntry
+	nil,                  // 15: pb.Status.RaftProgressEntry
 }
 var file_cluster_pb_peer_proto_depIdxs = []int32{
 	9,  // 0: pb.IsOnlineReq.targets:type_name -> pb.IsOnlineReq.TargetsEntry
 	10, // 1: pb.MessageReq.targets:type_name -> pb.MessageReq.TargetsEntry
 	11, // 2: pb.KickConnReq.targets:type_name -> pb.KickConnReq.TargetsEntry
 	12, // 3: pb.Status.user_count:type_name -> pb.Status.UserCountEntry
-	13, // 4: pb.Status.channel_count:type_name -> pb.Status.ChannelCountEntry
-	14, // 5: pb.Status.raft_progress:type_name -> pb.Status.RaftProgressEntry
-	7,  // 6: pb.Status.RaftProgressEntry.value:type_name -> pb.RaftProgress
-	0,  // 7: pb.PeerService.Inspect:input_type -> pb.Empty
-	1,  // 8: pb.PeerService.IsOnline:input_type -> pb.IsOnlineReq
-	5,  // 9: pb.PeerService.KickConn:input_type -> pb.KickConnReq
-	3,  // 10: pb.PeerService.SendToAll:input_type -> pb.MessageReq
-	3,  // 11: pb.PeerService.SendToTargets:input_type -> pb.MessageReq
-	6,  // 12: pb.PeerService.SendRaftMessage:input_type -> pb.RaftMessage
-	8,  // 13: pb.PeerService.Inspect:output_type -> pb.Status
-	2,  // 14: pb.PeerService.IsOnline:output_type -> pb.IsOnlineResp
-	0,  // 15: pb.PeerService.KickConn:output_type -> pb.Empty
-	4,  // 16: pb.PeerService.SendToAll:output_type -> pb.MessageResp
-	4,  // 17: pb.PeerService.SendToTargets:output_type -> pb.MessageResp
-	0,  // 18: pb.PeerService.SendRaftMessage:output_type -> pb.Empty
-	13, // [13:19] is the sub-list for method output_type
-	7,  // [7:13] is the sub-list for method input_type
-	7,  // [7:7] is the sub-list for extension type_name
-	7,  // [7:7] is the sub-list for extension extendee
-	0,  // [0:7] is the sub-list for field type_name
+	13, // 4: pb.Status.client_count:type_name -> pb.Status.ClientCountEntry
+	14, // 5: pb.Status.channel_count:type_name -> pb.Status.ChannelCountEntry
+	15, // 6: pb.Status.raft_progress:type_name -> pb.Status.RaftProgressEntry
+	7,  // 7: pb.Status.RaftProgressEntry.value:type_name -> pb.RaftProgress
+	0,  // 8: pb.PeerService.Inspect:input_type -> pb.Empty
+	1,  // 9: pb.PeerService.IsOnline:input_type -> pb.IsOnlineReq
+	5,  // 10: pb.PeerService.KickConn:input_type -> pb.KickConnReq
+	3,  // 11: pb.PeerService.SendToAll:input_type -> pb.MessageReq
+	3,  // 12: pb.PeerService.SendToTargets:input_type -> pb.MessageReq
+	6,  // 13: pb.PeerService.SendRaftMessage:input_type -> pb.RaftMessage
+	8,  // 14: pb.PeerService.Inspect:output_type -> pb.Status
+	2,  // 15: pb.PeerService.IsOnline:output_type -> pb.IsOnlineResp
+	0,  // 16: pb.PeerService.KickConn:output_type -> pb.Empty
+	4,  // 17: pb.PeerService.SendToAll:output_type -> pb.MessageResp
+	4,  // 18: pb.PeerService.SendToTargets:output_type -> pb.MessageResp
+	0,  // 19: pb.PeerService.SendRaftMessage:output_type -> pb.Empty
+	14, // [14:20] is the sub-list for method output_type
+	8,  // [8:14] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_cluster_pb_peer_proto_init() }
@@ -657,7 +662,7 @@ func file_cluster_pb_peer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_cluster_pb_peer_proto_rawDesc), len(file_cluster_pb_peer_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   16,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

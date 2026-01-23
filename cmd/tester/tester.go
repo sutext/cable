@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -139,18 +138,8 @@ func (t *Tester) addClient() *Client {
 	if endpoint == "" {
 		endpoint = statefulSetEndpoint()
 	}
-	strs := strings.Split(endpoint, "://")
-	if len(strs) != 2 {
-		panic("invalid endpoint")
-	}
-	network := strs[0]
-	addr := strs[1]
-	if network == "ws" {
-		addr = endpoint
-	}
 	result := &Client{}
-	result.cli = client.New(addr,
-		client.WithNetwork(network),
+	result.cli = client.New(endpoint,
 		client.WithKeepAlive(time.Second*5, time.Second*60),
 		client.WithHandler(result),
 	)

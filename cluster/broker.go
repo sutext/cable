@@ -493,8 +493,9 @@ func (b *broker) HandleRequest(method string, handler server.RequestHandler) {
 // - id: Identity of the disconnected user
 func (b *broker) onUserClosed(id *packet.Identity) {
 	op := &userClosedOp{
-		uid: id.UserID,
-		cid: id.ClientID,
+		uid:    id.UserID,
+		cid:    id.ClientID,
+		nodeID: b.id,
 	}
 	if err := b.cluster.SubmitOperation(context.Background(), op); err != nil {
 		b.logger.Error("Failed to submit user disconnect op", xlog.Err(err))
@@ -617,6 +618,11 @@ func (b *broker) inspect() *pb.Status {
 		userCount[key] = value.Len()
 		return true
 	})
+	clientCount := make(map[uint64]int32)
+	b.clientChannels.Range(func(key uint64, value *safe.KeyMap[struct{}]) bool {
+		clientCount[key] = value.Len()
+		return true
+	})
 	channelCount := make(map[uint64]int32)
 	b.channelClients.Range(func(key uint64, value *safe.KeyMap[string]) bool {
 		channelCount[key] = value.Len()
@@ -634,16 +640,16 @@ func (b *broker) inspect() *pb.Status {
 		}
 	}
 	return &pb.Status{
-		Id:           b.id,
-		UserCount:    userCount,
-		ClientCount:  b.clientChannels.Len(),
-		ClusterSize:  b.cluster.size,
-		ChannelCount: channelCount,
-		RaftState:    status.RaftState.String(),
-		RaftTerm:     status.Term,
-		RaftLogSize:  b.cluster.RaftLogSize(),
-		RaftApplied:  status.Applied,
-		RaftProgress: progress,
+		Id:            b.id,
+		UserCount:     userCount,
+		ClientCount:   clientCount,
+		ChannelCount:  channelCount,
+		RaftState:     status.RaftState.String(),
+		RaftTerm:      status.Term,
+		RaftLogSize:   b.cluster.RaftLogSize(),
+		RaftApplied:   status.Applied,
+		RaftProgress:  progress,
+		RaftNodeCount: b.cluster.size,
 	}
 }
 
@@ -731,15 +737,19 @@ func (b *broker) userClosedOp(op *userClosedOp) {
 	if userClients, ok := b.userClients.Get(op.nodeID); ok {
 		userClients.DeleteKey(op.uid, op.cid)
 	}
-	if clientChannels, ok := b.clientChannels.Get(op.nodeID); ok {
-		if channelClients, ok := b.channelClients.Get(op.nodeID); ok {
-			clientChannels.RangeKey(op.cid, func(channel string, s2 struct{}) bool {
-				channelClients.DeleteKey(channel, op.cid)
-				return true
-			})
-		}
-		clientChannels.DeleteKey(op.cid, op.uid)
+	clientChannels, ok := b.clientChannels.Get(op.nodeID)
+	if !ok {
+		return
 	}
+	defer clientChannels.DeleteKey(op.cid, op.uid)
+	channelClients, ok := b.channelClients.Get(op.nodeID)
+	if !ok {
+		return
+	}
+	clientChannels.RangeKey(op.cid, func(channel string, _ struct{}) bool {
+		channelClients.DeleteKey(channel, op.cid)
+		return true
+	})
 }
 
 // joinChannelOp processes join channel operations.

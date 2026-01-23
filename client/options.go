@@ -4,6 +4,7 @@
 package client
 
 import (
+	"crypto/tls"
 	"time"
 
 	"golang.org/x/net/quic"
@@ -59,7 +60,7 @@ type Options struct {
 	logger            *xlog.Logger  // logger for client logging
 	handler           Handler       // event handler for client events
 	retrier           *Retrier      // retry mechanism for reconnections
-	network           string        // network protocol to use
+	tlsConfig         *tls.Config   // TLS configuration (if using TLS)
 	quicConfig        *quic.Config  // QUIC configuration (if using QUIC)
 	pingTimeout       time.Duration // timeout for ping responses
 	pingInterval      time.Duration // interval between ping messages
@@ -80,13 +81,21 @@ func newOptions(options ...Option) *Options {
 		logger:            xlog.With("GROUP", "CLIENT"),
 		handler:           &emptyHandler{},
 		retrier:           NewRetrier(10, backoff.Exponential(time.Second, 1.5)),
-		network:           NetworkTCP,
 		pingTimeout:       time.Second * 5,
 		pingInterval:      time.Second * 60,
 		writeTimeout:      time.Second * 5,
 		requestTimeout:    time.Second * 5,
 		messageTimeout:    time.Second * 5,
 		sendQueueCapacity: 1024,
+		tlsConfig: &tls.Config{ // default TLS configuration, using self-signed certificate
+			InsecureSkipVerify: true,
+		},
+		quicConfig: &quic.Config{ // default QUIC configuration
+			MaxIdleTimeout: 5 * time.Second,
+			TLSConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
 	}
 	for _, o := range options {
 		o.f(opts)
@@ -109,17 +118,17 @@ func WithLogger(logger *xlog.Logger) Option {
 	}}
 }
 
-// WithNetwork sets the network protocol to use (TCP, UDP, WebSocket, QUIC).
-func WithNetwork(network string) Option {
-	return Option{f: func(o *Options) {
-		o.network = network
-	}}
-}
-
 // WithRetrier sets the custom retrier for reconnection attempts.
 func WithRetrier(retrier *Retrier) Option {
 	return Option{f: func(o *Options) {
 		o.retrier = retrier
+	}}
+}
+
+// WithTLSConfig sets the TLS configuration for TLS network protocol.
+func WithTLSConfig(config *tls.Config) Option {
+	return Option{f: func(o *Options) {
+		o.tlsConfig = config
 	}}
 }
 

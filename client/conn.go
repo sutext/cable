@@ -5,6 +5,7 @@ package client
 
 import (
 	"context"
+	"crypto/tls"
 	"net"
 
 	"golang.org/x/net/quic"
@@ -26,8 +27,9 @@ type Conn interface {
 
 // tcpConn implements the Conn interface for TCP connections.
 type tcpConn struct {
-	addr *net.TCPAddr // TCP address of the remote server
-	conn *net.TCPConn // Underlying TCP connection
+	addr      *net.TCPAddr // TCP address of the remote server
+	conn      *net.TCPConn // Underlying TCP connection
+	tlsConfig *tls.Config  // TLS configuration for secure TCP connection
 }
 
 // newTCPConn creates a new TCP connection instance.
@@ -65,6 +67,53 @@ func (c *tcpConn) Dail() error {
 
 // Close closes the TCP connection and releases resources.
 func (c *tcpConn) Close() error {
+	if c.conn != nil {
+		err := c.conn.Close()
+		c.conn = nil
+		return err
+	}
+	return nil
+}
+
+type tlsConn struct {
+	addr      string
+	conn      *tls.Conn   // Underlying TLS connection
+	tlsConfig *tls.Config // TLS configuration for secure TCP connection
+}
+
+func newTLSConn(addr string, tlsConfig *tls.Config) *tlsConn {
+	if tlsConfig == nil {
+		panic("tls config is nil")
+	}
+	return &tlsConn{addr: addr, tlsConfig: tlsConfig}
+}
+
+// WritePacket writes a packet to the TCP connection.
+func (c *tlsConn) WritePacket(p packet.Packet) error {
+	return packet.WriteTo(c.conn, p)
+}
+
+// ReadPacket reads a packet from the TCP connection.
+func (c *tlsConn) ReadPacket() (packet.Packet, error) {
+	return packet.ReadFrom(c.conn)
+}
+
+// Dail establishes a TCP connection to the remote server.
+func (c *tlsConn) Dail() error {
+	if c.conn != nil {
+		c.conn.Close()
+		c.conn = nil
+	}
+	conn, err := tls.Dial("tcp", c.addr, c.tlsConfig)
+	if err != nil {
+		return err
+	}
+	c.conn = conn
+	return nil
+}
+
+// Close closes the TCP connection and releases resources.
+func (c *tlsConn) Close() error {
 	if c.conn != nil {
 		err := c.conn.Close()
 		c.conn = nil
@@ -139,13 +188,20 @@ func (c *udpConn) Close() error {
 
 // wsConn implements the Conn interface for WebSocket connections.
 type wsConn struct {
-	url  string          // WebSocket URL of the remote server
-	conn *websocket.Conn // Underlying WebSocket connection
+	url       string          // WebSocket URL of the remote server
+	conn      *websocket.Conn // Underlying WebSocket connection
+	tlsConfig *tls.Config     // TLS configuration for secure WebSocket
 }
 
 // newWSConn creates a new WebSocket connection instance.
 func newWSConn(addr string) Conn {
 	return &wsConn{url: addr}
+}
+func newWSSConn(addr string, tlsConfig *tls.Config) Conn {
+	if tlsConfig == nil {
+		panic("tls config is nil")
+	}
+	return &wsConn{url: addr, tlsConfig: tlsConfig}
 }
 
 // WritePacket writes a packet to the WebSocket connection.
@@ -164,7 +220,15 @@ func (c *wsConn) Dail() error {
 		c.conn.Close()
 		c.conn = nil
 	}
-	ws, err := websocket.Dial(c.url, "cable", "https://localhost")
+	config, err := websocket.NewConfig(c.url, "http://localhostt")
+	if err != nil {
+		return err
+	}
+	config.Protocol = []string{"cable"}
+	if c.tlsConfig != nil {
+		config.TlsConfig = c.tlsConfig
+	}
+	ws, err := websocket.DialConfig(config)
 	if err != nil {
 		return err
 	}
@@ -180,10 +244,10 @@ func (c *wsConn) Close() error {
 
 // quicConn implements the Conn interface for QUIC connections.
 type quicConn struct {
-	addr     string          // QUIC address of the remote server
-	stream   *quic.Stream    // QUIC stream for reading/writing packets
-	config   *quic.Config    // QUIC configuration
-	endpoint *quic.Endpoint  // QUIC endpoint
+	addr     string         // QUIC address of the remote server
+	stream   *quic.Stream   // QUIC stream for reading/writing packets
+	config   *quic.Config   // QUIC configuration
+	endpoint *quic.Endpoint // QUIC endpoint
 }
 
 // newQUICConn creates a new QUIC connection instance.

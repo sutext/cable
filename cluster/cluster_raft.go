@@ -249,14 +249,13 @@ func (c *cluster) startRaft(join bool) {
 	if c.raft != nil {
 		return
 	}
-	storage := raft.NewMemoryStorage()
-	c.storage = storage
+	c.storage = raft.NewMemoryStorage()
 	conf := &raft.Config{
 		ID:                        c.broker.id,
 		ElectionTick:              10,
 		HeartbeatTick:             1,
-		Storage:                   storage,
-		MaxSizePerMsg:             10 * 1024 * 1024,
+		Storage:                   c.storage,
+		MaxSizePerMsg:             20 * 1024 * 1024,
 		MaxInflightMsgs:           256,
 		MaxUncommittedEntriesSize: 1 << 30,
 	}

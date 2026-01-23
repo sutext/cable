@@ -6,6 +6,7 @@ package client
 import (
 	"context"
 	"math"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -94,18 +95,31 @@ type client struct {
 
 // New creates a new Client instance with the specified address and options.
 // Supports multiple network protocols: TCP, UDP, WebSocket, QUIC.
-func New(address string, options ...Option) Client {
+func New(endpoint string, options ...Option) Client {
+	strs := strings.Split(endpoint, "://")
+	if len(strs) != 2 {
+		panic("invalid endpoint")
+	}
+	network := strs[0]
+	address := strs[1]
+	if network == NetworkWS || network == NetworkWSS {
+		address = endpoint
+	}
 	opts := newOptions(options...)
 	var conn Conn
-	switch opts.network {
+	switch network {
+	case NetworkWS:
+		conn = newWSConn(address)
+	case NetworkWSS:
+		conn = newWSSConn(address, opts.tlsConfig)
 	case NetworkTCP:
 		conn = newTCPConn(address)
+	case NetworkTLS:
+		conn = newTLSConn(address, opts.tlsConfig)
 	case NetworkUDP:
 		conn = newUDPConn(address)
 	case NetworkQUIC:
 		conn = newQUICConn(address, opts.quicConfig)
-	case NetworkWS:
-		conn = newWSConn(address)
 	default:
 		panic("unknown network")
 	}
