@@ -30,7 +30,6 @@ type config struct {
 	LogFormat       string                          `json:"log_format"`
 	Endpoints       []string                        `json:"endpoints"`
 	MaxUserID       int                             `json:"max_user_id"`
-	MaxClientID     int                             `json:"max_client_id"`
 	MaxChannelID    int                             `json:"max_channel_id"`
 	MessageInterval int                             `json:"message_interval"` // message speed per second
 	MessageRoute    map[packet.MessageKind]SendType `json:"message_route"`
@@ -73,9 +72,6 @@ func (c *config) validate() error {
 	if c.MaxUserID <= 0 {
 		return fmt.Errorf("invalid max user id: %d", c.MaxUserID)
 	}
-	if c.MaxClientID <= 0 {
-		return fmt.Errorf("invalid max client id: %d", c.MaxClientID)
-	}
 	if c.MaxChannelID <= 0 {
 		return fmt.Errorf("invalid max channel id: %d", c.MaxChannelID)
 	}
@@ -111,9 +107,6 @@ func (c *config) Level() slog.Level {
 }
 func (c *config) randomUserID() string {
 	return fmt.Sprintf("u%d", rand.IntN(c.MaxUserID))
-}
-func (c *config) randomClientID() string {
-	return fmt.Sprintf("c%d", rand.IntN((c.MaxClientID)))
 }
 func (c *config) randomChannelID() string {
 	return fmt.Sprintf("channel%d", rand.IntN(c.MaxChannelID))
@@ -153,6 +146,20 @@ type Client struct {
 	cli    client.Client
 }
 
+func newClient(config *config) *Client {
+	result := &Client{config: config}
+	result.cli = client.New(config.randomEndpoint(),
+		client.WithKeepAlive(time.Second*5, time.Second*60),
+		client.WithHandler(result),
+	)
+	uid := config.randomUserID()
+	cid := fmt.Sprintf("%d-%d", time.Now().UnixNano(), rand.Int64())
+	result.id = &packet.Identity{UserID: uid, ClientID: cid}
+	return result
+}
+func (c *Client) Connect() {
+	c.cli.Connect(c.id)
+}
 func (c *Client) run() {
 	for {
 		if !c.cli.IsReady() {
@@ -164,9 +171,18 @@ func (c *Client) run() {
 		}
 		err := c.cli.SendMessage(context.Background(), msg)
 		if err != nil {
-			xlog.Error("send message error", xlog.Int("Kind", int(msg.Kind)), xlog.Err(err))
+			xlog.Error("send message error",
+				xlog.Int("Kind", int(msg.Kind)),
+				xlog.Str("uid", c.id.UserID),
+				xlog.Str("cid", c.id.ClientID),
+				xlog.Err(err),
+			)
 		} else {
-			xlog.Info("send message success", xlog.Int("Kind", int(msg.Kind)))
+			xlog.Info("send message success",
+				xlog.Int("Kind", int(msg.Kind)),
+				xlog.Str("uid", c.id.UserID),
+				xlog.Str("cid", c.id.ClientID),
+			)
 		}
 		time.Sleep(time.Second * time.Duration(c.config.MessageInterval))
 	}
@@ -174,7 +190,6 @@ func (c *Client) run() {
 
 func (c *Client) OnStatus(status client.Status) {
 	if c.cli.IsReady() {
-		xlog.Info("client opened")
 		go c.run()
 	}
 }
@@ -184,20 +199,6 @@ func (c *Client) OnMessage(msg *packet.Message) error {
 }
 func (c *Client) OnRequest(req *packet.Request) (*packet.Response, error) {
 	return nil, fmt.Errorf("unsupported request")
-}
-
-var clients safe.RMap[string, *Client]
-
-func addClient(config *config) *Client {
-	result := &Client{config: config}
-	result.cli = client.New(config.randomEndpoint(),
-		client.WithKeepAlive(time.Second*5, time.Second*60),
-		client.WithHandler(result),
-	)
-	result.id = &packet.Identity{UserID: config.randomUserID(), ClientID: config.randomClientID()}
-	clients.Set(result.id.ClientID, result)
-	go result.cli.Connect(result.id)
-	return result
 }
 
 var configFile = "config.json"
@@ -217,6 +218,7 @@ func main() {
 	} else {
 		logger = xlog.NewText(conf.Level().Level())
 	}
+	var clients safe.RMap[string, *Client]
 	xlog.SetDefault(logger)
 	ctx := context.Background()
 	dur := time.Second * time.Duration(conf.MaxConns/conf.ConnSpeed)
@@ -230,7 +232,11 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				addClient(conf)
+				c := newClient(conf)
+				if !clients.Set(c.id.ClientID, c) {
+					xlog.Error("client already exists", xlog.Str("cid", c.id.ClientID))
+				}
+				go c.Connect()
 			}
 		}
 	}()

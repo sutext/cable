@@ -14,12 +14,11 @@ data:
       "conn_speed": 10,
       "log_format": "text",
       "endpoints": [
-        "tcp://cable-cluster-0.cable-cluster:1883",
-        "tcp://cable-cluster-1.cable-cluster:1883",
-        "tcp://cable-cluster-2.cable-cluster:1883"
+        "tcp://cable-cluster-0.cable:1883",
+        "tcp://cable-cluster-1.cable:1883",
+        "tcp://cable-cluster-2.cable:1883"
       ],
       "max_user_id": 100000,
-      "max_client_id": 1000,
       "max_channel_id": 100000,
       "message_interval": 10,
       "message_route": {

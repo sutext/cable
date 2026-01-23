@@ -39,7 +39,7 @@ metrics:
 
 # Kafka Configuration
 kafka:
-  enabled: true
+  enabled: false
   brokers:
     - "localhost:9092"
 # Redis Configuration

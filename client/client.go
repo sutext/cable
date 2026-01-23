@@ -420,7 +420,7 @@ func (c *client) _setStatus(status Status) {
 	if c.status == status {
 		return
 	}
-	c.logger.Debug("client status change", xlog.Str("from", c.status.String()), xlog.Str("to", status.String()))
+	c.logger.Info("client status change", xlog.Str("from", c.status.String()), xlog.Str("to", status.String()))
 	c.status = status
 	switch status {
 	case StatusClosed:

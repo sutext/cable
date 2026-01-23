@@ -16,6 +16,17 @@ func TestMap(t *testing.T) {
 		t.Error("Expected nil, got", foo)
 	}
 }
+func TestMapCount(t *testing.T) {
+	m := RMap[string, string]{}
+	m.Set("foo", "bar")
+	if count := m.Len(); count != 1 {
+		t.Error("Expected 1, got", count)
+	}
+	m.Delete("foo")
+	if count := m.Len(); count != 0 {
+		t.Error("Expected 0, got", count)
+	}
+}
 func BenchmarkMap(b *testing.B) {
 	b.Run("safe.RMap.Write", func(b *testing.B) {
 		m := RMap[string, string]{}

@@ -133,7 +133,7 @@ spec:
   selector:
     matchLabels:
       app: cable-cluster
-  serviceName: cable-cluster
+  serviceName: cable
   template:
     metadata:
       labels:
@@ -170,10 +170,10 @@ spec:
   podManagementPolicy: Parallel
   updateStrategy:
     type: RollingUpdate
+
 ---
 apiVersion: v1
 kind: Service
-
 metadata:
   name: cable-cluster
   labels:
@@ -219,3 +219,51 @@ spec:
       name: http-api
       port: 1888
       targetPort: 1888
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cable
+  labels:
+    app: cable
+spec:
+  selector:
+    app: cable-cluster
+  ports:
+    - protocol: TCP
+      name: ws
+      port: 1881
+      targetPort: 1881
+    - protocol: TCP
+      name: wss
+      port: 1882
+      targetPort: 1882
+    - protocol: TCP
+      name: tcp
+      port: 1883
+      targetPort: 1883
+    - protocol: TCP
+      name: tls
+      port: 1884
+      targetPort: 1884
+    - protocol: UDP
+      name: udp
+      port: 1885
+      targetPort: 1885
+    - protocol: UDP
+      name: quic
+      port: 1886
+      targetPort: 1886
+    - protocol: TCP
+      name: pprof
+      port: 6060
+      targetPort: 6060
+    - protocol: TCP
+      name: grpc-api
+      port: 1887
+      targetPort: 1887
+    - protocol: TCP
+      name: http-api
+      port: 1888
+      targetPort: 1888
+  clusterIP: None
