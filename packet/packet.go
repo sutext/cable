@@ -99,10 +99,10 @@ type Property uint8
 
 // Property constants.
 const (
-	PropertyNone    Property = 0 // Empty property
-	PropertyConnID  Property = 1 // Connection ID property
-	PropertyUserID  Property = 2 // User ID property
-	PropertyChannel Property = 3 // Channel property
+	PropertyNone     Property = 0 // Empty property
+	PropertyUserID   Property = 1 // User ID property
+	PropertyChannel  Property = 2 // Channel property
+	PropertyClientID Property = 3 // Client ID property
 )
 
 // Properties defines an interface for managing packet properties.

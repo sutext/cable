@@ -180,8 +180,8 @@ func NewBroker(opts ...Option) Broker {
 			server.WithLogger(b.logger),
 			server.WithMessage(b.onUserMessage),
 			server.WithRequest(b.onUserRequest),
-			server.WithConnect(func(p *packet.Connect) packet.ConnectCode {
-				return b.onUserConnect(p, l.network)
+			server.WithConnect(func(ctx context.Context, p *packet.Connect) packet.ConnectCode {
+				return b.onUserConnect(ctx, p, l.network)
 			}),
 		)
 		b.listeners[l.network] = l
@@ -528,8 +528,8 @@ func (b *broker) onUserClosed(id *packet.Identity) {
 //
 // Returns:
 // - packet.ConnectCode: Connect result code
-func (b *broker) onUserConnect(p *packet.Connect, net string) packet.ConnectCode {
-	code := b.handler.OnUserConnect(p)
+func (b *broker) onUserConnect(ctx context.Context, p *packet.Connect, net string) packet.ConnectCode {
+	code := b.handler.OnUserConnect(ctx, p)
 	if code != packet.ConnectAccepted {
 		return code
 	}
@@ -582,8 +582,8 @@ func (b *broker) onUserConnect(p *packet.Connect, net string) packet.ConnectCode
 //
 // Returns:
 // - error: Error if message handling fails, nil otherwise
-func (b *broker) onUserMessage(p *packet.Message, id *packet.Identity) error {
-	return b.handler.OnUserMessage(p, id)
+func (b *broker) onUserMessage(ctx context.Context, p *packet.Message, id *packet.Identity) error {
+	return b.handler.OnUserMessage(ctx, p, id)
 }
 
 // onUserRequest handles user request events.
@@ -596,12 +596,12 @@ func (b *broker) onUserMessage(p *packet.Message, id *packet.Identity) error {
 // Returns:
 // - *packet.Response: Response packet to send back to the user
 // - error: Error if request handling fails, nil otherwise
-func (b *broker) onUserRequest(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
+func (b *broker) onUserRequest(ctx context.Context, p *packet.Request, id *packet.Identity) (*packet.Response, error) {
 	handler, ok := b.requstHandlers.Get(p.Method)
 	if !ok {
 		return nil, xerr.RequestHandlerNotFound
 	}
-	return handler(p, id)
+	return handler(ctx, p, id)
 }
 
 // isActive checks if any of the given targets are active connections.

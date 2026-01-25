@@ -239,7 +239,7 @@ func (b *booter) startMeter() {
 	)
 	// Create metrics instruments
 	b.messageUpCounter, err = b.meter.Int64Counter(
-		"cable_messages_up_total",
+		"cable_messages_up_count",
 		metric.WithDescription("Total number of incoming messages"),
 		metric.WithUnit("{message}"),
 	)
@@ -305,22 +305,21 @@ func (b *booter) Shutdown(ctx context.Context) error {
 }
 
 // -- Handler methods --
-func (b *booter) OnUserConnect(c *packet.Connect) packet.ConnectCode {
+func (b *booter) OnUserConnect(ctx context.Context, p *packet.Connect) packet.ConnectCode {
 	return packet.ConnectAccepted
 }
 func (b *booter) OnUserClosed(id *packet.Identity) {
 
 }
-func (b *booter) OnUserMessage(m *packet.Message, id *packet.Identity) error {
+func (b *booter) OnUserMessage(ctx context.Context, m *packet.Message, id *packet.Identity) error {
 	route, ok := b.config.MessageRoute[m.Kind]
 	if !ok || !route.Enabled {
 		return nil
 	}
-	ctx := context.Background()
 	kindStr := fmt.Sprintf("%d", m.Kind)
 	startTime := time.Now()
 	if b.messageUpCounter != nil {
-		b.messageUpCounter.Add(context.Background(), 1,
+		b.messageUpCounter.Add(ctx, 1,
 			metric.WithAttributes(
 				attribute.String("broker_id", b.brokerID),
 				attribute.String("kind", kindStr),
@@ -329,7 +328,7 @@ func (b *booter) OnUserMessage(m *packet.Message, id *packet.Identity) error {
 	if b.messageUpDuration != nil {
 		defer func() {
 			elapsed := time.Since(startTime).Seconds()
-			b.messageUpDuration.Record(context.Background(), elapsed,
+			b.messageUpDuration.Record(ctx, elapsed,
 				metric.WithAttributes(
 					attribute.String("broker_id", b.brokerID),
 					attribute.String("kind", kindStr),

@@ -124,18 +124,20 @@ func (c *tlsConn) Close() error {
 
 // udpConn implements the Conn interface for UDP connections.
 type udpConn struct {
+	cid  string
 	addr *net.UDPAddr // UDP address of the remote server
 	conn *net.UDPConn // Underlying UDP connection
 	buf  []byte       // Buffer for reading packets
 }
 
 // newUDPConn creates a new UDP connection instance.
-func newUDPConn(addr string) Conn {
+func newUDPConn(addr string, cid string) Conn {
 	udpAddr, err := net.ResolveUDPAddr("udp", addr)
 	if err != nil {
 		panic(err)
 	}
 	return &udpConn{
+		cid:  cid,
 		addr: udpAddr,
 		buf:  make([]byte, packet.MAX_UDP),
 	}
@@ -143,6 +145,7 @@ func newUDPConn(addr string) Conn {
 
 // WritePacket writes a packet to the UDP connection.
 func (c *udpConn) WritePacket(p packet.Packet) error {
+	p.Set(packet.PropertyClientID, c.cid)
 	data, err := packet.Marshal(p)
 	if err != nil {
 		return err

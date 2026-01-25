@@ -3,8 +3,6 @@ package network
 import (
 	"context"
 	"crypto/tls"
-	"encoding/hex"
-	"hash/crc32"
 	"math"
 	"net/http"
 	"strings"
@@ -25,26 +23,30 @@ type rawconn interface {
 	Close() error
 	WriteData(data []byte) error
 }
+type delegate interface {
+	Logger() *xlog.Logger
+	GetConn(cid string) (Conn, bool)
+	OnClose(c Conn)
+	OnPacket(c Conn, p packet.Packet)
+	OnConnect(c Conn, p *packet.Connect) error
+	QueueCapacity() int32
+}
 type Transport interface {
 	Close(ctx context.Context) error
 	Listen(addr string) error
-	OnClose(handler func(c Conn))
-	OnPacket(handler func(p packet.Packet, c Conn))
-	OnAccept(handler func(p *packet.Connect, c Conn) packet.ConnectCode)
 }
 type Conn interface {
 	ID() *packet.Identity
 	IP() string
 	Close() error
 	IsIdle() bool
-	OnClose(handler func())
 	IsClosed() bool
 	SendPong() error
 	RecvPong()
 	SendPing(ctx context.Context) error
+	CloseCode(code packet.CloseCode) error
+	ConnackCode(code packet.ConnectCode) error
 	SendPacket(ctx context.Context, p packet.Packet) error
-	CloseClode(code packet.CloseCode) error
-	ConnackCode(code packet.ConnectCode, connId string) error
 	SendMessage(ctx context.Context, p *packet.Message) error
 	SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error)
 	RecvMessack(p *packet.Messack)
@@ -56,21 +58,22 @@ type conn struct {
 	closed       atomic.Bool
 	pingLock     sync.Mutex
 	pingChan     chan struct{}
+	delegate     delegate
 	sendQueue    *queue.Queue
 	messageID    atomic.Uint64
 	requestID    atomic.Uint64
 	requestLock  sync.Mutex
 	messageLock  sync.Mutex
-	closeHandler func()
 	messageTasks map[uint16]chan *packet.Messack
 	requestTasks map[uint16]chan *packet.Response
 }
 
-func newConn(raw rawconn, logger *xlog.Logger, queueCapacity int32) Conn {
+func newConn(raw rawconn, delegate delegate) Conn {
 	c := &conn{
 		raw:          raw,
-		logger:       logger,
-		sendQueue:    queue.New(int32(queueCapacity)),
+		logger:       delegate.Logger(),
+		delegate:     delegate,
+		sendQueue:    queue.New(int32(delegate.QueueCapacity())),
 		messageTasks: make(map[uint16]chan *packet.Messack),
 		requestTasks: make(map[uint16]chan *packet.Response),
 	}
@@ -89,9 +92,6 @@ func (c *conn) IsIdle() bool {
 
 func (c *conn) IsClosed() bool {
 	return c.closed.Load()
-}
-func (c *conn) OnClose(handler func()) {
-	c.closeHandler = handler
 }
 func (c *conn) SendPong() error {
 	return c.jumpPacket(context.Background(), packet.NewPong())
@@ -228,23 +228,17 @@ func (c *conn) Close() error {
 	if c.closed.CompareAndSwap(false, true) {
 		c.sendQueue.Close()
 		err := c.raw.Close()
-		if c.closeHandler != nil {
-			c.closeHandler()
-		}
+		c.delegate.OnClose(c)
 		return err
 	}
 	return nil
 }
-func (c *conn) CloseClode(code packet.CloseCode) error {
+func (c *conn) CloseCode(code packet.CloseCode) error {
 	c.jumpPacket(context.Background(), packet.NewClose(code))
 	return c.Close()
 }
-func (c *conn) ConnackCode(code packet.ConnectCode, connId string) error {
-	p := packet.NewConnack(code)
-	if connId != "" {
-		p.Set(packet.PropertyConnID, connId)
-	}
-	return c.jumpPacket(context.Background(), p)
+func (c *conn) ConnackCode(code packet.ConnectCode) error {
+	return c.jumpPacket(context.Background(), packet.NewConnack(code))
 }
 func (c *conn) SendPacket(ctx context.Context, p packet.Packet) error {
 	if c.IsClosed() {
@@ -276,11 +270,7 @@ func (c *conn) jumpPacket(ctx context.Context, p packet.Packet) error {
 		}
 	})
 }
-func genConnId(s string) string {
-	h := crc32.NewIEEE()
-	h.Write([]byte(s))
-	return hex.EncodeToString(h.Sum(nil))
-}
+
 func getAddrIp(addr string) string {
 	strs := strings.Split(addr, ":")
 	return strs[0]
@@ -328,7 +318,7 @@ func (p *pinger) SendPing() {
 	err := p.conn.SendPing(ctx)
 	if err != nil {
 		if t, ok := err.(interface{ Timeout() bool }); ok && t.Timeout() {
-			p.conn.CloseClode(packet.ClosePingTimeOut)
+			p.conn.CloseCode(packet.ClosePingTimeOut)
 		}
 	}
 }

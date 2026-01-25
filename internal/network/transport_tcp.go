@@ -11,40 +11,28 @@ import (
 )
 
 type transportTCP struct {
-	logger        *xlog.Logger
-	listener      net.Listener
-	tlsConfig     *tls.Config
-	closeHandler  func(c Conn)
-	packetHandler func(p packet.Packet, c Conn)
-	acceptHandler func(p *packet.Connect, c Conn) packet.ConnectCode
-	queueCapacity int32
+	logger    *xlog.Logger
+	listener  net.Listener
+	tlsConfig *tls.Config
+	delegate  delegate
 }
 
-func NewTCP(logger *xlog.Logger, queueCapacity int32) Transport {
+func NewTCP(delegate delegate) Transport {
 	return &transportTCP{
-		logger:        logger,
-		queueCapacity: queueCapacity,
+		logger:   delegate.Logger(),
+		delegate: delegate,
 	}
 }
-func NewTLS(config *tls.Config, logger *xlog.Logger, queueCapacity int32) Transport {
+func NewTLS(config *tls.Config, delegate delegate) Transport {
 	assertTLS(config)
 	return &transportTCP{
-		logger:        logger,
-		tlsConfig:     config,
-		queueCapacity: queueCapacity,
+		logger:    delegate.Logger(),
+		tlsConfig: config,
+		delegate:  delegate,
 	}
 }
 func (l *transportTCP) Close(ctx context.Context) error {
 	return l.listener.Close()
-}
-func (l *transportTCP) OnClose(handler func(c Conn)) {
-	l.closeHandler = handler
-}
-func (l *transportTCP) OnAccept(handler func(p *packet.Connect, c Conn) packet.ConnectCode) {
-	l.acceptHandler = handler
-}
-func (l *transportTCP) OnPacket(handler func(p packet.Packet, c Conn)) {
-	l.packetHandler = handler
 }
 
 func (l *transportTCP) Listen(address string) error {
@@ -91,24 +79,18 @@ func (l *transportTCP) handleConn(conn net.Conn) {
 		return
 	}
 	connPacket := p.(*packet.Connect)
-	c := newTCPConn(connPacket.Identity, getAddrIp(conn.RemoteAddr().String()), conn, l.logger, l.queueCapacity)
-	c.OnClose(func() {
-		l.closeHandler(c)
-	})
-	code := l.acceptHandler(connPacket, c)
-	if code != packet.ConnectAccepted {
-		c.ConnackCode(code, "")
-		c.Close()
+	c := newTCPConn(connPacket.Identity, getAddrIp(conn.RemoteAddr().String()), conn, l.delegate)
+	if err := l.delegate.OnConnect(c, connPacket); err != nil {
+		l.logger.Error("connect error", xlog.Err(err))
 		return
 	}
-	c.ConnackCode(packet.ConnectAccepted, "")
 	for {
 		p, err := packet.ReadFrom(conn)
 		if err != nil {
-			c.CloseClode(packet.AsCloseCode(err))
+			c.CloseCode(packet.AsCloseCode(err))
 			return
 		}
-		go l.packetHandler(p, c)
+		go l.delegate.OnPacket(c, p)
 	}
 }
 
@@ -132,11 +114,11 @@ func (c *tcpConn) WriteData(data []byte) error {
 	_, err := c.raw.Write(data)
 	return err
 }
-func newTCPConn(id *packet.Identity, ip string, raw net.Conn, logger *xlog.Logger, queueCapacity int32) Conn {
+func newTCPConn(id *packet.Identity, ip string, raw net.Conn, delegate delegate) Conn {
 	t := &tcpConn{
 		id:  id,
 		ip:  ip,
 		raw: raw,
 	}
-	return newConn(t, logger, queueCapacity)
+	return newConn(t, delegate)
 }

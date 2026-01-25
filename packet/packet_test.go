@@ -21,12 +21,12 @@ func TestPacket(t *testing.T) {
 	})
 	t.Run("Ping", func(t *testing.T) {
 		ping := NewPing()
-		ping.Set(PropertyConnID, "pingping")
+		ping.Set(PropertyClientID, "pingping")
 		testPacket(t, ping)
 	})
 	t.Run("Pong", func(t *testing.T) {
 		pong := NewPong()
-		pong.Set(PropertyConnID, "pongpong")
+		pong.Set(PropertyClientID, "pongpong")
 		testPacket(t, pong)
 	})
 	t.Run("Close", func(t *testing.T) {
@@ -52,12 +52,12 @@ func BigMessage() Packet {
 		Kind:    MessageKind(1),
 		Payload: []byte(data),
 	}
-	msg.Set(PropertyConnID, "xxxxxx")
+	msg.Set(PropertyClientID, "xxxxxx")
 	return msg
 }
 func testPacket(t *testing.T, p Packet) {
 	rw := &ReadWriter{}
-	p.Set(PropertyConnID, "test")
+	p.Set(PropertyClientID, "test")
 	err := WriteTo(rw, p)
 	if err != nil {
 		t.Error(err)

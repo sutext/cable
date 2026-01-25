@@ -3,7 +3,7 @@
   "max_conns": 2500,
   "conn_speed": 5,
   "log_format": "text",
-  "endpoints": ["tcp://172.16.2.123:1883"],
+  "endpoints": ["tcp://127.0.0.1:1883"],
   "max_user_id": 100000,
   "max_channel_id": 100000,
   "message_interval": 5,

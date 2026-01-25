@@ -11,6 +11,7 @@ import (
 	"sutext.github.io/cable/internal/network"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/stats"
 	"sutext.github.io/cable/xerr"
 	"sutext.github.io/cable/xlog"
 )
@@ -56,6 +57,8 @@ type server struct {
 	address        string                          // Server address to listen on
 	network        string                          // Network protocol
 	transport      network.Transport               // Network transport implementation
+	queueCapacity  int32                           // Maximum sending queue capacity
+	statsHandler   stats.Handler                   // Handler for statistics events
 	closeHandler   ClosedHandler                   // Handler for connection close events
 	connectHandler ConnectHandler                  // Handler for connection events
 	messageHandler MessageHandler                  // Handler for message events
@@ -76,6 +79,7 @@ func New(address string, opts ...Option) Server {
 		logger:         options.logger,
 		address:        address,
 		network:        options.network,
+		queueCapacity:  options.queueCapacity,
 		closeHandler:   options.closeHandler,
 		connectHandler: options.connectHandler,
 		messageHandler: options.messageHandler,
@@ -84,17 +88,17 @@ func New(address string, opts ...Option) Server {
 	// Create transport based on network protocol
 	switch s.network {
 	case NetworkWS:
-		s.transport = network.NewWS(s.logger, options.queueCapacity)
+		s.transport = network.NewWS(s)
 	case NetworkWSS:
-		s.transport = network.NewWSS(options.tlsConfig, s.logger, options.queueCapacity)
+		s.transport = network.NewWSS(options.tlsConfig, s)
 	case NetworkTCP:
-		s.transport = network.NewTCP(s.logger, options.queueCapacity)
+		s.transport = network.NewTCP(s)
 	case NetworkTLS:
-		s.transport = network.NewTLS(options.tlsConfig, s.logger, options.queueCapacity)
+		s.transport = network.NewTLS(options.tlsConfig, s)
 	case NetworkUDP:
-		s.transport = network.NewUDP(s.logger, options.queueCapacity)
+		s.transport = network.NewUDP(s)
 	case NetworkQUIC:
-		s.transport = network.NewQUIC(options.quicConfig, s.logger, options.queueCapacity)
+		s.transport = network.NewQUIC(options.quicConfig, s)
 	default:
 		panic(xerr.NetworkNotSupported)
 	}
@@ -106,9 +110,6 @@ func New(address string, opts ...Option) Server {
 // Returns:
 // - error: Error if the server fails to start, nil otherwise
 func (s *server) Serve() error {
-	s.transport.OnClose(s.onClose)
-	s.transport.OnAccept(s.onConnect)
-	s.transport.OnPacket(s.onPacket)
 	s.logger.Info("server listening", xlog.Str("address", s.address), xlog.Str("network", string(s.network)))
 	return s.transport.Listen(s.address)
 }
@@ -144,7 +145,7 @@ func (s *server) Network() string {
 // - bool: True if the client was kicked, false if not found
 func (s *server) KickConn(cid string) bool {
 	if c, ok := s.conns.Get(cid); ok {
-		c.CloseClode(packet.CloseKickedOut)
+		c.CloseCode(packet.CloseKickedOut)
 		return true
 	}
 	return false
@@ -180,7 +181,7 @@ func (s *server) ConnInfo(cid string) (*ConnInfo, bool) {
 // ExpelAllConns expels all connections from the server.
 func (s *server) ExpelAllConns() {
 	s.conns.Range(func(key string, c network.Conn) bool {
-		c.CloseClode(packet.CloseServerExpeled)
+		c.CloseCode(packet.CloseServerExpeled)
 		return true
 	})
 	s.conns = safe.RMap[string, network.Conn]{}
@@ -289,13 +290,53 @@ func (s *server) SendRequest(ctx context.Context, cid string, p *packet.Request)
 	}
 	return nil, xerr.ConnectionNotFound
 }
+func (s *server) Logger() *xlog.Logger {
+	return s.logger
+}
+func (s *server) GetConn(cid string) (network.Conn, bool) {
+	return s.conns.Get(cid)
+}
+func (s *server) QueueCapacity() int32 {
+	return s.queueCapacity
+}
 
-// onPacket handles incoming packets from clients.
+// OnConnect handles new client connections.
+//
+// Parameters:
+// - p: Connect packet from client
+// - c: Connection that was accepted
+func (s *server) OnConnect(c network.Conn, p *packet.Connect) error {
+	ctx := context.Background()
+	if s.statsHandler != nil {
+		ctx = s.statsHandler.TagConn(ctx, &stats.ConnInfo{
+			IP:  c.IP(),
+			UID: c.ID().UserID,
+			CID: c.ID().ClientID,
+		})
+		s.statsHandler.HandleConn(ctx, &stats.ConnBegin{})
+	}
+	code := s.connectHandler(ctx, p)
+	if code != packet.ConnectAccepted {
+		c.ConnackCode(code)
+		c.Close()
+		return code
+	}
+	if old, loaded := s.conns.Swap(p.Identity.ClientID, c); loaded {
+		old.CloseCode(packet.CloseDuplicateLogin)
+	}
+	c.ConnackCode(packet.ConnectAccepted)
+	if s.statsHandler != nil {
+		s.statsHandler.HandleConn(ctx, &stats.ConnEnd{})
+	}
+	return nil
+}
+
+// OnPacket handles incoming packets from clients.
 //
 // Parameters:
 // - p: Packet received from client
 // - c: Connection that received the packet
-func (s *server) onPacket(p packet.Packet, c network.Conn) {
+func (s *server) OnPacket(c network.Conn, p packet.Packet) {
 	if s.closed.Load() {
 		return
 	}
@@ -319,22 +360,18 @@ func (s *server) onPacket(p packet.Packet, c network.Conn) {
 	}
 }
 
-// onConnect handles new client connections.
+// OnClose handles connection close events.
 //
 // Parameters:
-// - p: Connect packet from client
-// - c: Connection that was accepted
-//
-// Returns:
-// - packet.ConnectCode: Connection result code
-func (s *server) onConnect(p *packet.Connect, c network.Conn) packet.ConnectCode {
-	code := s.connectHandler(p)
-	if code == packet.ConnectAccepted {
-		if old, loaded := s.conns.Swap(p.Identity.ClientID, c); loaded {
-			old.CloseClode(packet.CloseDuplicateLogin)
-		}
+// - c: Connection that was closed
+func (s *server) OnClose(c network.Conn) {
+	id := c.ID()
+	if id == nil {
+		return
 	}
-	return code
+	if s.conns.Delete(id.ClientID) {
+		s.closeHandler(id)
+	}
 }
 
 // onMessage handles incoming message packets from clients.
@@ -343,15 +380,25 @@ func (s *server) onConnect(p *packet.Connect, c network.Conn) packet.ConnectCode
 // - c: Connection that received the message
 // - p: Message packet received
 func (s *server) onMessage(c network.Conn, p *packet.Message) {
-	err := s.messageHandler(p, c.ID())
+	ctx := context.Background()
+	if s.statsHandler != nil {
+		ctx = s.statsHandler.TagMessage(ctx, &stats.MessageInfo{
+			MsgID: p.ID,
+		})
+		s.statsHandler.HandleMessage(ctx, &stats.MessageBegin{})
+	}
+	err := s.messageHandler(ctx, p, c.ID())
 	if err != nil {
 		s.logger.Error("failed to handle message", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 		return
 	}
 	if p.Qos == packet.MessageQos1 {
-		if err := c.SendPacket(context.Background(), p.Ack()); err != nil {
+		if err := c.SendPacket(ctx, p.Ack()); err != nil {
 			s.logger.Error("failed to send messack", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 		}
+	}
+	if s.statsHandler != nil {
+		s.statsHandler.HandleMessage(ctx, &stats.MessageEnd{})
 	}
 }
 
@@ -361,26 +408,22 @@ func (s *server) onMessage(c network.Conn, p *packet.Message) {
 // - c: Connection that received the request
 // - p: Request packet received
 func (s *server) onRequest(c network.Conn, p *packet.Request) {
-	res, err := s.requestHandler(p, c.ID())
+	ctx := context.Background()
+	if s.statsHandler != nil {
+		ctx = s.statsHandler.TagRequest(ctx, &stats.RequestInfo{
+			ReqID: p.ID,
+		})
+		s.statsHandler.HandleRequest(ctx, &stats.RequestBegin{})
+	}
+	res, err := s.requestHandler(ctx, p, c.ID())
 	if err != nil {
 		s.logger.Error("failed to handle request", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 		res = p.Response(packet.StatusNotFound)
 	}
-	if err := c.SendPacket(context.Background(), res); err != nil {
+	if err := c.SendPacket(ctx, res); err != nil {
 		s.logger.Error("failed to send response", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 	}
-}
-
-// onClose handles connection close events.
-//
-// Parameters:
-// - c: Connection that was closed
-func (s *server) onClose(c network.Conn) {
-	id := c.ID()
-	if id == nil {
-		return
-	}
-	if s.conns.Delete(id.ClientID) {
-		s.closeHandler(id)
+	if s.statsHandler != nil {
+		s.statsHandler.HandleRequest(ctx, &stats.RequestEnd{})
 	}
 }

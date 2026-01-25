@@ -55,7 +55,7 @@ type Client interface {
 	// Status returns the current client status.
 	Status() Status
 	// Connect establishes a connection with the given identity.
-	Connect(identity *packet.Identity)
+	Connect()
 	// IsReady returns whether the client is ready to send messages.
 	IsReady() bool
 	// SendMessage sends a message to the server.
@@ -68,7 +68,6 @@ type Client interface {
 type client struct {
 	id             *packet.Identity                 // Client identity
 	conn           Conn                             // Underlying connection
-	connId         string                           // Connection ID assigned by server
 	closed         atomic.Bool                      // Whether the client is closed
 	status         Status                           // Current client status
 	logger         *xlog.Logger                     // Logger instance
@@ -117,13 +116,14 @@ func New(endpoint string, options ...Option) Client {
 	case NetworkTLS:
 		conn = newTLSConn(address, opts.tlsConfig)
 	case NetworkUDP:
-		conn = newUDPConn(address)
+		conn = newUDPConn(address, opts.id.ClientID)
 	case NetworkQUIC:
 		conn = newQUICConn(address, opts.quicConfig)
 	default:
 		panic("unknown network")
 	}
 	c := &client{
+		id:             opts.id,
 		conn:           conn,
 		status:         StatusUnknown,
 		logger:         opts.logger,
@@ -157,14 +157,14 @@ func (c *client) Close() {
 }
 
 // Connect establishes a connection with the server using the provided identity.
-func (c *client) Connect(identity *packet.Identity) {
-	c.id = identity
+func (c *client) Connect() {
 	switch c.Status() {
 	case StatusOpened, StatusOpening:
 		return
 	}
 	c._setStatus(StatusOpening)
 	if err := c.reconnect(); err != nil {
+		c.logger.Error("connect error", xlog.Err(err))
 		c.retrying = false
 		c.retrier.Reset()
 		c.tryClose(err)
@@ -238,9 +238,6 @@ func (c *client) reconnect() error {
 	ack := p.(*packet.Connack)
 	if ack.Code != packet.ConnectAccepted {
 		return ack.Code
-	}
-	if connID, ok := ack.Get(packet.PropertyConnID); ok {
-		c.connId = connID
 	}
 	c.setStatus(StatusOpened)
 	return nil
@@ -388,9 +385,6 @@ func (c *client) sendPacket(ctx context.Context, jump bool, p packet.Packet) err
 	return c.sendQueue.Push(ctx, jump, func() {
 		if !c.IsReady() {
 			return
-		}
-		if c.connId != "" {
-			p.Set(packet.PropertyConnID, c.connId)
 		}
 		err := c.conn.WritePacket(p)
 		if err != nil {

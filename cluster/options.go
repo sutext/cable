@@ -3,6 +3,7 @@
 package cluster
 
 import (
+	"context"
 	"math/rand/v2"
 	"os"
 	"strconv"
@@ -27,16 +28,17 @@ type Handler interface {
 	//
 	// Returns:
 	// - packet.ConnectCode: Connection result code
-	OnUserConnect(p *packet.Connect) (code packet.ConnectCode)
+	OnUserConnect(ctx context.Context, p *packet.Connect) (code packet.ConnectCode)
 	// OnUserMessage is called when a message packet is received from a client.
 	//
 	// Parameters:
+	// - ctx: Context for the request
 	// - p: Message packet received
 	// - id: Identity of the client that sent the message
 	//
 	// Returns:
 	// - error: Error if message handling fails, nil otherwise
-	OnUserMessage(p *packet.Message, id *packet.Identity) error
+	OnUserMessage(ctx context.Context, p *packet.Message, id *packet.Identity) error
 	// GetUserChannels returns the list of channels a user has joined.
 	//
 	// Parameters:
@@ -56,12 +58,12 @@ func (h *emptyHandler) OnUserClosed(id *packet.Identity) {
 }
 
 // OnUserConnect implements the Handler interface with default implementation that accepts all connections.
-func (h *emptyHandler) OnUserConnect(p *packet.Connect) (code packet.ConnectCode) {
+func (h *emptyHandler) OnUserConnect(ctx context.Context, p *packet.Connect) (code packet.ConnectCode) {
 	return packet.ConnectAccepted
 }
 
 // OnUserMessage implements the Handler interface with empty implementation.
-func (h *emptyHandler) OnUserMessage(p *packet.Message, id *packet.Identity) error {
+func (h *emptyHandler) OnUserMessage(ctx context.Context, p *packet.Message, id *packet.Identity) error {
 	return nil
 }
 

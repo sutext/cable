@@ -141,24 +141,26 @@ func (t *config) randomMessage() *packet.Message {
 }
 
 type Client struct {
-	id     *packet.Identity
 	config *config
 	cli    client.Client
 }
 
 func newClient(config *config) *Client {
 	result := &Client{config: config}
+	uid := config.randomUserID()
+	cid := fmt.Sprintf("%d-%d", time.Now().UnixNano(), rand.Int64())
 	result.cli = client.New(config.randomEndpoint(),
+		client.WithID(&packet.Identity{UserID: uid, ClientID: cid}),
 		client.WithKeepAlive(time.Second*5, time.Second*60),
 		client.WithHandler(result),
 	)
-	uid := config.randomUserID()
-	cid := fmt.Sprintf("%d-%d", time.Now().UnixNano(), rand.Int64())
-	result.id = &packet.Identity{UserID: uid, ClientID: cid}
 	return result
 }
+func (c *Client) ID() *packet.Identity {
+	return c.cli.ID()
+}
 func (c *Client) Connect() {
-	c.cli.Connect(c.id)
+	c.cli.Connect()
 }
 func (c *Client) run() {
 	for {
@@ -173,15 +175,11 @@ func (c *Client) run() {
 		if err != nil {
 			xlog.Error("send message error",
 				xlog.Int("Kind", int(msg.Kind)),
-				xlog.Str("uid", c.id.UserID),
-				xlog.Str("cid", c.id.ClientID),
 				xlog.Err(err),
 			)
 		} else {
 			xlog.Info("send message success",
 				xlog.Int("Kind", int(msg.Kind)),
-				xlog.Str("uid", c.id.UserID),
-				xlog.Str("cid", c.id.ClientID),
 			)
 		}
 		time.Sleep(time.Second * time.Duration(c.config.MessageInterval))
@@ -233,9 +231,7 @@ func main() {
 				return
 			case <-ticker.C:
 				c := newClient(conf)
-				if !clients.Set(c.id.ClientID, c) {
-					xlog.Error("client already exists", xlog.Str("cid", c.id.ClientID))
-				}
+				clients.Set(c.ID().ClientID, c)
 				go c.Connect()
 			}
 		}

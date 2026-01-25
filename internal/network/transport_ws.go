@@ -13,40 +13,28 @@ import (
 )
 
 type transportWebSocket struct {
-	logger        *xlog.Logger
-	tlsConfig     *tls.Config
-	httpServer    *http.Server
-	closeHandler  func(c Conn)
-	packetHandler func(p packet.Packet, c Conn)
-	acceptHandler func(p *packet.Connect, c Conn) packet.ConnectCode
-	queueCapacity int32
+	logger     *xlog.Logger
+	tlsConfig  *tls.Config
+	httpServer *http.Server
+	delegate   delegate
 }
 
-func NewWS(logger *xlog.Logger, queueCapacity int32) Transport {
+func NewWS(delegate delegate) Transport {
 	return &transportWebSocket{
-		logger:        logger,
-		queueCapacity: queueCapacity,
+		logger:   delegate.Logger(),
+		delegate: delegate,
 	}
 }
-func NewWSS(config *tls.Config, logger *xlog.Logger, queueCapacity int32) Transport {
+func NewWSS(config *tls.Config, delegate delegate) Transport {
 	assertTLS(config)
 	return &transportWebSocket{
-		logger:        logger,
-		tlsConfig:     config,
-		queueCapacity: queueCapacity,
+		logger:    delegate.Logger(),
+		tlsConfig: config,
+		delegate:  delegate,
 	}
 }
 func (l *transportWebSocket) Close(ctx context.Context) error {
 	return l.httpServer.Close()
-}
-func (l *transportWebSocket) OnClose(handler func(c Conn)) {
-	l.closeHandler = handler
-}
-func (l *transportWebSocket) OnAccept(handler func(p *packet.Connect, c Conn) packet.ConnectCode) {
-	l.acceptHandler = handler
-}
-func (l *transportWebSocket) OnPacket(handler func(p packet.Packet, c Conn)) {
-	l.packetHandler = handler
 }
 func (l *transportWebSocket) Listen(address string) error {
 	l.httpServer = &http.Server{
@@ -92,24 +80,18 @@ func (l *transportWebSocket) handleConn(conn *websocket.Conn) {
 	}
 	connPacket := p.(*packet.Connect)
 	realIp := getRealIP(conn.Request())
-	c := newWSConn(connPacket.Identity, realIp, conn, l.logger, l.queueCapacity)
-	c.OnClose(func() {
-		l.closeHandler(c)
-	})
-	code := l.acceptHandler(connPacket, c)
-	if code != packet.ConnectAccepted {
-		c.ConnackCode(code, "")
-		c.Close()
+	c := newWSConn(connPacket.Identity, realIp, conn, l.delegate)
+	if err := l.delegate.OnConnect(c, connPacket); err != nil {
+		l.logger.Error("connect error", xlog.Err(err))
 		return
 	}
-	c.ConnackCode(packet.ConnectAccepted, "")
 	for {
 		p, err := packet.ReadFrom(conn)
 		if err != nil {
-			c.CloseClode(packet.AsCloseCode(err))
+			c.CloseCode(packet.AsCloseCode(err))
 			return
 		}
-		go l.packetHandler(p, c)
+		go l.delegate.OnPacket(c, p)
 	}
 }
 
@@ -133,11 +115,11 @@ func (c *wsConn) WriteData(data []byte) error {
 	_, err := c.raw.Write(data)
 	return err
 }
-func newWSConn(id *packet.Identity, ip string, raw *websocket.Conn, logger *xlog.Logger, queueCapacity int32) Conn {
+func newWSConn(id *packet.Identity, ip string, raw *websocket.Conn, delegate delegate) Conn {
 	t := &wsConn{
 		id:  id,
 		ip:  ip,
 		raw: raw,
 	}
-	return newConn(t, logger, queueCapacity)
+	return newConn(t, delegate)
 }

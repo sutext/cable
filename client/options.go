@@ -57,17 +57,18 @@ func (h *emptyHandler) OnRequest(p *packet.Request) (*packet.Response, error) {
 
 // Options holds the configuration for the client.
 type Options struct {
-	logger            *xlog.Logger  // logger for client logging
-	handler           Handler       // event handler for client events
-	retrier           *Retrier      // retry mechanism for reconnections
-	tlsConfig         *tls.Config   // TLS configuration (if using TLS)
-	quicConfig        *quic.Config  // QUIC configuration (if using QUIC)
-	pingTimeout       time.Duration // timeout for ping responses
-	pingInterval      time.Duration // interval between ping messages
-	writeTimeout      time.Duration // timeout for write operations
-	requestTimeout    time.Duration // timeout for request operations
-	messageTimeout    time.Duration // timeout for message operations
-	sendQueueCapacity int32         // capacity of the send queue
+	id                *packet.Identity // client identity
+	logger            *xlog.Logger     // logger for client logging
+	handler           Handler          // event handler for client events
+	retrier           *Retrier         // retry mechanism for reconnections
+	tlsConfig         *tls.Config      // TLS configuration (if using TLS)
+	quicConfig        *quic.Config     // QUIC configuration (if using QUIC)
+	pingTimeout       time.Duration    // timeout for ping responses
+	pingInterval      time.Duration    // interval between ping messages
+	writeTimeout      time.Duration    // timeout for write operations
+	requestTimeout    time.Duration    // timeout for request operations
+	messageTimeout    time.Duration    // timeout for message operations
+	sendQueueCapacity int32            // capacity of the send queue
 }
 
 // Option is a function type for configuring the client using builder pattern.
@@ -101,6 +102,11 @@ func newOptions(options ...Option) *Options {
 		o.f(opts)
 	}
 	return opts
+}
+func WithID(id *packet.Identity) Option {
+	return Option{f: func(o *Options) {
+		o.id = id
+	}}
 }
 
 // WithPing sets the ping timeout and interval for keep-alive mechanism.

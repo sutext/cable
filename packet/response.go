@@ -87,7 +87,7 @@ func (p *Response) ReadFrom(r coder.Decoder) error {
 	if err != nil {
 		return err
 	}
-	if err := p.packet.ReadFrom(r); err != nil {
+	if err = p.packet.ReadFrom(r); err != nil {
 		return err
 	}
 	b, err := r.ReadAll()

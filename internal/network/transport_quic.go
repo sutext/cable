@@ -10,37 +10,24 @@ import (
 )
 
 type transportQUIC struct {
-	logger        *xlog.Logger
-	config        *quic.Config
-	endpoint      *quic.Endpoint
-	closeHandler  func(c Conn)
-	packetHandler func(p packet.Packet, c Conn)
-	acceptHandler func(p *packet.Connect, c Conn) packet.ConnectCode
-	queueCapacity int32
+	logger   *xlog.Logger
+	config   *quic.Config
+	endpoint *quic.Endpoint
+	delegate delegate
 }
 
-func NewQUIC(config *quic.Config, logger *xlog.Logger, queueCapacity int32) Transport {
+func NewQUIC(config *quic.Config, delegate delegate) Transport {
 	if config == nil {
 		panic("quic config is nil")
 	}
 	assertTLS(config.TLSConfig)
 	return &transportQUIC{
-		logger:        logger,
-		queueCapacity: queueCapacity,
-		config:        config,
+		logger: delegate.Logger(),
+		config: config,
 	}
 }
 func (l *transportQUIC) Close(ctx context.Context) error {
 	return l.endpoint.Close(ctx)
-}
-func (l *transportQUIC) OnClose(handler func(c Conn)) {
-	l.closeHandler = handler
-}
-func (l *transportQUIC) OnAccept(handler func(p *packet.Connect, c Conn) packet.ConnectCode) {
-	l.acceptHandler = handler
-}
-func (l *transportQUIC) OnPacket(handler func(p packet.Packet, c Conn)) {
-	l.packetHandler = handler
 }
 
 func (l *transportQUIC) Listen(address string) error {
@@ -82,24 +69,18 @@ func (l *transportQUIC) handleConn(stream *quic.Stream, ip string) {
 		return
 	}
 	connPacket := p.(*packet.Connect)
-	c := newQUICConn(connPacket.Identity, ip, stream, l.logger, l.queueCapacity)
-	c.OnClose(func() {
-		l.closeHandler(c)
-	})
-	code := l.acceptHandler(connPacket, c)
-	if code != packet.ConnectAccepted {
-		c.ConnackCode(code, "")
-		c.Close()
+	c := newQUICConn(connPacket.Identity, ip, stream, l.delegate)
+	if err := l.delegate.OnConnect(c, connPacket); err != nil {
+		l.logger.Error("connect error", xlog.Err(err))
 		return
 	}
-	c.ConnackCode(packet.ConnectAccepted, "")
 	for {
 		p, err := packet.ReadFrom(stream)
 		if err != nil {
-			c.CloseClode(packet.AsCloseCode(err))
+			c.CloseCode(packet.AsCloseCode(err))
 			return
 		}
-		go l.packetHandler(p, c)
+		go l.delegate.OnPacket(c, p)
 	}
 }
 
@@ -123,11 +104,11 @@ func (c *quicConn) WriteData(data []byte) error {
 	_, err := c.raw.Write(data)
 	return err
 }
-func newQUICConn(id *packet.Identity, ip string, raw *quic.Stream, logger *xlog.Logger, queueCapacity int32) Conn {
+func newQUICConn(id *packet.Identity, ip string, raw *quic.Stream, delegate delegate) Conn {
 	t := &quicConn{
 		id:  id,
 		ip:  ip,
 		raw: raw,
 	}
-	return newConn(t, logger, queueCapacity)
+	return newConn(t, delegate)
 }

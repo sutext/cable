@@ -4,11 +4,13 @@
 package server
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 
 	"golang.org/x/net/quic"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/stats"
 	"sutext.github.io/cable/xlog"
 )
 
@@ -17,29 +19,23 @@ type ClosedHandler func(p *packet.Identity)
 
 // ConnectHandler is called when a new client connects to the server.
 // It returns a connection code indicating whether the connection is accepted.
-type ConnectHandler func(p *packet.Connect) packet.ConnectCode
+type ConnectHandler func(ctx context.Context, p *packet.Connect) packet.ConnectCode
 
 // MessageHandler is called when a message packet is received from a client.
-type MessageHandler func(p *packet.Message, id *packet.Identity) error
+type MessageHandler func(ctx context.Context, p *packet.Message, id *packet.Identity) error
 
 // RequestHandler is called when a request packet is received from a client.
 // It returns a response packet to be sent back to the client.
-type RequestHandler func(p *packet.Request, id *packet.Identity) (*packet.Response, error)
+type RequestHandler func(ctx context.Context, p *packet.Request, id *packet.Identity) (*packet.Response, error)
 
 // Network constants define the supported network protocols for the server.
 const (
-	// NetworkWS represents WebSocket protocol.
-	NetworkWS   string = "ws"
-	// NetworkWSS represents WebSocket Secure protocol.
-	NetworkWSS  string = "wss"
-	// NetworkTCP represents TCP protocol.
-	NetworkTCP  string = "tcp"
-	// NetworkTLS represents TCP with TLS protocol.
-	NetworkTLS  string = "tls"
-	// NetworkUDP represents UDP protocol.
-	NetworkUDP  string = "udp"
-	// NetworkQUIC represents QUIC protocol.
-	NetworkQUIC string = "quic"
+	NetworkWS   string = "ws"   // NetworkWS represents WebSocket protocol.
+	NetworkWSS  string = "wss"  // NetworkWSS represents WebSocket Secure protocol.
+	NetworkTCP  string = "tcp"  // NetworkTCP represents TCP protocol.
+	NetworkTLS  string = "tls"  // NetworkTLS represents TCP with TLS protocol.
+	NetworkUDP  string = "udp"  // NetworkUDP represents UDP protocol.
+	NetworkQUIC string = "quic" // NetworkQUIC represents QUIC protocol.
 )
 
 // Option is a function type for configuring the server using builder pattern.
@@ -49,15 +45,16 @@ type Option struct {
 
 // options holds the configuration for the server.
 type options struct {
-	logger         *xlog.Logger       // logger for server logging
-	network        string             // network protocol to use
-	tlsConfig      *tls.Config        // TLS configuration for secure protocols
-	quicConfig     *quic.Config       // QUIC configuration for QUIC protocol
-	queueCapacity  int32              // capacity of the send queue
-	closeHandler   ClosedHandler      // handler for connection close events
-	connectHandler ConnectHandler     // handler for connection events
-	messageHandler MessageHandler     // handler for message events
-	requestHandler RequestHandler     // handler for request events
+	logger         *xlog.Logger   // logger for server logging
+	network        string         // network protocol to use
+	tlsConfig      *tls.Config    // TLS configuration for secure protocols
+	quicConfig     *quic.Config   // QUIC configuration for QUIC protocol
+	queueCapacity  int32          // capacity of the send queue
+	statsHandler   stats.Handler  // handler for statistics events
+	closeHandler   ClosedHandler  // handler for connection close events
+	connectHandler ConnectHandler // handler for connection events
+	messageHandler MessageHandler // handler for message events
+	requestHandler RequestHandler // handler for request events
 }
 
 // NewOptions creates a new options instance with default values and applies the given options.
@@ -75,15 +72,15 @@ func NewOptions(opts ...Option) *options {
 		closeHandler: func(p *packet.Identity) {
 			// Default empty close handler
 		},
-		connectHandler: func(p *packet.Connect) packet.ConnectCode {
+		connectHandler: func(ctx context.Context, p *packet.Connect) packet.ConnectCode {
 			// Default connect handler accepts all connections
 			return packet.ConnectAccepted
 		},
-		messageHandler: func(p *packet.Message, id *packet.Identity) error {
+		messageHandler: func(ctx context.Context, p *packet.Message, id *packet.Identity) error {
 			// Default message handler returns error if not implemented
 			return fmt.Errorf("MessageHandler not implemented")
 		},
-		requestHandler: func(p *packet.Request, id *packet.Identity) (*packet.Response, error) {
+		requestHandler: func(ctx context.Context, p *packet.Request, id *packet.Identity) (*packet.Response, error) {
 			// Default request handler returns error if not implemented
 			return nil, fmt.Errorf("RequestHandler not implemented")
 		},
