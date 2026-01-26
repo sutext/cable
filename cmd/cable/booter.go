@@ -21,35 +21,32 @@ import (
 	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/quic"
-	"google.golang.org/grpc/stats"
 	"sutext.github.io/cable/cluster"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/server"
+	"sutext.github.io/cable/stats"
 	"sutext.github.io/cable/xlog"
 )
 
 type RedisClient interface {
 	Close() error
 	HDel(ctx context.Context, key string, fields ...string) *redis.IntCmd
-	HSet(ctx context.Context, key string, values ...interface{}) *redis.IntCmd
+	HSet(ctx context.Context, key string, values ...any) *redis.IntCmd
 	HGetAll(ctx context.Context, key string) *redis.MapStringStringCmd
 }
+
 type booter struct {
-	brokerID            string
-	redis               RedisClient
-	config              *config
-	broker              cluster.Broker
-	kafka               sarama.Client
-	grpcApi             *grpcServer
-	httpApi             *httpServer
-	producer            sarama.SyncProducer
-	tracerProvider      *tracesdk.TracerProvider
-	meterProvider       *metricsdk.MeterProvider
-	meter               metric.Meter
-	messageUpCounter    metric.Int64Counter
-	messageDownCounter  metric.Int64Counter
-	messageUpDuration   metric.Float64Histogram
-	messageDownDuration metric.Float64Histogram
+	brokerID       string
+	redis          RedisClient
+	config         *config
+	broker         cluster.Broker
+	kafka          sarama.Client
+	grpcApi        *grpcServer
+	httpApi        *httpServer
+	producer       sarama.SyncProducer
+	tracerProvider *tracesdk.TracerProvider
+	meterProvider  *metricsdk.MeterProvider
+	meter          metric.Meter
 }
 
 func bool2byte(b bool) byte {
@@ -85,19 +82,21 @@ func newBooter(config *config) *booter {
 		)
 		liss[i] = lis
 	}
-	var serverHandler stats.Handler
-	var clientHandler stats.Handler
+	var grpcHandler *stats.GrpcHandler
 	if b.config.Trace.Enabled || b.config.Metrics.Enabled {
-		serverHandler = otelgrpc.NewServerHandler()
-		clientHandler = otelgrpc.NewClientHandler()
+		grpcHandler = &stats.GrpcHandler{
+			Client: otelgrpc.NewClientHandler(),
+			Server: otelgrpc.NewServerHandler(),
+		}
+
 	}
 	b.broker = cluster.NewBroker(
 		cluster.WithBrokerID(b.config.BrokerID),
 		cluster.WithHandler(b),
 		cluster.WithClusterSize(config.ClusterSize),
 		cluster.WithListeners(liss),
-		cluster.WithPerrServerHandler(serverHandler),
-		cluster.WithPerrClientHandler(clientHandler),
+		cluster.WithStatsHandler(newStats()),
+		cluster.WithGrpcStatsHandler(*grpcHandler),
 	)
 
 	b.brokerID = fmt.Sprintf("%d", b.broker.ID())
@@ -232,50 +231,6 @@ func (b *booter) startMeter() {
 	)
 	// Set global meter provider
 	otel.SetMeterProvider(b.meterProvider)
-	// Get meter from provider
-	b.meter = b.meterProvider.Meter(
-		b.config.Trace.ServiceName,
-		metric.WithInstrumentationVersion("1.0.0"),
-	)
-	// Create metrics instruments
-	b.messageUpCounter, err = b.meter.Int64Counter(
-		"cable_messages_up_count",
-		metric.WithDescription("Total number of incoming messages"),
-		metric.WithUnit("{message}"),
-	)
-	if err != nil {
-		xlog.Error("Failed to create message up counter", xlog.Err(err))
-		return
-	}
-	b.messageDownCounter, err = b.meter.Int64Counter(
-		"cable_messages_down_total",
-		metric.WithDescription("Total number of outgoing messages"),
-		metric.WithUnit("{message}"),
-	)
-	if err != nil {
-		xlog.Error("Failed to create message down counter", xlog.Err(err))
-		return
-	}
-	b.messageUpDuration, err = b.meter.Float64Histogram(
-		"cable_messages_up_duration_seconds",
-		metric.WithDescription("Duration of message processing for incoming messages"),
-		metric.WithUnit("s"),
-		metric.WithExplicitBucketBoundaries(0.001, 0.01, 0.1, 1.0, 10.0),
-	)
-	if err != nil {
-		xlog.Error("Failed to create message up duration histogram", xlog.Err(err))
-		return
-	}
-	b.messageDownDuration, err = b.meter.Float64Histogram(
-		"cable_messages_down_duration_seconds",
-		metric.WithDescription("Duration of message processing for outgoing messages"),
-		metric.WithUnit("s"),
-		metric.WithExplicitBucketBoundaries(0.001, 0.01, 0.1, 1.0, 10.0),
-	)
-	if err != nil {
-		xlog.Error("Failed to create message down duration histogram", xlog.Err(err))
-		return
-	}
 	xlog.Info("OTel metrics initialized for Mimir",
 		xlog.Str("otlp_endpoint", b.config.Metrics.OTLPEndpoint),
 	)
@@ -316,34 +271,6 @@ func (b *booter) OnUserMessage(ctx context.Context, m *packet.Message, id *packe
 	if !ok || !route.Enabled {
 		return nil
 	}
-	kindStr := fmt.Sprintf("%d", m.Kind)
-	startTime := time.Now()
-	if b.messageUpCounter != nil {
-		b.messageUpCounter.Add(ctx, 1,
-			metric.WithAttributes(
-				attribute.String("broker_id", b.brokerID),
-				attribute.String("kind", kindStr),
-			))
-	}
-	if b.messageUpDuration != nil {
-		defer func() {
-			elapsed := time.Since(startTime).Seconds()
-			b.messageUpDuration.Record(ctx, elapsed,
-				metric.WithAttributes(
-					attribute.String("broker_id", b.brokerID),
-					attribute.String("kind", kindStr),
-				))
-		}()
-	}
-	if b.tracerProvider != nil {
-		tracer := otel.Tracer(b.config.Trace.ServiceName)
-		var span trace.Span
-		ctx, span = tracer.Start(ctx, "message.process")
-		span.SetAttributes(
-			attribute.String("message.kind", kindStr),
-		)
-		defer span.End()
-	}
 	wg := &sync.WaitGroup{}
 	toUserID := ""
 	toChannel := ""
@@ -377,7 +304,7 @@ func (b *booter) OnUserMessage(ctx context.Context, m *packet.Message, id *packe
 		// Invalid resendType, do nothing
 		xlog.Warn("Invalid resendType in message route",
 			xlog.Str("resendType", string(route.ResendType)),
-			xlog.Str("kind", kindStr))
+			xlog.Int("kind", int(m.Kind)))
 	}
 	// Send message to Kafka if topic is configured
 	if route.KafkaTopic != "" && b.producer != nil {
@@ -430,23 +357,7 @@ func (b *booter) SendToAll(ctx context.Context, m *packet.Message) (int32, int32
 		ctx, resendSpan = tracer.Start(ctx, "message.resend.all")
 		defer resendSpan.End()
 	}
-	sendStartTime := time.Now()
 	total, success, err := b.broker.SendToAll(ctx, m)
-	if b.messageDownCounter != nil {
-		b.messageDownCounter.Add(ctx, int64(success),
-			metric.WithAttributes(
-				attribute.String("broker_id", b.brokerID),
-				attribute.String("message_kind", kindStr),
-			))
-	}
-	if b.messageDownDuration != nil {
-		b.messageDownDuration.Record(ctx, time.Since(sendStartTime).Seconds(),
-			metric.WithAttributes(
-				attribute.String("broker_id", b.brokerID),
-				attribute.String("message_kind", kindStr),
-			))
-	}
-
 	if err != nil {
 		xlog.Error("Failed to send message to all", xlog.Err(err))
 		if resendSpan != nil {
@@ -462,84 +373,29 @@ func (b *booter) SendToAll(ctx context.Context, m *packet.Message) (int32, int32
 }
 func (b *booter) SendToUser(ctx context.Context, uid string, m *packet.Message) (int32, int32, error) {
 	kindStr := fmt.Sprintf("%d", m.Kind)
-	var resendSpan trace.Span
-	if b.tracerProvider != nil {
-		tracer := otel.Tracer(b.config.Trace.ServiceName)
-		ctx, resendSpan = tracer.Start(ctx, "message.resend.user")
-		defer resendSpan.End()
-	}
-	sendStartTime := time.Now()
 	total, success, err := b.broker.SendToUser(ctx, uid, m)
-	if b.messageDownCounter != nil {
-		b.messageDownCounter.Add(ctx, int64(success),
-			metric.WithAttributes(
-				attribute.String("broker_id", b.brokerID),
-				attribute.String("message_kind", kindStr),
-			))
-	}
-	if b.messageDownDuration != nil {
-		b.messageDownDuration.Record(ctx, time.Since(sendStartTime).Seconds(),
-			metric.WithAttributes(
-				attribute.String("broker_id", b.brokerID),
-				attribute.String("message_kind", kindStr),
-			))
-	}
 	if err != nil {
 		xlog.Error("Failed to send message to user",
 			xlog.Err(err),
 			xlog.Uid(uid),
 			xlog.Str("kind", kindStr))
-		if resendSpan != nil {
-			resendSpan.RecordError(err)
-		}
 	} else {
 		xlog.Info("Sent message to user",
 			xlog.Uid(uid),
 			xlog.I32("total", total),
 			xlog.I32("success", success),
 			xlog.Str("kind", kindStr))
-		if resendSpan != nil {
-			resendSpan.SetAttributes(
-				attribute.Int("clients.total", int(total)),
-				attribute.Int("clients.success", int(success)),
-			)
-		}
 	}
 	return total, success, err
 }
 func (b *booter) SendToChannel(ctx context.Context, channel string, m *packet.Message) (int32, int32, error) {
 	kindStr := fmt.Sprintf("%d", m.Kind)
-	var resendSpan trace.Span
-	if b.tracerProvider != nil {
-		tracer := otel.Tracer(b.config.Trace.ServiceName)
-		ctx, resendSpan = tracer.Start(ctx, "message.resend.channel")
-		defer resendSpan.End()
-	}
-	sendStartTime := time.Now()
 	total, success, err := b.broker.SendToChannel(ctx, channel, m)
-	if b.messageDownCounter != nil {
-		b.messageDownCounter.Add(ctx, int64(success),
-			metric.WithAttributes(
-				attribute.String("broker_id", b.brokerID),
-				attribute.String("message_kind", kindStr),
-			))
-	}
-	if b.messageDownDuration != nil {
-		b.messageDownDuration.Record(ctx, time.Since(sendStartTime).Seconds(),
-			metric.WithAttributes(
-				attribute.String("broker_id", b.brokerID),
-				attribute.String("message_kind", kindStr),
-			))
-	}
 	if err != nil {
 		xlog.Error("Failed to send message to channel",
 			xlog.Err(err),
 			xlog.Str("channel", channel),
 			xlog.Str("kind", kindStr))
-		if resendSpan != nil {
-			resendSpan.RecordError(err)
-		}
-
 	} else {
 		xlog.Info("Sent message to channel",
 			xlog.Str("channel", channel),

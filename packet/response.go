@@ -19,14 +19,42 @@ type StatusCode uint8
 
 // StatusCode constants.
 const (
-	StatusOK            StatusCode = 0   // Request completed successfully
+	StatusUnknown       StatusCode = 0   // Unknown status
+	StatusOK            StatusCode = 200 // Request completed successfully
 	StatusNotFound      StatusCode = 100 // Resource not found
 	StatusUnauthorized  StatusCode = 101 // Unauthorized access
 	StatusInternalError StatusCode = 102 // Internal server error
 	StatusInvalidParams StatusCode = 103 // Invalid request parameters
-	StatusForbidden     StatusCode = 201 // Access forbidden
+	StatusForbidden     StatusCode = 104 // Access forbidden
 	StatusBadRequest    StatusCode = 255 // Invalid request format
 )
+
+func (s StatusCode) String() string {
+	switch s {
+	case StatusOK:
+		return "OK"
+	case StatusNotFound:
+		return "Not Found"
+	case StatusUnauthorized:
+		return "Unauthorized"
+	case StatusInternalError:
+		return "Internal Error"
+	case StatusInvalidParams:
+		return "Invalid Parameters"
+	case StatusForbidden:
+		return "Forbidden"
+	case StatusBadRequest:
+		return "Bad Request"
+	default:
+		return "Unknown Status"
+	}
+}
+func (s StatusCode) IsOK() bool {
+	return s == StatusOK
+}
+func (s StatusCode) Error() string {
+	return s.String()
+}
 
 // Response represents a response packet to a request.
 type Response struct {

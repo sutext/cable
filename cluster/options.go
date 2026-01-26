@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 
-	"google.golang.org/grpc/stats"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/stats"
 )
 
 // Handler defines the callback methods for cluster events.
@@ -28,7 +28,7 @@ type Handler interface {
 	//
 	// Returns:
 	// - packet.ConnectCode: Connection result code
-	OnUserConnect(ctx context.Context, p *packet.Connect) (code packet.ConnectCode)
+	OnUserConnect(ctx context.Context, p *packet.Connect) packet.ConnectCode
 	// OnUserMessage is called when a message packet is received from a client.
 	//
 	// Parameters:
@@ -58,7 +58,7 @@ func (h *emptyHandler) OnUserClosed(id *packet.Identity) {
 }
 
 // OnUserConnect implements the Handler interface with default implementation that accepts all connections.
-func (h *emptyHandler) OnUserConnect(ctx context.Context, p *packet.Connect) (code packet.ConnectCode) {
+func (h *emptyHandler) OnUserConnect(ctx context.Context, p *packet.Connect) packet.ConnectCode {
 	return packet.ConnectAccepted
 }
 
@@ -74,13 +74,13 @@ func (h *emptyHandler) GetUserChannels(uid string) (channels map[string]string, 
 
 // options holds the configuration for the cluster.
 type options struct {
-	handler           Handler       // Handler for cluster events
-	brokerID          uint64        // Unique ID for the broker
-	peerPort          uint16        // Port for peer-to-peer communication
-	listeners         []*Listener   // List of listeners for client connections
-	clusterSize       int32         // Initial cluster size
-	peerServerHandler stats.Handler // gRPC stats handler for the cluster
-	peerClientHandler stats.Handler // gRPC stats handler for the peer-to-peer communication
+	handler          Handler           // Handler for cluster events
+	brokerID         uint64            // Unique ID for the broker
+	peerPort         uint16            // Port for peer-to-peer communication
+	listeners        []*Listener       // List of listeners for client connections
+	clusterSize      int32             // Initial cluster size
+	statsHandler     stats.Handler     // Stats handler for the cluster
+	grpcStatsHandler stats.GrpcHandler // gRPC stats handler for the cluster
 }
 
 // newOptions creates a new options instance with default values and applies the given options.
@@ -172,29 +172,29 @@ func WithClusterSize(size int32) Option {
 	}}
 }
 
-// WithPerrServerHandler sets the gRPC stats handler for the cluster.
+// WithStatsHandler sets the stats handler for the cluster.
 //
 // Parameters:
-// - handler: gRPC stats handler
+// - handler: Stats handler
 //
 // Returns:
 // - Option: Configuration option for the cluster
-func WithPerrServerHandler(handler stats.Handler) Option {
+func WithStatsHandler(handler stats.Handler) Option {
 	return Option{func(o *options) {
-		o.peerServerHandler = handler
+		o.statsHandler = handler
 	}}
 }
 
-// WithPerrClientHandler sets the gRPC stats handler for the peer-to-peer communication.
+// WithGrpcStatsHandler sets the gRPC stats handler for the cluster.
 //
 // Parameters:
 // - handler: gRPC stats handler
 //
 // Returns:
 // - Option: Configuration option for the cluster
-func WithPerrClientHandler(handler stats.Handler) Option {
+func WithGrpcStatsHandler(handler stats.GrpcHandler) Option {
 	return Option{func(o *options) {
-		o.peerClientHandler = handler
+		o.grpcStatsHandler = handler
 	}}
 }
 

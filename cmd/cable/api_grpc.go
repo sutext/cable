@@ -37,7 +37,9 @@ func (s *grpcServer) Serve() error {
 	s.listener = lis
 	var h stats.Handler
 	if s.booter.config.Trace.Enabled || s.booter.config.Metrics.Enabled {
-		h = otelgrpc.NewServerHandler()
+		h = otelgrpc.NewServerHandler(
+			otelgrpc.WithPublicEndpoint(),
+		)
 	}
 	gs := grpc.NewServer(
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{

@@ -4,13 +4,13 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"time"
 
 	"go.etcd.io/raft/v3/raftpb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/stats"
 	"sutext.github.io/cable/cluster/pb"
 	"sutext.github.io/cable/coder"
 	"sutext.github.io/cable/packet"
@@ -33,12 +33,12 @@ type peerServer struct {
 //
 // Returns:
 // - *peerServer: A new peer server instance
-func newPeerServer(broker *broker, address string, handler stats.Handler) *peerServer {
+func newPeerServer(broker *broker, opts *options) *peerServer {
 	return &peerServer{
 		broker:  broker,
-		address: address,
+		address: fmt.Sprintf(":%d", opts.peerPort),
 		server: grpc.NewServer(
-			grpc.StatsHandler(handler),
+			grpc.StatsHandler(opts.grpcStatsHandler.Server),
 			grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
 				MinTime:             time.Second * 20,
 				PermitWithoutStream: true,

@@ -44,11 +44,12 @@ type peerClient struct {
 //
 // Returns:
 // - *peerClient: A new peer client instance
-func newPeerClient(id uint64, addr string, logger *xlog.Logger) *peerClient {
+func newPeerClient(id uint64, addr string, logger *xlog.Logger, statsHandler stats.Handler) *peerClient {
 	p := &peerClient{
-		id:     id,
-		addr:   addr,
-		logger: logger,
+		id:           id,
+		addr:         addr,
+		logger:       logger,
+		statsHandler: statsHandler,
 	}
 	return p
 }

@@ -20,7 +20,6 @@ const (
 	ConnectionNotFound                  // Connection not found
 	ServerAlreadyClosed                 // Server is already closed
 	NetworkNotSupported                 // Network type not supported
-	RequestHandlerNotFound              // Request handler not found
 	InvalidPeerMessageFlag              // Invalid peer message flag
 )
 
@@ -40,7 +39,6 @@ var errorMap = map[Error]string{
 	ServerAlreadyClosed:    "server already closed",
 	NetworkNotSupported:    "network not supported",
 	InvalidPeerMessageFlag: "invalid peer message flag",
-	RequestHandlerNotFound: "request handler not found",
 }
 
 // Error implements the error interface for Error type.

@@ -195,7 +195,7 @@ func (c *Client) OnMessage(msg *packet.Message) error {
 	xlog.Info("receive message", xlog.Msg(string(msg.Payload)))
 	return nil
 }
-func (c *Client) OnRequest(req *packet.Request) (*packet.Response, error) {
+func (c *Client) OnRequest(req *packet.Request) ([]byte, error) {
 	return nil, fmt.Errorf("unsupported request")
 }
 

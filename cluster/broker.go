@@ -5,7 +5,6 @@ package cluster
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"sync"
 
 	"sutext.github.io/cable/cluster/pb"
@@ -183,11 +182,12 @@ func NewBroker(opts ...Option) Broker {
 			server.WithConnect(func(ctx context.Context, p *packet.Connect) packet.ConnectCode {
 				return b.onUserConnect(ctx, p, l.network)
 			}),
+			server.WithStatsHandler(options.statsHandler),
 		)
 		b.listeners[l.network] = l
 	}
-	b.cluster = newCluster(b, options.clusterSize, options.peerPort)
-	b.peerServer = newPeerServer(b, fmt.Sprintf(":%d", options.peerPort), options.peerServerHandler)
+	b.cluster = newCluster(b, options)
+	b.peerServer = newPeerServer(b, options)
 	return b
 }
 func (b *broker) ID() uint64 {
@@ -596,10 +596,10 @@ func (b *broker) onUserMessage(ctx context.Context, p *packet.Message, id *packe
 // Returns:
 // - *packet.Response: Response packet to send back to the user
 // - error: Error if request handling fails, nil otherwise
-func (b *broker) onUserRequest(ctx context.Context, p *packet.Request, id *packet.Identity) (*packet.Response, error) {
+func (b *broker) onUserRequest(ctx context.Context, p *packet.Request, id *packet.Identity) ([]byte, error) {
 	handler, ok := b.requstHandlers.Get(p.Method)
 	if !ok {
-		return nil, xerr.RequestHandlerNotFound
+		return nil, packet.StatusNotFound
 	}
 	return handler(ctx, p, id)
 }

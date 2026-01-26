@@ -469,15 +469,21 @@ func (c *client) handlePacket(p packet.Packet) {
 			c.logger.Error("response task not found", xlog.U16("id", p.ID()))
 		}
 	case packet.REQUEST:
-		res, err := c.handler.OnRequest(p.(*packet.Request))
+		p := p.(*packet.Request)
+		var res *packet.Response
+		body, err := c.handler.OnRequest(p)
 		if err != nil {
 			c.logger.Error("request handler error", xlog.Err(err))
-			return
-		}
-		if res != nil {
-			if err := c.sendPacket(context.Background(), false, res); err != nil {
-				c.logger.Error("send response packet error", xlog.Err(err))
+			code, ok := err.(packet.StatusCode)
+			if !ok {
+				code = packet.StatusBadRequest
 			}
+			res = p.Response(code)
+		} else {
+			res = p.Response(packet.StatusOK, body)
+		}
+		if err := c.sendPacket(context.Background(), false, res); err != nil {
+			c.logger.Error("send response packet error", xlog.Err(err))
 		}
 	case packet.RESPONSE:
 		p := p.(*packet.Response)

@@ -129,9 +129,10 @@ type ConnectCode uint8
 
 // ConnectCode constants.
 const (
-	ConnectAccepted  ConnectCode = 0 // Connection accepted
-	ConnectRejected  ConnectCode = 1 // Connection rejected
-	ConnectDuplicate ConnectCode = 2 // Duplicate connection detected
+	ConnectAccepted    ConnectCode = 0 // Connection accepted
+	ConnectRejected    ConnectCode = 1 // Connection rejected
+	ConnectDuplicate   ConnectCode = 2 // Duplicate connection detected
+	ConnectServerError ConnectCode = 3 // Server error occurred
 )
 
 // String returns a string representation of the ConnectCode.
@@ -143,12 +144,12 @@ func (c ConnectCode) String() string {
 		return "Connection Rejected"
 	case ConnectDuplicate:
 		return "Connection Duplicate"
+	case ConnectServerError:
+		return "Server Error"
 	default:
 		return "Unknown Connack Code"
 	}
 }
-
-// Error implements the error interface for ConnectCode.
 func (c ConnectCode) Error() string {
 	return c.String()
 }

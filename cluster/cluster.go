@@ -9,6 +9,7 @@ import (
 
 	"go.etcd.io/raft/v3"
 	"go.etcd.io/raft/v3/raftpb"
+	"google.golang.org/grpc/stats"
 	"sutext.github.io/cable/internal/discovery"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/xerr"
@@ -60,6 +61,7 @@ type cluster struct {
 	appliedIndex    uint64                         // Last applied Raft log index
 	snapshotIndex   uint64                         // Last snapshot index
 	confChangeCount uint64                         // Number of configuration changes
+	peerStats       stats.Handler                  // Stats handler for peer client events
 }
 
 // newCluster creates a new cluster instance.
@@ -71,13 +73,14 @@ type cluster struct {
 //
 // Returns:
 // - *cluster: A new cluster instance
-func newCluster(broker *broker, size int32, port uint16) *cluster {
+func newCluster(broker *broker, opts *options) *cluster {
 	c := &cluster{
-		size:      size,
+		size:      opts.clusterSize,
 		broker:    broker,
 		logger:    broker.logger,
 		stoped:    make(chan struct{}),
-		discovery: discovery.New(broker.id, port),
+		peerStats: opts.grpcStatsHandler.Client,
+		discovery: discovery.New(broker.id, opts.peerPort),
 	}
 	c.discovery.OnRequest(func(id uint64, addr string) {
 		c.AddBroker(context.Background(), id, addr)
@@ -148,7 +151,7 @@ func (c *cluster) AddBroker(ctx context.Context, id uint64, addr string) error {
 		p.updateAddr(addr)
 		return nil
 	}
-	peer := newPeerClient(id, addr, c.broker.logger)
+	peer := newPeerClient(id, addr, c.logger, c.peerStats)
 	c.peers.Set(id, peer)
 	peer.connect()
 	if c.peers.Len() == c.size-1 {

@@ -26,7 +26,7 @@ type MessageHandler func(ctx context.Context, p *packet.Message, id *packet.Iden
 
 // RequestHandler is called when a request packet is received from a client.
 // It returns a response packet to be sent back to the client.
-type RequestHandler func(ctx context.Context, p *packet.Request, id *packet.Identity) (*packet.Response, error)
+type RequestHandler func(ctx context.Context, p *packet.Request, id *packet.Identity) ([]byte, error)
 
 // Network constants define the supported network protocols for the server.
 const (
@@ -80,9 +80,9 @@ func NewOptions(opts ...Option) *options {
 			// Default message handler returns error if not implemented
 			return fmt.Errorf("MessageHandler not implemented")
 		},
-		requestHandler: func(ctx context.Context, p *packet.Request, id *packet.Identity) (*packet.Response, error) {
+		requestHandler: func(ctx context.Context, p *packet.Request, id *packet.Identity) ([]byte, error) {
 			// Default request handler returns error if not implemented
-			return nil, fmt.Errorf("RequestHandler not implemented")
+			return nil, packet.StatusNotFound
 		},
 	}
 	for _, o := range opts {
@@ -177,6 +177,9 @@ func WithMessage(handler MessageHandler) Option {
 // - Option: Configuration option for the server
 func WithRequest(handler RequestHandler) Option {
 	return Option{f: func(o *options) { o.requestHandler = handler }}
+}
+func WithStatsHandler(handler stats.Handler) Option {
+	return Option{f: func(o *options) { o.statsHandler = handler }}
 }
 
 // WithSendQueue sets the capacity of the send queue.

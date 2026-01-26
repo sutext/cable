@@ -36,7 +36,7 @@ type Handler interface {
 	// OnMessage is called when a message packet is received.
 	OnMessage(p *packet.Message) error
 	// OnRequest is called when a request packet is received and expects a response.
-	OnRequest(p *packet.Request) (*packet.Response, error)
+	OnRequest(p *packet.Request) ([]byte, error)
 }
 
 // emptyHandler is a default implementation of Handler that does nothing.
@@ -51,7 +51,7 @@ func (h *emptyHandler) OnMessage(p *packet.Message) error {
 }
 
 // OnRequest implements the Handler interface with empty implementation.
-func (h *emptyHandler) OnRequest(p *packet.Request) (*packet.Response, error) {
+func (h *emptyHandler) OnRequest(p *packet.Request) ([]byte, error) {
 	return nil, nil
 }
 

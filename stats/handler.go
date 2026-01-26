@@ -2,57 +2,68 @@ package stats
 
 import (
 	"context"
+	"time"
+
+	"google.golang.org/grpc/stats"
+	"sutext.github.io/cable/packet"
 )
 
-type ConnInfo struct {
-	IP  string // IP address of the client
-	UID string // User ID associated with the client
-	CID string // Client ID of the connection
+type GrpcHandler struct {
+	Client stats.Handler
+	Server stats.Handler
 }
-type ConnStats interface {
-	isConnStats() // ConnStats is a marker interface for connection statistics.
+
+type ConnBegin struct {
+	UserID    string // User ID associated with the client
+	ClientIP  string // IP address of the client
+	ClientID  string // Client ID of the connection
+	BeginTime time.Time
 }
-type ConnBegin struct{}
 
-func (*ConnBegin) isConnStats() {}
-
-type ConnEnd struct{}
-
-func (*ConnEnd) isConnStats() {}
-
-type MessageInfo struct {
-	MsgID uint16 // Message ID of the message
+type ConnEnd struct {
+	BeginTime time.Time
+	EndTime   time.Time
+	Error     error
 }
-type MessageStats interface {
-	isMessageStats() // MessageStats is a marker interface for message statistics.
+
+type MessageBegin struct {
+	ID          uint16 // Message ID of the message
+	Qos         packet.MessageQos
+	Kind        packet.MessageKind
+	BeginTime   time.Time
+	IsIncoming  bool
+	PayloadSize int // Size of the payload in bytes
 }
-type MessageBegin struct{}
 
-func (*MessageBegin) isMessageStats() {}
-
-type MessageEnd struct{}
-
-func (*MessageEnd) isMessageStats() {}
-
-type RequestInfo struct {
-	ReqID uint16 // Request ID of the request
+type MessageEnd struct {
+	Error      error
+	EndTime    time.Time
+	BeginTime  time.Time
+	IsIncoming bool
 }
-type RequestStats interface {
-	isRequestStats()
+
+type RequestBegin struct {
+	ID         uint16 // Request ID of the request
+	Method     string // Method name of the request
+	BodySize   int    // Size of the request body in bytes
+	BeginTime  time.Time
+	IsIncoming bool
 }
-type RequestBegin struct{}
 
-func (*RequestBegin) isRequestStats() {}
-
-type RequestEnd struct{}
-
-func (*RequestEnd) isRequestStats() {}
+type RequestEnd struct {
+	Error      error
+	EndTime    time.Time
+	BodySize   int
+	BeginTime  time.Time
+	StatusCode packet.StatusCode
+	IsIncoming bool
+}
 
 type Handler interface {
-	TagConn(ctx context.Context, info *ConnInfo) context.Context
-	HandleConn(ctx context.Context, stats ConnStats)
-	TagMessage(ctx context.Context, msg *MessageInfo) context.Context
-	HandleMessage(ctx context.Context, stats MessageStats)
-	TagRequest(ctx context.Context, req *RequestInfo) context.Context
-	HandleRequest(ctx context.Context, stats RequestStats)
+	ConnectBegin(ctx context.Context, info *ConnBegin) context.Context
+	ConnectEnd(ctx context.Context, info *ConnEnd)
+	MessageBegin(ctx context.Context, info *MessageBegin) context.Context
+	MessageEnd(ctx context.Context, info *MessageEnd)
+	RequestBegin(ctx context.Context, info *RequestBegin) context.Context
+	RequestEnd(ctx context.Context, info *RequestEnd)
 }

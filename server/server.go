@@ -262,13 +262,35 @@ func (s *server) Brodcast(ctx context.Context, p *packet.Message) (int32, int32,
 // Returns:
 // - error: Error if send fails, nil otherwise
 func (s *server) SendMessage(ctx context.Context, cid string, p *packet.Message) error {
+	var err error
+	if s.statsHandler != nil {
+		beginTime := time.Now()
+		ctx = s.statsHandler.MessageBegin(ctx, &stats.MessageBegin{
+			ID:          p.ID,
+			Qos:         p.Qos,
+			Kind:        p.Kind,
+			BeginTime:   beginTime,
+			IsIncoming:  false,
+			PayloadSize: len(p.Payload),
+		})
+		defer s.statsHandler.MessageEnd(ctx, &stats.MessageEnd{
+			Error:      err,
+			EndTime:    time.Now(),
+			BeginTime:  beginTime,
+			IsIncoming: false,
+		})
+	}
 	if s.closed.Load() {
-		return xerr.ServerIsClosed
+		err = xerr.ServerIsClosed
+		return err
 	}
-	if c, ok := s.conns.Get(cid); ok {
-		return c.SendMessage(ctx, p)
+	c, ok := s.conns.Get(cid)
+	if !ok {
+		err = xerr.ConnectionNotFound
+		return err
 	}
-	return xerr.ConnectionNotFound
+	err = c.SendMessage(ctx, p)
+	return err
 }
 
 // SendRequest sends a request to a client and returns the response.
@@ -282,13 +304,42 @@ func (s *server) SendMessage(ctx context.Context, cid string, p *packet.Message)
 // - *packet.Response: Response packet if successful, nil otherwise
 // - error: Error if request fails, nil otherwise
 func (s *server) SendRequest(ctx context.Context, cid string, p *packet.Request) (*packet.Response, error) {
+	var err error
+	var res *packet.Response
+	if s.statsHandler != nil {
+		beginTime := time.Now()
+		ctx = s.statsHandler.RequestBegin(ctx, &stats.RequestBegin{
+			ID:         p.ID,
+			Method:     p.Method,
+			BodySize:   len(p.Body),
+			BeginTime:  beginTime,
+			IsIncoming: false,
+		})
+		defer func() {
+			end := &stats.RequestEnd{
+				Error:      err,
+				EndTime:    time.Now(),
+				BeginTime:  beginTime,
+				IsIncoming: false,
+			}
+			if res != nil {
+				end.StatusCode = res.Code
+				end.BodySize = len(res.Body)
+			}
+			s.statsHandler.RequestEnd(ctx, end)
+		}()
+	}
 	if s.closed.Load() {
-		return nil, xerr.ServerIsClosed
+		err = xerr.ServerIsClosed
+		return nil, err
 	}
-	if c, ok := s.conns.Get(cid); ok {
-		return c.SendRequest(ctx, p)
+	c, ok := s.conns.Get(cid)
+	if !ok {
+		err = xerr.ConnectionNotFound
+		return nil, err
 	}
-	return nil, xerr.ConnectionNotFound
+	res, err = c.SendRequest(ctx, p)
+	return res, err
 }
 func (s *server) Logger() *xlog.Logger {
 	return s.logger
@@ -307,27 +358,34 @@ func (s *server) QueueCapacity() int32 {
 // - c: Connection that was accepted
 func (s *server) OnConnect(c network.Conn, p *packet.Connect) error {
 	ctx := context.Background()
+	var err error
 	if s.statsHandler != nil {
-		ctx = s.statsHandler.TagConn(ctx, &stats.ConnInfo{
-			IP:  c.IP(),
-			UID: c.ID().UserID,
-			CID: c.ID().ClientID,
+		beginTime := time.Now()
+		ctx = s.statsHandler.ConnectBegin(ctx, &stats.ConnBegin{
+			UserID:    p.Identity.UserID,
+			ClientIP:  c.IP(),
+			ClientID:  p.Identity.ClientID,
+			BeginTime: beginTime,
 		})
-		s.statsHandler.HandleConn(ctx, &stats.ConnBegin{})
+		defer s.statsHandler.ConnectEnd(ctx, &stats.ConnEnd{
+			BeginTime: beginTime,
+			EndTime:   time.Now(),
+			Error:     err,
+		})
 	}
-	code := s.connectHandler(ctx, p)
+	var code packet.ConnectCode
+	code = s.connectHandler(ctx, p)
 	if code != packet.ConnectAccepted {
 		c.ConnackCode(code)
 		c.Close()
-		return code
+		err = code
+		s.logger.Error("failed to handle connect", xlog.Err(err), xlog.Uid(p.Identity.UserID), xlog.Cid(p.Identity.ClientID))
+		return err
 	}
 	if old, loaded := s.conns.Swap(p.Identity.ClientID, c); loaded {
 		old.CloseCode(packet.CloseDuplicateLogin)
 	}
 	c.ConnackCode(packet.ConnectAccepted)
-	if s.statsHandler != nil {
-		s.statsHandler.HandleConn(ctx, &stats.ConnEnd{})
-	}
 	return nil
 }
 
@@ -381,24 +439,33 @@ func (s *server) OnClose(c network.Conn) {
 // - p: Message packet received
 func (s *server) onMessage(c network.Conn, p *packet.Message) {
 	ctx := context.Background()
+	var err error
 	if s.statsHandler != nil {
-		ctx = s.statsHandler.TagMessage(ctx, &stats.MessageInfo{
-			MsgID: p.ID,
+		beginTime := time.Now()
+		ctx = s.statsHandler.MessageBegin(ctx, &stats.MessageBegin{
+			ID:          p.ID,
+			Qos:         p.Qos,
+			Kind:        p.Kind,
+			BeginTime:   beginTime,
+			IsIncoming:  true,
+			PayloadSize: len(p.Payload),
 		})
-		s.statsHandler.HandleMessage(ctx, &stats.MessageBegin{})
+		defer s.statsHandler.MessageEnd(ctx, &stats.MessageEnd{
+			Error:      err,
+			EndTime:    time.Now(),
+			BeginTime:  beginTime,
+			IsIncoming: false,
+		})
 	}
-	err := s.messageHandler(ctx, p, c.ID())
+	err = s.messageHandler(ctx, p, c.ID())
 	if err != nil {
 		s.logger.Error("failed to handle message", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 		return
 	}
 	if p.Qos == packet.MessageQos1 {
-		if err := c.SendPacket(ctx, p.Ack()); err != nil {
+		if err = c.SendPacket(ctx, p.Ack()); err != nil {
 			s.logger.Error("failed to send messack", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 		}
-	}
-	if s.statsHandler != nil {
-		s.statsHandler.HandleMessage(ctx, &stats.MessageEnd{})
 	}
 }
 
@@ -409,21 +476,42 @@ func (s *server) onMessage(c network.Conn, p *packet.Message) {
 // - p: Request packet received
 func (s *server) onRequest(c network.Conn, p *packet.Request) {
 	ctx := context.Background()
+	var err error
+	var res *packet.Response
 	if s.statsHandler != nil {
-		ctx = s.statsHandler.TagRequest(ctx, &stats.RequestInfo{
-			ReqID: p.ID,
+		beginTime := time.Now()
+		ctx = s.statsHandler.RequestBegin(ctx, &stats.RequestBegin{
+			ID:         p.ID,
+			Method:     p.Method,
+			BodySize:   len(p.Body),
+			BeginTime:  beginTime,
+			IsIncoming: true,
 		})
-		s.statsHandler.HandleRequest(ctx, &stats.RequestBegin{})
+		defer func() {
+			s.statsHandler.RequestEnd(ctx, &stats.RequestEnd{
+				Error:      err,
+				EndTime:    time.Now(),
+				BodySize:   len(res.Body),
+				BeginTime:  beginTime,
+				StatusCode: res.Code,
+				IsIncoming: true,
+			})
+		}()
+
 	}
-	res, err := s.requestHandler(ctx, p, c.ID())
-	if err != nil {
+	body, rerr := s.requestHandler(ctx, p, c.ID())
+	if rerr != nil {
+		err = rerr
 		s.logger.Error("failed to handle request", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
-		res = p.Response(packet.StatusNotFound)
+		code, ok := rerr.(packet.StatusCode)
+		if !ok {
+			code = packet.StatusInternalError
+		}
+		res = p.Response(code)
+	} else {
+		res = p.Response(packet.StatusOK, body)
 	}
-	if err := c.SendPacket(ctx, res); err != nil {
+	if err = c.SendPacket(ctx, res); err != nil {
 		s.logger.Error("failed to send response", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
-	}
-	if s.statsHandler != nil {
-		s.statsHandler.HandleRequest(ctx, &stats.RequestEnd{})
 	}
 }
