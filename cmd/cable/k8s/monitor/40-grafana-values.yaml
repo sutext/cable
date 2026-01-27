@@ -10,6 +10,10 @@ datasources:
         url: http://mimir-gateway/prometheus
         access: proxy
         isDefault: true
+        jsonData:
+          httpHeaderName1: "X-Scope-OrgID"
+        secureJsonData:
+          httpHeaderValue1: "cable"
       - name: Tempo
         type: tempo
         url: http://tempo:3200

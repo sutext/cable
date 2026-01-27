@@ -18,6 +18,8 @@ config:
         insecure: true
     otlphttp/mimir:
       endpoint: http://mimir-gateway/otlp/
+      headers:
+        X-Scope-OrgID: "cable"
       tls:
         insecure: true
 

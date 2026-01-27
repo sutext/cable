@@ -19,7 +19,7 @@ httpPort: 1888
 peerPort: 4567
 
 # Log Level: debug, info, warn, error
-logLevel: "info"
+logLevel: "error"
 
 # Log Format: text, json
 logFormat: "text"
@@ -34,6 +34,7 @@ trace:
 metrics:
   enabled: true
   interval: 10
+  tenantID: cable
   serviceName: cable
   otlpEndpoint: http://mimir.local/otlp/v1/metrics
 

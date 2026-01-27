@@ -59,6 +59,7 @@ type traceConfig struct {
 
 type metricsConfig struct {
 	Enabled      bool   `yaml:"enabled"`
+	TenantID     string `yaml:"tenantID"`
 	Interval     int    `yaml:"interval"`
 	ServiceName  string `yaml:"serviceName"`
 	OTLPEndpoint string `yaml:"otlpEndpoint"`
@@ -135,6 +136,9 @@ func (c *config) validate() error {
 		}
 		if c.Metrics.OTLPEndpoint == "" {
 			return fmt.Errorf("metrics enabled but OTLP endpoint is empty")
+		}
+		if c.Metrics.TenantID == "" {
+			return fmt.Errorf("metrics enabled but tenant ID is empty")
 		}
 	}
 	if c.Kafka.Enabled {

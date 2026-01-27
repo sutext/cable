@@ -43,6 +43,7 @@ data:
     metrics:
       enabled: true
       interval: 10
+      tenantID: cable
       otlpEndpoint: http://mimir-gateway/otlp/v1/metrics
       serviceName: cable
 

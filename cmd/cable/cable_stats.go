@@ -127,7 +127,11 @@ func (b *statistics) initMeter(conf metricsConfig) (*metricsdk.MeterProvider, er
 	otlpExporter, err := otlpmetrichttp.New(ctx,
 		otlpmetrichttp.WithEndpointURL(conf.OTLPEndpoint),
 		otlpmetrichttp.WithInsecure(), // Remove this in production
-		otlpmetrichttp.WithTimeout(5*time.Second))
+		otlpmetrichttp.WithTimeout(5*time.Second),
+		otlpmetrichttp.WithHeaders(map[string]string{
+			"X-Scope-OrgID": conf.TenantID,
+		}),
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -171,16 +175,8 @@ func (s *statistics) ConnectBegin(ctx context.Context, info *stats.ConnBegin) co
 	if !s.traceEnabled && !s.meterEnabled {
 		return ctx
 	}
-	attrs := []attribute.KeyValue{
-		attribute.String("cable.connect.userid", info.UserID),
-		attribute.String("cable.connect.clientid", info.ClientID),
-		attribute.String("cable.connect.clientip", info.ClientIP),
-	}
 	if s.tracer != nil {
-		ctx, _ = s.tracer.Start(ctx, "cable.connect",
-			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(attrs...),
-		)
+		ctx, _ = s.tracer.Start(ctx, "cable.connect", trace.WithSpanKind(trace.SpanKindServer))
 	}
 	return ctx
 }
@@ -209,22 +205,12 @@ func (s *statistics) MessageBegin(ctx context.Context, info *stats.MessageBegin)
 	if info.IsIncoming {
 		ctx, _ = s.tracer.Start(ctx, "cable.message.receive",
 			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(
-				attribute.Int("cable.message.kind", int(info.Kind)),
-				attribute.Int("cable.message.id", int(info.ID)),
-				attribute.Int("cable.message.qos", int(info.Qos)),
-				attribute.Int("cable.message.payload_size", info.PayloadSize),
-			),
+			trace.WithAttributes(attribute.Int("cable.message.kind", int(info.Kind))),
 		)
 	} else {
 		opts := []trace.SpanStartOption{
 			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(
-				attribute.Int("cable.message.kind", int(info.Kind)),
-				attribute.Int("cable.message.id", int(info.ID)),
-				attribute.Int("cable.message.qos", int(info.Qos)),
-				attribute.Int("cable.message.payload_size", info.PayloadSize),
-			),
+			trace.WithAttributes(attribute.Int("cable.message.kind", int(info.Kind))),
 		}
 		if s := trace.SpanContextFromContext(ctx); s.IsValid() && s.IsRemote() {
 			opts = append(opts, trace.WithLinks(trace.Link{SpanContext: s}))
@@ -248,7 +234,7 @@ func (s *statistics) MessageEnd(ctx context.Context, info *stats.MessageEnd) {
 		}
 	}
 	elapsedTime := float64(info.EndTime.Sub(info.BeginTime)) / float64(time.Millisecond)
-	s.messageDuration.Record(ctx, elapsedTime, attribute.Int("kind", int(info.Kind)))
+	s.messageDuration.Record(ctx, elapsedTime, attribute.Int("cable.message.kind", int(info.Kind)))
 }
 
 // TagRequest implements stats.Handler.
@@ -300,10 +286,7 @@ func (s *statistics) RedisEnd(ctx context.Context, info *RedisEnd) {
 		}
 	}
 	elapsedTime := float64(info.EndTime.Sub(info.BeginTime)) / float64(time.Millisecond)
-	s.redisDuration.Record(ctx, elapsedTime, "redis",
-		s.redisDuration.AttrCollectionName(info.Key),
-		s.redisDuration.AttrOperationName(info.Type),
-	)
+	s.redisDuration.Record(ctx, elapsedTime, "redis", s.redisDuration.AttrOperationName(info.Type))
 }
 
 func (s *statistics) KafkaBegin(ctx context.Context, info *KafkaBegin) context.Context {

@@ -11,7 +11,7 @@ data:
     {
       "log_level": "info",
       "max_conns": 25000,
-      "conn_speed": 1000,
+      "conn_speed": 500,
       "log_format": "text",
       "endpoints": [
         "tcp://cable-cluster-0.cable:1883",
@@ -20,7 +20,7 @@ data:
       ],
       "max_user_id": 100000,
       "max_channel_id": 100000,
-      "message_interval": 20,
+      "message_interval": 10,
       "message_route": {
         "1": "user",
         "2": "channel"

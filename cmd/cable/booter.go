@@ -38,7 +38,6 @@ func bool2byte(b bool) byte {
 }
 func newBooter(config *config) *booter {
 	b := &booter{config: config}
-	// kafka := sarama.NewClient(config.KafkaBrokers, sarama.NewConfig())
 	liss := make([]*cluster.Listener, len(config.Listeners))
 	for i, l := range config.Listeners {
 		var tlsConfig *tls.Config

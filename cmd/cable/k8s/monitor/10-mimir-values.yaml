@@ -1,6 +1,30 @@
 
 fullnameOverride: "mimir"
-
+runtimeConfig:
+  ingester_limits: # limits that each ingester replica enforces
+    max_ingestion_rate: 200000
+    max_series: 1500000
+    max_tenants: 1000
+    max_inflight_push_requests: 300000
+  distributor_limits: # limits that each distributor replica enforces
+    max_ingestion_rate: 200000
+    max_inflight_push_requests: 300000
+    max_inflight_push_requests_bytes: 50000000
+  overrides:
+    defaults:
+      request_rate: 10000
+      request_burst_size: 200000
+      ingestion_rate: 10000
+      ingestion_burst_size: 200000
+      max_global_series_per_user: 150000 
+    cable: # limits for tenant-1 that the whole cluster enforces
+      request_rate: 40000
+      request_burst_size: 400000
+      ingestion_rate: 40000
+      ingestion_burst_size: 400000
+      max_global_series_per_user: 1500000
+      max_fetched_series_per_query: 100000
+      
 minio:
   enabled: true
   mode: standalone
@@ -37,11 +61,12 @@ storage:
 # 数据保留策略
 tenantLimits:
   global:
-    ingestion_burst_size: 100000
-    ingestion_rate: 10000
-    max_series_per_metric: 10000
-    max_series_per_user: 1000000
+    ingestion_burst_size: 2000000
+    ingestion_rate: 200000
+    max_series_per_metric: 100000
+    max_series_per_user: 10000000
     retention_period: 7d
+    max_write_request_data_item_size: 31967232
 
 # 组件配置 - 轻量级部署，单副本
 alertmanager:
@@ -66,8 +91,15 @@ distributor:
     limits:
       memory: 2Gi
       cpu: 1000m
+  config:
+    remote_timeout: 5s
+    ring:
+      heartbeat_period: 1m
+      heartbeat_timeout: 4m
 
 ingester:
+  extraArgs:
+    ingester.out-of-order-time-window: 5m
   replicas: 1
   resources:
     requests:
