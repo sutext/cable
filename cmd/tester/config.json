@@ -1,7 +1,7 @@
 {
   "log_level": "info",
   "max_conns": 2500,
-  "conn_speed": 5,
+  "conn_speed": 10,
   "log_format": "text",
   "endpoints": ["tcp://127.0.0.1:1883"],
   "max_user_id": 100000,

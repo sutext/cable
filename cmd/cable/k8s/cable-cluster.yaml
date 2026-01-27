@@ -48,7 +48,7 @@ data:
 
     # Kafka Configuration
     kafka:
-      enabled: false
+      enabled: true
       brokers:
         - "kafka-broker-0.kafka-broker:9092"
         - "kafka-broker-1.kafka-broker:9092"
@@ -64,7 +64,7 @@ data:
 
     # Redis Cluster Configuration
     redisCluster:
-      enabled: false
+      enabled: true
       password: ""
       addresses: 
         - "redis-cluster-0.redis-cluster:6379"
@@ -78,11 +78,11 @@ data:
       1: 
         enabled: true
         resendType: "user"
-        kafkaTopic: "cable-upstream-user"
+        kafkaTopic: "cable-user-messages"
       2:
         enabled: true
         resendType: "channel"
-        kafkaTopic: "cable-upstream-group"
+        kafkaTopic: "cable-group-messages"
 
     # Listeners Configuration
     listeners:

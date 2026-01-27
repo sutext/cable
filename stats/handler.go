@@ -36,6 +36,7 @@ type MessageBegin struct {
 }
 
 type MessageEnd struct {
+	Kind       packet.MessageKind
 	Error      error
 	EndTime    time.Time
 	BeginTime  time.Time

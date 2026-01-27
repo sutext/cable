@@ -79,6 +79,7 @@ func New(address string, opts ...Option) Server {
 		logger:         options.logger,
 		address:        address,
 		network:        options.network,
+		statsHandler:   options.statsHandler,
 		queueCapacity:  options.queueCapacity,
 		closeHandler:   options.closeHandler,
 		connectHandler: options.connectHandler,
@@ -451,6 +452,7 @@ func (s *server) onMessage(c network.Conn, p *packet.Message) {
 			PayloadSize: len(p.Payload),
 		})
 		defer s.statsHandler.MessageEnd(ctx, &stats.MessageEnd{
+			Kind:       p.Kind,
 			Error:      err,
 			EndTime:    time.Now(),
 			BeginTime:  beginTime,

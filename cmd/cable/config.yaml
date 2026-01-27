@@ -32,10 +32,10 @@ trace:
 
 # Metrics Configuration
 metrics:
-  enabled: false
+  enabled: true
   interval: 10
   serviceName: cable
-  otlpEndpoint: http://172.16.2.123:4318/v1/metrics
+  otlpEndpoint: http://mimir.local/otlp/v1/metrics
 
 # Kafka Configuration
 kafka:
@@ -64,11 +64,11 @@ messageRoute:
   0: 
     enabled: true
     resendType: "user"
-    kafkaTopic: ""
+    kafkaTopic: "cable-user-messages"
   1:
     enabled: true
     resendType: "channel"
-    kafkaTopic: ""
+    kafkaTopic: "cable-channel-messages"
 
 
 # Listeners Configuration

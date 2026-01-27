@@ -8,18 +8,8 @@ import (
 	"time"
 
 	"github.com/IBM/sarama"
-	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/metric"
-	"go.opentelemetry.io/otel/propagation"
-	metricsdk "go.opentelemetry.io/otel/sdk/metric"
-	"go.opentelemetry.io/otel/sdk/resource"
-	tracesdk "go.opentelemetry.io/otel/sdk/trace"
-	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/quic"
 	"sutext.github.io/cable/cluster"
 	"sutext.github.io/cable/packet"
@@ -28,25 +18,16 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
-type RedisClient interface {
-	Close() error
-	HDel(ctx context.Context, key string, fields ...string) *redis.IntCmd
-	HSet(ctx context.Context, key string, values ...any) *redis.IntCmd
-	HGetAll(ctx context.Context, key string) *redis.MapStringStringCmd
-}
-
 type booter struct {
-	brokerID       string
-	redis          RedisClient
-	config         *config
-	broker         cluster.Broker
-	kafka          sarama.Client
-	grpcApi        *grpcServer
-	httpApi        *httpServer
-	producer       sarama.SyncProducer
-	tracerProvider *tracesdk.TracerProvider
-	meterProvider  *metricsdk.MeterProvider
-	meter          metric.Meter
+	brokerID string
+	redis    *redisClient
+	config   *config
+	broker   cluster.Broker
+	kafka    sarama.Client
+	grpcApi  *grpcServer
+	httpApi  *httpServer
+	producer sarama.SyncProducer
+	stats    *statistics
 }
 
 func bool2byte(b bool) byte {
@@ -82,21 +63,22 @@ func newBooter(config *config) *booter {
 		)
 		liss[i] = lis
 	}
-	var grpcHandler *stats.GrpcHandler
+	var grpcHandler stats.GrpcHandler
 	if b.config.Trace.Enabled || b.config.Metrics.Enabled {
-		grpcHandler = &stats.GrpcHandler{
+		grpcHandler = stats.GrpcHandler{
 			Client: otelgrpc.NewClientHandler(),
 			Server: otelgrpc.NewServerHandler(),
 		}
 
 	}
+	b.stats = newStats(config)
 	b.broker = cluster.NewBroker(
 		cluster.WithBrokerID(b.config.BrokerID),
 		cluster.WithHandler(b),
 		cluster.WithClusterSize(config.ClusterSize),
 		cluster.WithListeners(liss),
-		cluster.WithStatsHandler(newStats()),
-		cluster.WithGrpcStatsHandler(*grpcHandler),
+		cluster.WithStatsHandler(b.stats),
+		cluster.WithGrpcStatsHandler(grpcHandler),
 	)
 
 	b.brokerID = fmt.Sprintf("%d", b.broker.ID())
@@ -105,10 +87,8 @@ func newBooter(config *config) *booter {
 	return b
 }
 func (b *booter) Start() {
-	b.startRedis()
+	b.redis = newRedis(b.config, b.stats)
 	b.startKafka()
-	b.startMeter()
-	b.startTracer()
 	go func() {
 		if err := b.grpcApi.Serve(); err != nil {
 			xlog.Error("Failed to start API server", xlog.Err(err))
@@ -121,29 +101,13 @@ func (b *booter) Start() {
 	}()
 	b.broker.Start()
 }
-func (b *booter) startRedis() {
-	if b.config.Redis.Enabled {
-		b.redis = redis.NewClient(&redis.Options{
-			Addr:     b.config.Redis.Address,
-			Password: b.config.Redis.Password,
-			DB:       b.config.Redis.DB,
-		})
-		return
-	}
-	if b.config.RedisCluster.Enabled {
-		b.redis = redis.NewClusterClient(&redis.ClusterOptions{
-			Addrs:    b.config.RedisCluster.Addresses,
-			Password: b.config.RedisCluster.Password,
-		})
-	}
-}
 func (b *booter) startKafka() {
 	if !b.config.Kafka.Enabled {
 		return
 	}
 	kafkaConfig := sarama.NewConfig()
 	kafkaConfig.Producer.Return.Successes = true
-	kafkaConfig.Producer.RequiredAcks = sarama.WaitForAll
+	kafkaConfig.Producer.RequiredAcks = sarama.WaitForLocal
 	kafkaConfig.Producer.Partitioner = sarama.NewRandomPartitioner
 	var err error
 	b.kafka, err = sarama.NewClient(b.config.Kafka.Brokers, kafkaConfig)
@@ -156,85 +120,6 @@ func (b *booter) startKafka() {
 		}
 	}
 }
-func (b *booter) startTracer() {
-	if !b.config.Trace.Enabled {
-		return
-	}
-	ctx := context.Background()
-	// Create OTLP exporter
-	exporter, err := otlptracegrpc.New(ctx,
-		otlptracegrpc.WithEndpoint(b.config.Trace.OTLPEndpoint),
-		otlptracegrpc.WithInsecure(), // Remove this in production
-		otlptracegrpc.WithTimeout(5*time.Second))
-	if err != nil {
-		xlog.Error("Failed to create otlp tracer exporter", xlog.Err(err))
-		return
-	}
-	// Create resource with service name
-	r, err := resource.New(ctx, resource.WithAttributes(
-		attribute.String("service.name", b.config.Trace.ServiceName),
-		attribute.String("service.instance.id", fmt.Sprintf("%d", b.config.BrokerID)),
-	))
-	if err != nil {
-		xlog.Error("Failed to create resource", xlog.Err(err))
-		return
-	}
-
-	// Create tracer provider
-	tracerProvider := tracesdk.NewTracerProvider(
-		tracesdk.WithBatcher(exporter),
-		tracesdk.WithResource(r),
-		// Use default sampler for simplicity
-	)
-	// Apply sampler ratio by setting the global tracer provider's sampler
-	// This is a simplified approach to avoid API compatibility issues
-
-	// Set global tracer provider
-	otel.SetTracerProvider(tracerProvider)
-	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{},
-		propagation.Baggage{},
-	))
-	b.tracerProvider = tracerProvider
-	xlog.Info("Tracing initialized", xlog.Str("serviceName", b.config.Trace.ServiceName))
-}
-func (b *booter) startMeter() {
-	if !b.config.Metrics.Enabled {
-		return
-	}
-	ctx := context.Background()
-	// Create OTLP metrics exporter (for Grafana Mimir)
-	otlpExporter, err := otlpmetrichttp.New(ctx,
-		otlpmetrichttp.WithEndpointURL(b.config.Metrics.OTLPEndpoint),
-		otlpmetrichttp.WithInsecure(), // Remove this in production
-		otlpmetrichttp.WithTimeout(5*time.Second))
-	if err != nil {
-		xlog.Error("Failed to create otlp metrics exporter", xlog.Err(err))
-		return
-	}
-	// Create meter provider with OTLP exporter for Mimir
-	reader := metricsdk.NewPeriodicReader(otlpExporter,
-		metricsdk.WithInterval(time.Duration(b.config.Metrics.Interval)*time.Second),
-		metricsdk.WithTimeout(5*time.Second),
-	)
-	r, err := resource.New(ctx, resource.WithAttributes(
-		attribute.String("service.name", b.config.Metrics.ServiceName),
-		attribute.String("service.instance.id", fmt.Sprintf("%d", b.config.BrokerID)),
-	))
-	if err != nil {
-		xlog.Error("Failed to create resource for metrics", xlog.Err(err))
-		return
-	}
-	b.meterProvider = metricsdk.NewMeterProvider(
-		metricsdk.WithReader(reader),
-		metricsdk.WithResource(r),
-	)
-	// Set global meter provider
-	otel.SetMeterProvider(b.meterProvider)
-	xlog.Info("OTel metrics initialized for Mimir",
-		xlog.Str("otlp_endpoint", b.config.Metrics.OTLPEndpoint),
-	)
-}
 
 func (b *booter) Shutdown(ctx context.Context) error {
 	if b.redis != nil {
@@ -246,16 +131,7 @@ func (b *booter) Shutdown(ctx context.Context) error {
 	if b.kafka != nil {
 		b.kafka.Close()
 	}
-	if b.tracerProvider != nil {
-		if err := b.tracerProvider.Shutdown(ctx); err != nil {
-			xlog.Error("Failed to shutdown tracer provider", xlog.Err(err))
-		}
-	}
-	if b.meterProvider != nil {
-		if err := b.meterProvider.Shutdown(ctx); err != nil {
-			xlog.Error("Failed to shutdown meter provider", xlog.Err(err))
-		}
-	}
+	b.stats.Shutdown(ctx)
 	return b.broker.Shutdown(ctx)
 }
 
@@ -325,44 +201,37 @@ func (b *booter) userKey(uid string) string {
 }
 func (b *booter) ListChannels(ctx context.Context, uid string) (map[string]string, error) {
 	if b.redis == nil {
-		return nil, fmt.Errorf("redis client not initialized")
+		return nil, nil
 	}
 	return b.redis.HGetAll(ctx, b.userKey(uid)).Result()
 }
 func (b *booter) JoinChannel(ctx context.Context, uid string, channels map[string]string) error {
-	if b.redis != nil {
-		_, err := b.redis.HSet(ctx, b.userKey(uid), "channels", channels).Result()
-		if err != nil {
-			return err
-		}
+	if b.redis == nil {
+		return nil
+	}
+	_, err := b.redis.HSet(ctx, b.userKey(uid), "channels", channels).Result()
+	if err != nil {
+		return err
 	}
 	return b.broker.JoinChannel(ctx, uid, channels)
 
 }
 func (b *booter) LeaveChannel(ctx context.Context, uid string, channels map[string]string) error {
-	if b.redis != nil {
-		_, err := b.redis.HSet(ctx, b.userKey(uid), "channels", channels).Result()
-		if err != nil {
-			return err
-		}
+	if b.redis == nil {
+		return nil
+	}
+	_, err := b.redis.HSet(ctx, b.userKey(uid), "channels", channels).Result()
+	if err != nil {
+		return err
 	}
 	return b.broker.LeaveChannel(ctx, uid, channels)
 }
 
 func (b *booter) SendToAll(ctx context.Context, m *packet.Message) (int32, int32, error) {
 	kindStr := fmt.Sprintf("%d", m.Kind)
-	var resendSpan trace.Span
-	if b.tracerProvider != nil {
-		tracer := otel.Tracer(b.config.Trace.ServiceName)
-		ctx, resendSpan = tracer.Start(ctx, "message.resend.all")
-		defer resendSpan.End()
-	}
 	total, success, err := b.broker.SendToAll(ctx, m)
 	if err != nil {
 		xlog.Error("Failed to send message to all", xlog.Err(err))
-		if resendSpan != nil {
-			resendSpan.RecordError(err)
-		}
 	} else {
 		xlog.Debug("Sent message to all clients",
 			xlog.I32("total", total),
@@ -406,28 +275,45 @@ func (b *booter) SendToChannel(ctx context.Context, channel string, m *packet.Me
 	return total, success, err
 }
 func (b *booter) SendToKafka(ctx context.Context, topic, toUserID, toChannel string, id *packet.Identity, m *packet.Message) {
-	headers := []sarama.RecordHeader{
-		{Key: []byte("messageQos"), Value: []byte{byte(m.Qos)}},
-		{Key: []byte("messageDup"), Value: []byte{bool2byte(m.Dup)}},
-		{Key: []byte("messageKind"), Value: []byte{byte(m.Kind)}},
+	var err error
+	var offset int64
+	var partition int32
+	startTime := time.Now()
+	ctx = b.stats.KafkaBegin(ctx, &KafkaBegin{
+		BeginTime: startTime,
+		Topic:     topic,
+	})
+	defer func() {
+		b.stats.KafkaEnd(ctx, &KafkaEnd{
+			EndTime: time.Now(),
+			Topic:   topic,
+			Error:   err,
+		})
+	}()
+	headers := &KafkaHeader{
+		raw: []sarama.RecordHeader{
+			{Key: []byte("messageQos"), Value: []byte{byte(m.Qos)}},
+			{Key: []byte("messageDup"), Value: []byte{bool2byte(m.Dup)}},
+			{Key: []byte("messageKind"), Value: []byte{byte(m.Kind)}},
+		},
 	}
 	if toUserID != "" {
-		headers = append(headers, sarama.RecordHeader{Key: []byte("toUser"), Value: []byte(toUserID)})
+		headers.Set("toUser", toUserID)
 	}
 	if toChannel != "" {
-		headers = append(headers, sarama.RecordHeader{Key: []byte("toChannel"), Value: []byte(toChannel)})
+		headers.Set("toChannel", toChannel)
 	}
 	if id != nil {
-		headers = append(headers,
-			sarama.RecordHeader{Key: []byte("fromUser"), Value: []byte(id.UserID)},
-			sarama.RecordHeader{Key: []byte("fromClient"), Value: []byte(id.ClientID)})
+		headers.Set("fromUser", id.UserID)
+		headers.Set("fromClient", id.ClientID)
 	}
+	otel.GetTextMapPropagator().Inject(ctx, headers)
 	kafkaMsg := &sarama.ProducerMessage{
 		Topic:   topic,
 		Value:   sarama.ByteEncoder(m.Payload),
-		Headers: headers,
+		Headers: headers.raw,
 	}
-	partition, offset, err := b.producer.SendMessage(kafkaMsg)
+	partition, offset, err = b.producer.SendMessage(kafkaMsg)
 	if err != nil {
 		xlog.Error("Failed to send message to Kafka",
 			xlog.Err(err),
@@ -439,15 +325,5 @@ func (b *booter) SendToKafka(ctx context.Context, topic, toUserID, toChannel str
 			xlog.I32("partition", partition),
 			xlog.I64("offset", offset),
 			xlog.Int("kind", int(m.Kind)))
-	}
-	if b.tracerProvider != nil {
-		tracer := b.tracerProvider.Tracer(b.config.Trace.ServiceName)
-		_, kafkaSpan := tracer.Start(ctx, "message.resend.kafka")
-		kafkaSpan.SetAttributes(attribute.String("kafka.topic", topic))
-		kafkaSpan.SetAttributes(attribute.String("message.kind", fmt.Sprintf("%d", m.Kind)))
-		if err != nil {
-			kafkaSpan.RecordError(err)
-		}
-		kafkaSpan.End()
 	}
 }
