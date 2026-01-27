@@ -233,8 +233,17 @@ func (s *statistics) MessageEnd(ctx context.Context, info *stats.MessageEnd) {
 			span.End()
 		}
 	}
+	var inout string
+	if info.IsIncoming {
+		inout = "in"
+	} else {
+		inout = "out"
+	}
 	elapsedTime := float64(info.EndTime.Sub(info.BeginTime)) / float64(time.Millisecond)
-	s.messageDuration.Record(ctx, elapsedTime, attribute.Int("cable.message.kind", int(info.Kind)))
+	s.messageDuration.Record(ctx, elapsedTime,
+		attribute.Int("kind", int(info.Kind)),
+		attribute.String("inout", inout),
+	)
 }
 
 // TagRequest implements stats.Handler.
