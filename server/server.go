@@ -457,7 +457,7 @@ func (s *server) onMessage(c network.Conn, p *packet.Message) {
 			Error:      err,
 			EndTime:    time.Now(),
 			BeginTime:  beginTime,
-			IsIncoming: false,
+			IsIncoming: true,
 		})
 	}
 	err = s.messageHandler(ctx, p, c.ID())
