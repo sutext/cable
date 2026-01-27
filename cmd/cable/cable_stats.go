@@ -23,13 +23,6 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
-var (
-	statsContextKey = struct{}{}
-)
-
-type statsContext struct {
-	attrs []attribute.KeyValue
-}
 type statistics struct {
 	stats.Handler
 	kafkaHandler
@@ -194,7 +187,7 @@ func (s *statistics) ConnectEnd(ctx context.Context, info *stats.ConnEnd) {
 	}
 
 	elapsedTime := float64(info.EndTime.Sub(info.BeginTime)) / float64(time.Millisecond)
-	s.connectDuration.Record(ctx, elapsedTime)
+	s.connectDuration.Record(ctx, elapsedTime, attribute.String("ack_code", info.Code.String()))
 }
 
 // TagMessage implements stats.Handler.
@@ -216,7 +209,7 @@ func (s *statistics) MessageBegin(ctx context.Context, info *stats.MessageBegin)
 			opts = append(opts, trace.WithLinks(trace.Link{SpanContext: s}))
 			ctx = trace.ContextWithRemoteSpanContext(ctx, s)
 		}
-		ctx, _ = s.tracer.Start(ctx, "cable.message.receive", opts...)
+		ctx, _ = s.tracer.Start(ctx, "cable.message.sent", opts...)
 	}
 
 	return ctx
@@ -235,13 +228,14 @@ func (s *statistics) MessageEnd(ctx context.Context, info *stats.MessageEnd) {
 	}
 	var inout string
 	if info.IsIncoming {
-		inout = "in"
+		inout = "receive"
 	} else {
-		inout = "out"
+		inout = "sent"
 	}
 	elapsedTime := float64(info.EndTime.Sub(info.BeginTime)) / float64(time.Millisecond)
 	s.messageDuration.Record(ctx, elapsedTime,
 		attribute.Int("kind", int(info.Kind)),
+		attribute.Bool("isok", info.Error == nil),
 		attribute.String("inout", inout),
 	)
 }
@@ -295,7 +289,10 @@ func (s *statistics) RedisEnd(ctx context.Context, info *RedisEnd) {
 		}
 	}
 	elapsedTime := float64(info.EndTime.Sub(info.BeginTime)) / float64(time.Millisecond)
-	s.redisDuration.Record(ctx, elapsedTime, "redis", s.redisDuration.AttrOperationName(info.Type))
+	s.redisDuration.Record(ctx, elapsedTime, "redis",
+		s.redisDuration.AttrOperationName(info.Type),
+		attribute.Bool("isok", info.Error == nil),
+	)
 }
 
 func (s *statistics) KafkaBegin(ctx context.Context, info *KafkaBegin) context.Context {
@@ -320,8 +317,15 @@ func (s *statistics) KafkaEnd(ctx context.Context, info *KafkaEnd) {
 			span.End()
 		}
 	}
+	var op string
+	if info.IsProducer {
+		op = "produce"
+	} else {
+		op = "consume"
+	}
 	elapsedTime := float64(info.EndTime.Sub(info.BeginTime)) / float64(time.Millisecond)
-	s.kafkaDuration.Record(ctx, elapsedTime, "process.kafka", "kafka",
-		attribute.String("kafka.topic", info.Topic),
+	s.kafkaDuration.Record(ctx, elapsedTime, op, "kafka",
+		attribute.String("topic", info.Topic),
+		attribute.Bool("isok", info.Error == nil),
 	)
 }

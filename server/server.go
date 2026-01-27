@@ -360,6 +360,7 @@ func (s *server) QueueCapacity() int32 {
 func (s *server) OnConnect(c network.Conn, p *packet.Connect) error {
 	ctx := context.Background()
 	var err error
+	var code packet.ConnectCode
 	if s.statsHandler != nil {
 		beginTime := time.Now()
 		ctx = s.statsHandler.ConnectBegin(ctx, &stats.ConnBegin{
@@ -372,9 +373,9 @@ func (s *server) OnConnect(c network.Conn, p *packet.Connect) error {
 			BeginTime: beginTime,
 			EndTime:   time.Now(),
 			Error:     err,
+			Code:      code,
 		})
 	}
-	var code packet.ConnectCode
 	code = s.connectHandler(ctx, p)
 	if code != packet.ConnectAccepted {
 		c.ConnackCode(code)

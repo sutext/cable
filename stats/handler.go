@@ -23,6 +23,7 @@ type ConnBegin struct {
 type ConnEnd struct {
 	BeginTime time.Time
 	EndTime   time.Time
+	Code      packet.ConnectCode
 	Error     error
 }
 
