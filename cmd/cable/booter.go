@@ -205,7 +205,7 @@ func (b *booter) JoinChannel(ctx context.Context, uid string, channels map[strin
 	if b.redis == nil {
 		return nil
 	}
-	_, err := b.redis.HSet(ctx, b.userKey(uid), "channels", channels)
+	_, err := b.redis.HSet(ctx, b.userKey(uid), channels)
 	if err != nil {
 		return err
 	}
@@ -216,7 +216,11 @@ func (b *booter) LeaveChannel(ctx context.Context, uid string, channels map[stri
 	if b.redis == nil {
 		return nil
 	}
-	_, err := b.redis.HSet(ctx, b.userKey(uid), "channels", channels)
+	keys := make([]string, 0, len(channels))
+	for channel := range channels {
+		keys = append(keys, channel)
+	}
+	_, err := b.redis.HDel(ctx, b.userKey(uid), keys...)
 	if err != nil {
 		return err
 	}

@@ -80,11 +80,11 @@ func newStats(config *config) *statistics {
 		}
 		s.meterProvider = provider
 		meter := s.meterProvider.Meter("cable.stats", metric.WithInstrumentationVersion("1.0.0"))
-		s.kafkaDuration = newDuration(meter, "cable.kafka.process.duration", " Kafka processing duration in milliseconds")
-		s.redisDuration = newDuration(meter, "cable.redis.process.duration", " Redis processing duration in milliseconds")
-		s.connectDuration = newDuration(meter, "cable.connect.process.duration", " Connect packet processing duration in milliseconds")
-		s.messageDuration = newDuration(meter, "cable.message.process.duration", " Message packet processing duration in milliseconds")
-		s.requestDuration = newDuration(meter, "cable.request.process.duration", " Request packet processing duration in milliseconds")
+		s.kafkaDuration = newDuration(meter, "cable.kafka.duration", " Kafka processing duration in milliseconds")
+		s.redisDuration = newDuration(meter, "cable.redis.duration", " Redis processing duration in milliseconds")
+		s.connectDuration = newDuration(meter, "cable.connect.duration", " Connect packet processing duration in milliseconds")
+		s.messageDuration = newDuration(meter, "cable.message.duration", " Message packet processing duration in milliseconds")
+		s.requestDuration = newDuration(meter, "cable.request.duration", " Request packet processing duration in milliseconds")
 	}
 	return s
 }
@@ -98,7 +98,9 @@ func (b *statistics) initTrace(conf traceConfig) (*tracesdk.TracerProvider, erro
 		return nil, err
 	}
 	r, err := resource.New(ctx, resource.WithAttributes(
+		semconv.ServiceVersion("1.0.0"),
 		semconv.ServiceName(conf.ServiceName),
+		semconv.ServiceNamespace("cable"),
 		semconv.ServiceInstanceID(fmt.Sprintf("%d", b.brokerID)),
 	))
 	if err != nil {
