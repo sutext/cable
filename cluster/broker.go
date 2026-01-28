@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 
 	"sutext.github.io/cable/cluster/pb"
 	"sutext.github.io/cable/internal/safe"
@@ -349,21 +350,26 @@ func (b *broker) ConnCount() map[string]int32 {
 // - int32: Total number of clients attempted to send to
 // - int32: Number of successful sends
 // - error: Error if sending fails, nil otherwise
-func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (total, success int32, err error) {
-	total, success = b.sendToAll(ctx, m)
+func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (int32, int32, error) {
 	wg := sync.WaitGroup{}
+	var total, success atomic.Int32
+	wg.Go(func() {
+		t, s := b.sendToAll(ctx, m)
+		total.Add(t)
+		success.Add(s)
+	})
 	b.cluster.RangePeers(func(id uint64, peer *peerClient) {
 		wg.Go(func() {
 			if t, s, err := peer.sendToAll(ctx, m); err == nil {
-				total += t
-				success += s
+				total.Add(t)
+				success.Add(s)
 			} else {
 				b.logger.Error("send to all from peer failed", xlog.Peer(id), xlog.Err(err))
 			}
 		})
 	})
 	wg.Wait()
-	return total, success, nil
+	return total.Load(), success.Load(), nil
 }
 
 // SendToUser sends a message to a specific user in the cluster.
@@ -377,33 +383,40 @@ func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (total, succe
 // - int32: Total number of clients attempted to send to
 // - int32: Number of successful sends
 // - error: Error if sending fails, nil otherwise
-func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) (total, success int32, err error) {
+func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) (int32, int32, error) {
 	if uid == "" {
 		return 0, 0, xerr.InvalidUserID
 	}
+	wg := sync.WaitGroup{}
+	var total, success atomic.Int32
 	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
 		if id == b.id {
 			if cids, ok := value.Get(uid); ok {
-				t, s := b.sendToTargets(ctx, m, cids.Load())
-				total += t
-				success += s
+				wg.Go(func() {
+					t, s := b.sendToClients(ctx, m, cids.Load())
+					total.Add(t)
+					success.Add(s)
+				})
 			}
 		} else {
 			if peer, ok := b.cluster.GetPeer(id); ok {
 				if cids, ok := value.Get(uid); ok {
-					t, s, err := peer.sendToTargets(ctx, m, cids.Load())
-					if err == nil {
-						total += t
-						success += s
-					} else {
-						b.logger.Error("send to user from peer failed", xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
-					}
+					wg.Go(func() {
+						t, s, err := peer.sendToUser(ctx, m, cids.Load())
+						if err == nil {
+							total.Add(t)
+							success.Add(s)
+						} else {
+							b.logger.Error("send to user from peer failed", xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
+						}
+					})
 				}
 			}
 		}
 		return true
 	})
-	return total, success, nil
+	wg.Wait()
+	return total.Load(), success.Load(), nil
 }
 
 // SendToChannel sends a message to all clients in a channel.
@@ -417,33 +430,40 @@ func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 // - int32: Total number of clients attempted to send to
 // - int32: Number of successful sends
 // - error: Error if sending fails, nil otherwise
-func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success int32, err error) {
+func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Message) (int32, int32, error) {
 	if channel == "" {
 		return 0, 0, xerr.InvalidChannel
 	}
+	wg := sync.WaitGroup{}
+	var total, success atomic.Int32
 	b.channelClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
 		if id == b.id {
 			if cids, ok := value.Get(channel); ok {
-				t, s := b.sendToTargets(ctx, m, cids.Load())
-				total += t
-				success += s
+				wg.Go(func() {
+					t, s := b.sendToClients(ctx, m, cids.Load())
+					total.Add(t)
+					success.Add(s)
+				})
 			}
 		} else {
 			if peer, ok := b.cluster.GetPeer(id); ok {
 				if cids, ok := value.Get(channel); ok {
-					t, s, err := peer.sendToTargets(ctx, m, cids.Load())
-					if err == nil {
-						total += t
-						success += s
-					} else {
-						b.logger.Error("send to user from peer failed", xlog.Peer(id), xlog.Channel(channel), xlog.Err(err))
-					}
+					wg.Go(func() {
+						t, s, err := peer.sendToChannel(ctx, m, cids.Load())
+						if err == nil {
+							total.Add(t)
+							success.Add(s)
+						} else {
+							b.logger.Error("send to user from peer failed", xlog.Peer(id), xlog.Channel(channel), xlog.Err(err))
+						}
+					})
 				}
 			}
 		}
 		return true
 	})
-	return total, success, nil
+	wg.Wait()
+	return total.Load(), success.Load(), nil
 }
 
 // JoinChannel adds a user to one or more channels.
@@ -698,18 +718,18 @@ func (b *broker) sendToAll(ctx context.Context, m *packet.Message) (total, succe
 	return total, success
 }
 
-// sendToTargets sends a message to specific target clients.
+// sendToClients sends a message to specific target clients.
 //
 // Parameters:
 // - ctx: Context for the operation
 // - m: Message to send
-// - targets: Map of client IDs to network protocols
+// - cids: Map of client IDs to network protocols
 //
 // Returns:
 // - int32: Total number of clients attempted to send to
 // - int32: Number of successful sends
-func (b *broker) sendToTargets(ctx context.Context, m *packet.Message, targets map[string]string) (total, success int32) {
-	for cid, net := range targets {
+func (b *broker) sendToClients(ctx context.Context, m *packet.Message, cids map[string]string) (total, success int32) {
+	for cid, net := range cids {
 		total++
 		if l, ok := b.listeners[net]; ok && l.ISStarted() {
 			if err := l.SendMessage(ctx, cid, m); err != nil {

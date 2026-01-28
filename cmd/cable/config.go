@@ -54,7 +54,6 @@ type route struct {
 }
 type traceConfig struct {
 	Enabled      bool   `yaml:"enabled"`
-	ServiceName  string `yaml:"serviceName"`
 	OTLPEndpoint string `yaml:"otlpEndpoint"`
 }
 
@@ -62,26 +61,27 @@ type metricsConfig struct {
 	Enabled      bool   `yaml:"enabled"`
 	TenantID     string `yaml:"tenantID"`
 	Interval     int    `yaml:"interval"`
-	ServiceName  string `yaml:"serviceName"`
 	OTLPEndpoint string `yaml:"otlpEndpoint"`
 }
 
 type config struct {
-	Pprof        bool                         `yaml:"pprof"`
-	BrokerID     uint64                       `yaml:"brokerid"`
-	GrpcPort     uint16                       `yaml:"grpcPort"`
-	HTTPPort     uint16                       `yaml:"httpPort"`
-	PeerPort     uint16                       `yaml:"peerPort"`
-	LogLevel     string                       `yaml:"logLevel"`
-	LogFormat    string                       `yaml:"logFormat"`
-	ClusterSize  int32                        `yaml:"clusterSize"`
-	Trace        traceConfig                  `yaml:"trace"`
-	Metrics      metricsConfig                `yaml:"metrics"`
-	Kafka        kafkaConfig                  `yaml:"kafka"`
-	Redis        redisSingle                  `yaml:"redis"`
-	RedisCluster redisCluster                 `yaml:"redisCluster"`
-	MessageRoute map[packet.MessageKind]route `yaml:"messageRoute"`
-	Listeners    []listener                   `yaml:"listeners"`
+	Pprof          bool                         `yaml:"pprof"`
+	BrokerID       uint64                       `yaml:"brokerid"`
+	GrpcPort       uint16                       `yaml:"grpcPort"`
+	HTTPPort       uint16                       `yaml:"httpPort"`
+	PeerPort       uint16                       `yaml:"peerPort"`
+	LogLevel       string                       `yaml:"logLevel"`
+	LogFormat      string                       `yaml:"logFormat"`
+	ClusterSize    int32                        `yaml:"clusterSize"`
+	ServiceName    string                       `yaml:"serviceName"`
+	ServiceVersion string                       `yaml:"serviceVersion"`
+	Trace          traceConfig                  `yaml:"trace"`
+	Metrics        metricsConfig                `yaml:"metrics"`
+	Kafka          kafkaConfig                  `yaml:"kafka"`
+	Redis          redisSingle                  `yaml:"redis"`
+	RedisCluster   redisCluster                 `yaml:"redisCluster"`
+	MessageRoute   map[packet.MessageKind]route `yaml:"messageRoute"`
+	Listeners      []listener                   `yaml:"listeners"`
 }
 
 func (c *config) String() string {
@@ -128,13 +128,16 @@ func (c *config) validate() error {
 	if c.ClusterSize < 0 {
 		return fmt.Errorf("invalid cluster size: %d", c.ClusterSize)
 	}
-	if c.Trace.Enabled && c.Trace.ServiceName == "" {
+	if c.ServiceName == "" {
+		return fmt.Errorf("service name is empty")
+	}
+	if c.ServiceVersion == "" {
+		return fmt.Errorf("service version is empty")
+	}
+	if c.Trace.Enabled && c.Trace.OTLPEndpoint == "" {
 		return fmt.Errorf("trace enabled but service name is empty")
 	}
 	if c.Metrics.Enabled {
-		if c.Metrics.ServiceName == "" {
-			return fmt.Errorf("metrics enabled but service name is empty")
-		}
 		if c.Metrics.Interval < 1 {
 			return fmt.Errorf("metrics interval is less than 1")
 		}

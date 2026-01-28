@@ -7,6 +7,7 @@ import (
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/metric"
@@ -45,9 +46,8 @@ type statistics struct {
 	kafkaHandler
 	redisHandler
 	brokerID        uint64
+	config          *config
 	tracer          trace.Tracer
-	traceEnabled    bool
-	meterEnabled    bool
 	traceProvider   *tracesdk.TracerProvider
 	meterProvider   *metricsdk.MeterProvider
 	redisDuration   milliDuration
@@ -59,11 +59,10 @@ type statistics struct {
 
 func newStats(config *config) *statistics {
 	s := &statistics{
-		brokerID:     config.BrokerID,
-		traceEnabled: config.Trace.Enabled,
-		meterEnabled: config.Metrics.Enabled,
+		brokerID: config.BrokerID,
+		config:   config,
 	}
-	if s.traceEnabled {
+	if config.Trace.Enabled {
 		provider, err := s.initTrace(config.Trace)
 		if err != nil {
 			otel.Handle(err)
@@ -72,7 +71,7 @@ func newStats(config *config) *statistics {
 		s.traceProvider = provider
 		s.tracer = s.traceProvider.Tracer("cable.stats", trace.WithInstrumentationVersion("1.0.0"))
 	}
-	if s.meterEnabled {
+	if config.Metrics.Enabled {
 		provider, err := s.initMeter(config.Metrics)
 		if err != nil {
 			otel.Handle(err)
@@ -98,9 +97,9 @@ func (b *statistics) initTrace(conf traceConfig) (*tracesdk.TracerProvider, erro
 		return nil, err
 	}
 	r, err := resource.New(ctx, resource.WithAttributes(
-		semconv.ServiceVersion("1.0.0"),
-		semconv.ServiceName(conf.ServiceName),
-		semconv.ServiceNamespace("cable"),
+		semconv.ServiceVersion(b.config.ServiceVersion),
+		semconv.ServiceName(b.config.ServiceName),
+		semconv.ServiceNamespace(b.config.ServiceName),
 		semconv.ServiceInstanceID(fmt.Sprintf("%d", b.brokerID)),
 	))
 	if err != nil {
@@ -109,7 +108,6 @@ func (b *statistics) initTrace(conf traceConfig) (*tracesdk.TracerProvider, erro
 	tracerProvider := tracesdk.NewTracerProvider(
 		tracesdk.WithBatcher(exporter),
 		tracesdk.WithResource(r),
-		// Use default sampler for simplicity
 	)
 	otel.SetTracerProvider(tracerProvider)
 	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
@@ -138,7 +136,9 @@ func (b *statistics) initMeter(conf metricsConfig) (*metricsdk.MeterProvider, er
 		metricsdk.WithTimeout(5*time.Second),
 	)
 	r, err := resource.New(ctx, resource.WithAttributes(
-		semconv.ServiceName(conf.ServiceName),
+		semconv.ServiceVersion(b.config.ServiceVersion),
+		semconv.ServiceName(b.config.ServiceName),
+		semconv.ServiceNamespace(b.config.ServiceName),
 		semconv.ServiceInstanceID(fmt.Sprintf("%d", b.brokerID)),
 	))
 	if err != nil {
@@ -169,22 +169,23 @@ func (s *statistics) Shutdown(ctx context.Context) (err error) {
 
 // TagConn implements stats.Handler.
 func (s *statistics) ConnectBegin(ctx context.Context, info *stats.ConnBegin) context.Context {
-	if !s.traceEnabled && !s.meterEnabled {
+	if s.tracer == nil {
 		return ctx
 	}
-	if s.tracer != nil {
-		ctx, _ = s.tracer.Start(ctx, "cable.connect", trace.WithSpanKind(trace.SpanKindServer))
-	}
+	ctx, _ = s.tracer.Start(ctx, "cable.connect.in", trace.WithSpanKind(trace.SpanKindServer))
 	return ctx
 }
 
 // HandleConn implements stats.Handler.
 func (s *statistics) ConnectEnd(ctx context.Context, info *stats.ConnEnd) {
-	if s.traceEnabled {
+	if s.tracer != nil {
 		span := trace.SpanFromContext(ctx)
 		if span.IsRecording() {
 			if info.Error != nil {
+				span.SetStatus(codes.Error, info.Error.Error())
 				span.RecordError(info.Error)
+			} else {
+				span.SetStatus(codes.Ok, "")
 			}
 			span.End()
 		}
@@ -198,47 +199,40 @@ func (s *statistics) MessageBegin(ctx context.Context, info *stats.MessageBegin)
 	if s.tracer == nil {
 		return ctx
 	}
-	var inout string
 	var kind trace.SpanKind
-	if info.IsIncoming {
-		inout = "in"
+	if info.Inout == "in" {
 		kind = trace.SpanKindServer
 	} else {
-		inout = "out"
 		kind = trace.SpanKindClient
 	}
-	ctx, _ = s.tracer.Start(ctx, "cable.message",
+	ctx, _ = s.tracer.Start(ctx, fmt.Sprintf("cable.message.%s", info.Inout),
 		trace.WithSpanKind(kind),
 		trace.WithAttributes(
 			attribute.Int("cable.message.kind", int(info.Kind)),
 			attribute.String("cable.message.network", info.Network),
-			attribute.String("cable.message.inout", inout),
 		),
 	)
 	return ctx
 }
 
 func (s *statistics) MessageEnd(ctx context.Context, info *stats.MessageEnd) {
-	if s.traceEnabled {
+	if s.tracer != nil {
 		span := trace.SpanFromContext(ctx)
 		if span.IsRecording() {
 			if info.Error != nil {
+				span.SetStatus(codes.Error, info.Error.Error())
 				span.RecordError(info.Error)
+			} else {
+				span.SetStatus(codes.Ok, "")
 			}
 			span.End()
 		}
-	}
-	var inout string
-	if info.IsIncoming {
-		inout = "in"
-	} else {
-		inout = "out"
 	}
 	elapsedTime := float64(info.EndTime.Sub(info.BeginTime)) / float64(time.Millisecond)
 	s.messageDuration.Record(ctx, elapsedTime,
 		attribute.Int("kind", int(info.Kind)),
 		attribute.Bool("isok", info.Error == nil),
-		attribute.String("inout", inout),
+		attribute.String("inout", info.Inout),
 		attribute.String("network", info.Network),
 	)
 }
@@ -247,48 +241,41 @@ func (s *statistics) RequestBegin(ctx context.Context, info *stats.RequestBegin)
 	if s.tracer == nil {
 		return ctx
 	}
-	var inout string
 	var kind trace.SpanKind
-	if info.IsIncoming {
-		inout = "in"
+	if info.Inout == "in" {
 		kind = trace.SpanKindServer
 	} else {
-		inout = "out"
 		kind = trace.SpanKindClient
 	}
-	ctx, _ = s.tracer.Start(ctx, "cable.request",
+	ctx, _ = s.tracer.Start(ctx, fmt.Sprintf("cable.request.%s", info.Inout),
 		trace.WithSpanKind(kind),
 		trace.WithAttributes(
 			attribute.String("cable.request.method", info.Method),
 			attribute.String("cable.request.network", info.Network),
-			attribute.String("cable.request.inout", inout),
 		),
 	)
 	return ctx
 }
 
 func (s *statistics) RequestEnd(ctx context.Context, info *stats.RequestEnd) {
-	if s.traceEnabled {
+	if s.tracer != nil {
 		span := trace.SpanFromContext(ctx)
 		if span.IsRecording() {
 			if info.Error != nil {
+				span.SetStatus(codes.Error, info.Error.Error())
 				span.RecordError(info.Error)
+			} else {
+				span.SetStatus(codes.Ok, "")
 			}
 			span.End()
 		}
-	}
-	var inout string
-	if info.IsIncoming {
-		inout = "in"
-	} else {
-		inout = "out"
 	}
 	elapsedTime := float64(info.EndTime.Sub(info.BeginTime)) / float64(time.Millisecond)
 	s.requestDuration.Record(ctx, elapsedTime,
 		attribute.Bool("isok", info.Error == nil),
 		attribute.String("method", info.Method),
 		attribute.String("network", info.Network),
-		attribute.String("inout", inout),
+		attribute.String("inout", info.Inout),
 	)
 }
 
@@ -296,21 +283,21 @@ func (s *statistics) RedisBegin(ctx context.Context, info *RedisBegin) context.C
 	if s.tracer == nil {
 		return ctx
 	}
-	ctx, _ = s.tracer.Start(ctx, "cable.redis",
+	ctx, _ = s.tracer.Start(ctx, fmt.Sprintf("cable.redis.%s", info.Cmd),
 		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(
-			attribute.String("cable.redis.cmd", info.Cmd),
-		),
 	)
 	return ctx
 }
 
 func (s *statistics) RedisEnd(ctx context.Context, info *RedisEnd) {
-	if s.traceEnabled {
+	if s.tracer != nil {
 		span := trace.SpanFromContext(ctx)
 		if span.IsRecording() {
 			if info.Error != nil {
+				span.SetStatus(codes.Error, info.Error.Error())
 				span.RecordError(info.Error)
+			} else {
+				span.SetStatus(codes.Ok, "")
 			}
 			span.End()
 		}
@@ -326,16 +313,9 @@ func (s *statistics) KafkaBegin(ctx context.Context, info *KafkaBegin) context.C
 	if s.tracer == nil {
 		return ctx
 	}
-	var op string
-	if info.IsProducer {
-		op = "produce"
-	} else {
-		op = "consume"
-	}
-	ctx, _ = s.tracer.Start(ctx, "cable.kafka",
+	ctx, _ = s.tracer.Start(ctx, fmt.Sprintf("cable.kafka.%s", info.Op),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
-			attribute.String("cable.kafka.op", op),
 			attribute.String("cable.kafka.topic", info.Topic),
 		),
 	)
@@ -343,24 +323,21 @@ func (s *statistics) KafkaBegin(ctx context.Context, info *KafkaBegin) context.C
 }
 
 func (s *statistics) KafkaEnd(ctx context.Context, info *KafkaEnd) {
-	if s.traceEnabled {
+	if s.tracer != nil {
 		span := trace.SpanFromContext(ctx)
 		if span.IsRecording() {
 			if info.Error != nil {
+				span.SetStatus(codes.Error, info.Error.Error())
 				span.RecordError(info.Error)
+			} else {
+				span.SetStatus(codes.Ok, "")
 			}
 			span.End()
 		}
 	}
-	var op string
-	if info.IsProducer {
-		op = "produce"
-	} else {
-		op = "consume"
-	}
 	elapsedTime := float64(info.EndTime.Sub(info.BeginTime)) / float64(time.Millisecond)
 	s.kafkaDuration.Record(ctx, elapsedTime,
-		attribute.String("op", op),
+		attribute.String("op", info.Op),
 		attribute.String("topic", info.Topic),
 		attribute.Bool("isok", info.Error == nil),
 	)

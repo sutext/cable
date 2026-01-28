@@ -70,8 +70,10 @@ service PeerService {
   rpc KickConn (KickConnReq) returns (Empty) {}
   // SendMessage sends a message to a user or a channel.
   rpc SendToAll (MessageReq) returns (MessageResp) {}
-  // SendToTargets sends a message to a channel.
-  rpc SendToTargets (MessageReq) returns (MessageResp) {}
+  // SendToUser sends a message to a user.
+  rpc SendToUser (MessageReq) returns (MessageResp) {}
+  // SendToChannel sends a message to a channel.
+  rpc SendToChannel (MessageReq) returns (MessageResp) {}
   // SendRaftMessage handles a Raft message from another node
   rpc SendRaftMessage (RaftMessage) returns (Empty) {}
 }

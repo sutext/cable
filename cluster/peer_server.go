@@ -143,12 +143,33 @@ func (s *peerServer) SendToAll(ctx context.Context, req *pb.MessageReq) (*pb.Mes
 // Returns:
 // - *pb.MessageResp: Response containing send statistics
 // - error: Error if sending fails, nil otherwise
-func (s *peerServer) SendToTargets(ctx context.Context, req *pb.MessageReq) (*pb.MessageResp, error) {
+func (s *peerServer) SendToUser(ctx context.Context, req *pb.MessageReq) (*pb.MessageResp, error) {
 	msg := &packet.Message{}
 	if err := coder.Unmarshal(req.Message, msg); err != nil {
 		return nil, xerr.InvalidPeerMessage
 	}
-	total, success := s.broker.sendToTargets(ctx, msg, req.Targets)
+	total, success := s.broker.sendToClients(ctx, msg, req.Targets)
+	return &pb.MessageResp{
+		Total:   total,
+		Success: success,
+	}, nil
+}
+
+// SendToChannel sends a message to specific channel clients on this broker.
+//
+// Parameters:
+// - ctx: Context for the request
+// - req: Request containing the message and target clients
+//
+// Returns:
+// - *pb.MessageResp: Response containing send statistics
+// - error: Error if sending fails, nil otherwise
+func (s *peerServer) SendToChannel(ctx context.Context, req *pb.MessageReq) (*pb.MessageResp, error) {
+	msg := &packet.Message{}
+	if err := coder.Unmarshal(req.Message, msg); err != nil {
+		return nil, xerr.InvalidPeerMessage
+	}
+	total, success := s.broker.sendToClients(ctx, msg, req.Targets)
 	return &pb.MessageResp{
 		Total:   total,
 		Success: success,

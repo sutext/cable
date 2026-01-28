@@ -268,17 +268,17 @@ func (s *server) SendMessage(ctx context.Context, cid string, p *packet.Message)
 		beginTime := time.Now()
 		ctx = s.statsHandler.MessageBegin(ctx, &stats.MessageBegin{
 			Kind:        p.Kind,
+			Inout:       "out",
 			Network:     s.network,
 			BeginTime:   beginTime,
-			IsIncoming:  false,
 			PayloadSize: len(p.Payload),
 		})
 		defer s.statsHandler.MessageEnd(ctx, &stats.MessageEnd{
-			Error:      err,
-			EndTime:    time.Now(),
-			Network:    s.network,
-			BeginTime:  beginTime,
-			IsIncoming: false,
+			Inout:     "out",
+			Error:     err,
+			EndTime:   time.Now(),
+			Network:   s.network,
+			BeginTime: beginTime,
 		})
 	}
 	if s.closed.Load() {
@@ -310,19 +310,19 @@ func (s *server) SendRequest(ctx context.Context, cid string, p *packet.Request)
 	if s.statsHandler != nil {
 		beginTime := time.Now()
 		ctx = s.statsHandler.RequestBegin(ctx, &stats.RequestBegin{
-			Method:     p.Method,
-			Network:    s.network,
-			BodySize:   len(p.Body),
-			BeginTime:  beginTime,
-			IsIncoming: false,
+			Inout:     "out",
+			Method:    p.Method,
+			Network:   s.network,
+			BodySize:  len(p.Body),
+			BeginTime: beginTime,
 		})
 		defer func() {
 			end := &stats.RequestEnd{
-				Error:      err,
-				EndTime:    time.Now(),
-				Network:    s.network,
-				BeginTime:  beginTime,
-				IsIncoming: false,
+				Inout:     "out",
+				Error:     err,
+				EndTime:   time.Now(),
+				Network:   s.network,
+				BeginTime: beginTime,
 			}
 			if res != nil {
 				end.StatusCode = res.Code
@@ -444,18 +444,18 @@ func (s *server) onMessage(c network.Conn, p *packet.Message) {
 		beginTime := time.Now()
 		ctx = s.statsHandler.MessageBegin(ctx, &stats.MessageBegin{
 			Kind:        p.Kind,
+			Inout:       "in",
 			Network:     s.network,
 			BeginTime:   beginTime,
-			IsIncoming:  true,
 			PayloadSize: len(p.Payload),
 		})
 		defer s.statsHandler.MessageEnd(ctx, &stats.MessageEnd{
-			Kind:       p.Kind,
-			Error:      err,
-			Network:    s.network,
-			EndTime:    time.Now(),
-			BeginTime:  beginTime,
-			IsIncoming: true,
+			Kind:      p.Kind,
+			Error:     err,
+			Inout:     "in",
+			Network:   s.network,
+			EndTime:   time.Now(),
+			BeginTime: beginTime,
 		})
 	}
 	err = s.messageHandler(ctx, p, c.ID())
@@ -482,22 +482,22 @@ func (s *server) onRequest(c network.Conn, p *packet.Request) {
 	if s.statsHandler != nil {
 		beginTime := time.Now()
 		ctx = s.statsHandler.RequestBegin(ctx, &stats.RequestBegin{
-			Method:     p.Method,
-			Network:    s.network,
-			BodySize:   len(p.Body),
-			BeginTime:  beginTime,
-			IsIncoming: true,
+			Inout:     "in",
+			Method:    p.Method,
+			Network:   s.network,
+			BodySize:  len(p.Body),
+			BeginTime: beginTime,
 		})
 		defer func() {
 			s.statsHandler.RequestEnd(ctx, &stats.RequestEnd{
 				Error:      err,
+				Inout:      "in",
 				EndTime:    time.Now(),
 				Method:     p.Method,
 				Network:    s.network,
 				BodySize:   len(res.Body),
 				BeginTime:  beginTime,
 				StatusCode: res.Code,
-				IsIncoming: true,
 			})
 		}()
 

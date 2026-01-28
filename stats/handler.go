@@ -26,30 +26,31 @@ type ConnEnd struct {
 
 type MessageBegin struct {
 	Kind        packet.MessageKind
+	Inout       string // "in" or "out"
 	Network     string
 	BeginTime   time.Time
-	IsIncoming  bool
 	PayloadSize int // Size of the payload in bytes
 }
 
 type MessageEnd struct {
-	Kind       packet.MessageKind
-	Error      error
-	Network    string
-	EndTime    time.Time
-	BeginTime  time.Time
-	IsIncoming bool
+	Kind      packet.MessageKind
+	Error     error
+	Inout     string // "in" or "out"
+	Network   string
+	EndTime   time.Time
+	BeginTime time.Time
 }
 
 type RequestBegin struct {
-	Method     string // Method name of the request
-	Network    string
-	BodySize   int // Size of the request body in bytes
-	BeginTime  time.Time
-	IsIncoming bool
+	Inout     string // "in" or "out"
+	Method    string // Method name of the request
+	Network   string
+	BodySize  int // Size of the request body in bytes
+	BeginTime time.Time
 }
 
 type RequestEnd struct {
+	Inout      string // "in" or "out"
 	Error      error
 	EndTime    time.Time
 	Method     string
@@ -57,7 +58,6 @@ type RequestEnd struct {
 	BodySize   int
 	BeginTime  time.Time
 	StatusCode packet.StatusCode
-	IsIncoming bool
 }
 
 type Handler interface {

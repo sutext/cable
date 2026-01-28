@@ -582,14 +582,16 @@ const file_cluster_pb_peer_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1aQ\n" +
 	"\x11RaftProgressEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12&\n" +
-	"\x05value\x18\x02 \x01(\v2\x10.pb.RaftProgressR\x05value:\x028\x012\xa1\x02\n" +
+	"\x05value\x18\x02 \x01(\v2\x10.pb.RaftProgressR\x05value:\x028\x012\xd2\x02\n" +
 	"\vPeerService\x12\"\n" +
 	"\aInspect\x12\t.pb.Empty\x1a\n" +
 	".pb.Status\"\x00\x12/\n" +
 	"\bIsOnline\x12\x0f.pb.IsOnlineReq\x1a\x10.pb.IsOnlineResp\"\x00\x12(\n" +
 	"\bKickConn\x12\x0f.pb.KickConnReq\x1a\t.pb.Empty\"\x00\x12.\n" +
-	"\tSendToAll\x12\x0e.pb.MessageReq\x1a\x0f.pb.MessageResp\"\x00\x122\n" +
-	"\rSendToTargets\x12\x0e.pb.MessageReq\x1a\x0f.pb.MessageResp\"\x00\x12/\n" +
+	"\tSendToAll\x12\x0e.pb.MessageReq\x1a\x0f.pb.MessageResp\"\x00\x12/\n" +
+	"\n" +
+	"SendToUser\x12\x0e.pb.MessageReq\x1a\x0f.pb.MessageResp\"\x00\x122\n" +
+	"\rSendToChannel\x12\x0e.pb.MessageReq\x1a\x0f.pb.MessageResp\"\x00\x12/\n" +
 	"\x0fSendRaftMessage\x12\x0f.pb.RaftMessage\x1a\t.pb.Empty\"\x00B\x06Z\x04./pbb\x06proto3"
 
 var (
@@ -636,16 +638,18 @@ var file_cluster_pb_peer_proto_depIdxs = []int32{
 	1,  // 9: pb.PeerService.IsOnline:input_type -> pb.IsOnlineReq
 	5,  // 10: pb.PeerService.KickConn:input_type -> pb.KickConnReq
 	3,  // 11: pb.PeerService.SendToAll:input_type -> pb.MessageReq
-	3,  // 12: pb.PeerService.SendToTargets:input_type -> pb.MessageReq
-	6,  // 13: pb.PeerService.SendRaftMessage:input_type -> pb.RaftMessage
-	8,  // 14: pb.PeerService.Inspect:output_type -> pb.Status
-	2,  // 15: pb.PeerService.IsOnline:output_type -> pb.IsOnlineResp
-	0,  // 16: pb.PeerService.KickConn:output_type -> pb.Empty
-	4,  // 17: pb.PeerService.SendToAll:output_type -> pb.MessageResp
-	4,  // 18: pb.PeerService.SendToTargets:output_type -> pb.MessageResp
-	0,  // 19: pb.PeerService.SendRaftMessage:output_type -> pb.Empty
-	14, // [14:20] is the sub-list for method output_type
-	8,  // [8:14] is the sub-list for method input_type
+	3,  // 12: pb.PeerService.SendToUser:input_type -> pb.MessageReq
+	3,  // 13: pb.PeerService.SendToChannel:input_type -> pb.MessageReq
+	6,  // 14: pb.PeerService.SendRaftMessage:input_type -> pb.RaftMessage
+	8,  // 15: pb.PeerService.Inspect:output_type -> pb.Status
+	2,  // 16: pb.PeerService.IsOnline:output_type -> pb.IsOnlineResp
+	0,  // 17: pb.PeerService.KickConn:output_type -> pb.Empty
+	4,  // 18: pb.PeerService.SendToAll:output_type -> pb.MessageResp
+	4,  // 19: pb.PeerService.SendToUser:output_type -> pb.MessageResp
+	4,  // 20: pb.PeerService.SendToChannel:output_type -> pb.MessageResp
+	0,  // 21: pb.PeerService.SendRaftMessage:output_type -> pb.Empty
+	15, // [15:22] is the sub-list for method output_type
+	8,  // [8:15] is the sub-list for method input_type
 	8,  // [8:8] is the sub-list for extension type_name
 	8,  // [8:8] is the sub-list for extension extendee
 	0,  // [0:8] is the sub-list for field type_name

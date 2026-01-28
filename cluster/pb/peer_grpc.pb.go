@@ -23,7 +23,8 @@ const (
 	PeerService_IsOnline_FullMethodName        = "/pb.PeerService/IsOnline"
 	PeerService_KickConn_FullMethodName        = "/pb.PeerService/KickConn"
 	PeerService_SendToAll_FullMethodName       = "/pb.PeerService/SendToAll"
-	PeerService_SendToTargets_FullMethodName   = "/pb.PeerService/SendToTargets"
+	PeerService_SendToUser_FullMethodName      = "/pb.PeerService/SendToUser"
+	PeerService_SendToChannel_FullMethodName   = "/pb.PeerService/SendToChannel"
 	PeerService_SendRaftMessage_FullMethodName = "/pb.PeerService/SendRaftMessage"
 )
 
@@ -43,8 +44,10 @@ type PeerServiceClient interface {
 	KickConn(ctx context.Context, in *KickConnReq, opts ...grpc.CallOption) (*Empty, error)
 	// SendMessage sends a message to a user or a channel.
 	SendToAll(ctx context.Context, in *MessageReq, opts ...grpc.CallOption) (*MessageResp, error)
-	// SendToTargets sends a message to a channel.
-	SendToTargets(ctx context.Context, in *MessageReq, opts ...grpc.CallOption) (*MessageResp, error)
+	// SendToUser sends a message to a user.
+	SendToUser(ctx context.Context, in *MessageReq, opts ...grpc.CallOption) (*MessageResp, error)
+	// SendToChannel sends a message to a channel.
+	SendToChannel(ctx context.Context, in *MessageReq, opts ...grpc.CallOption) (*MessageResp, error)
 	// SendRaftMessage handles a Raft message from another node
 	SendRaftMessage(ctx context.Context, in *RaftMessage, opts ...grpc.CallOption) (*Empty, error)
 }
@@ -97,10 +100,20 @@ func (c *peerServiceClient) SendToAll(ctx context.Context, in *MessageReq, opts 
 	return out, nil
 }
 
-func (c *peerServiceClient) SendToTargets(ctx context.Context, in *MessageReq, opts ...grpc.CallOption) (*MessageResp, error) {
+func (c *peerServiceClient) SendToUser(ctx context.Context, in *MessageReq, opts ...grpc.CallOption) (*MessageResp, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MessageResp)
-	err := c.cc.Invoke(ctx, PeerService_SendToTargets_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, PeerService_SendToUser_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *peerServiceClient) SendToChannel(ctx context.Context, in *MessageReq, opts ...grpc.CallOption) (*MessageResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MessageResp)
+	err := c.cc.Invoke(ctx, PeerService_SendToChannel_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -133,8 +146,10 @@ type PeerServiceServer interface {
 	KickConn(context.Context, *KickConnReq) (*Empty, error)
 	// SendMessage sends a message to a user or a channel.
 	SendToAll(context.Context, *MessageReq) (*MessageResp, error)
-	// SendToTargets sends a message to a channel.
-	SendToTargets(context.Context, *MessageReq) (*MessageResp, error)
+	// SendToUser sends a message to a user.
+	SendToUser(context.Context, *MessageReq) (*MessageResp, error)
+	// SendToChannel sends a message to a channel.
+	SendToChannel(context.Context, *MessageReq) (*MessageResp, error)
 	// SendRaftMessage handles a Raft message from another node
 	SendRaftMessage(context.Context, *RaftMessage) (*Empty, error)
 	mustEmbedUnimplementedPeerServiceServer()
@@ -159,8 +174,11 @@ func (UnimplementedPeerServiceServer) KickConn(context.Context, *KickConnReq) (*
 func (UnimplementedPeerServiceServer) SendToAll(context.Context, *MessageReq) (*MessageResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method SendToAll not implemented")
 }
-func (UnimplementedPeerServiceServer) SendToTargets(context.Context, *MessageReq) (*MessageResp, error) {
-	return nil, status.Error(codes.Unimplemented, "method SendToTargets not implemented")
+func (UnimplementedPeerServiceServer) SendToUser(context.Context, *MessageReq) (*MessageResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendToUser not implemented")
+}
+func (UnimplementedPeerServiceServer) SendToChannel(context.Context, *MessageReq) (*MessageResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method SendToChannel not implemented")
 }
 func (UnimplementedPeerServiceServer) SendRaftMessage(context.Context, *RaftMessage) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method SendRaftMessage not implemented")
@@ -258,20 +276,38 @@ func _PeerService_SendToAll_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
-func _PeerService_SendToTargets_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _PeerService_SendToUser_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(MessageReq)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(PeerServiceServer).SendToTargets(ctx, in)
+		return srv.(PeerServiceServer).SendToUser(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: PeerService_SendToTargets_FullMethodName,
+		FullMethod: PeerService_SendToUser_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PeerServiceServer).SendToTargets(ctx, req.(*MessageReq))
+		return srv.(PeerServiceServer).SendToUser(ctx, req.(*MessageReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PeerService_SendToChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MessageReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PeerServiceServer).SendToChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PeerService_SendToChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PeerServiceServer).SendToChannel(ctx, req.(*MessageReq))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -318,8 +354,12 @@ var PeerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _PeerService_SendToAll_Handler,
 		},
 		{
-			MethodName: "SendToTargets",
-			Handler:    _PeerService_SendToTargets_Handler,
+			MethodName: "SendToUser",
+			Handler:    _PeerService_SendToUser_Handler,
+		},
+		{
+			MethodName: "SendToChannel",
+			Handler:    _PeerService_SendToChannel_Handler,
 		},
 		{
 			MethodName: "SendRaftMessage",

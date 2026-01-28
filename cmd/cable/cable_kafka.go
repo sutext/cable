@@ -33,17 +33,17 @@ func (k *KafkaHeader) Keys() []string {
 }
 
 type KafkaBegin struct {
-	Topic      string
-	IsProducer bool
-	BeginTime  time.Time
+	Op        string // "produce" or "consume"
+	Topic     string
+	BeginTime time.Time
 }
 
 type KafkaEnd struct {
-	Topic      string
-	Error      error
-	EndTime    time.Time
-	BeginTime  time.Time
-	IsProducer bool
+	Op        string // "produce" or "consume"
+	Topic     string
+	Error     error
+	EndTime   time.Time
+	BeginTime time.Time
 }
 
 type kafkaHandler interface {

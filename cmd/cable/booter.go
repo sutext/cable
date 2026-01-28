@@ -10,6 +10,8 @@ import (
 	"github.com/IBM/sarama"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/net/quic"
 	"sutext.github.io/cable/cluster"
 	"sutext.github.io/cable/packet"
@@ -227,50 +229,72 @@ func (b *booter) LeaveChannel(ctx context.Context, uid string, channels map[stri
 	return b.broker.LeaveChannel(ctx, uid, channels)
 }
 
-func (b *booter) SendToAll(ctx context.Context, m *packet.Message) (int32, int32, error) {
-	kindStr := fmt.Sprintf("%d", m.Kind)
-	total, success, err := b.broker.SendToAll(ctx, m)
+func (b *booter) SendToAll(ctx context.Context, m *packet.Message) (total, success int32, err error) {
+	if b.stats.tracer != nil {
+		var span trace.Span
+		ctx, span = b.stats.tracer.Start(ctx, "cable.SendToAll", trace.WithSpanKind(trace.SpanKindServer))
+		defer func() {
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				span.RecordError(err)
+			} else {
+				span.SetStatus(codes.Ok, "")
+			}
+			span.End()
+		}()
+	}
+	total, success, err = b.broker.SendToAll(ctx, m)
 	if err != nil {
 		xlog.Error("Failed to send message to all", xlog.Err(err))
-	} else {
-		xlog.Debug("Sent message to all clients",
-			xlog.I32("total", total),
-			xlog.I32("success", success),
-			xlog.Str("kind", kindStr))
+		return 0, 0, err
 	}
 	return total, success, err
 }
-func (b *booter) SendToUser(ctx context.Context, uid string, m *packet.Message) (int32, int32, error) {
-	kindStr := fmt.Sprintf("%d", m.Kind)
-	total, success, err := b.broker.SendToUser(ctx, uid, m)
+func (b *booter) SendToUser(ctx context.Context, uid string, m *packet.Message) (total, success int32, err error) {
+	if b.stats.tracer != nil {
+		var span trace.Span
+		ctx, span = b.stats.tracer.Start(ctx, "cable.SendToUser", trace.WithSpanKind(trace.SpanKindServer))
+		defer func() {
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				span.RecordError(err)
+			} else {
+				span.SetStatus(codes.Ok, "")
+			}
+			span.End()
+		}()
+	}
+	total, success, err = b.broker.SendToUser(ctx, uid, m)
 	if err != nil {
 		xlog.Error("Failed to send message to user",
 			xlog.Err(err),
 			xlog.Uid(uid),
-			xlog.Str("kind", kindStr))
-	} else {
-		xlog.Info("Sent message to user",
-			xlog.Uid(uid),
-			xlog.I32("total", total),
-			xlog.I32("success", success),
-			xlog.Str("kind", kindStr))
+			xlog.Int("kind", int(m.Kind)))
+		return 0, 0, err
 	}
 	return total, success, err
 }
-func (b *booter) SendToChannel(ctx context.Context, channel string, m *packet.Message) (int32, int32, error) {
-	kindStr := fmt.Sprintf("%d", m.Kind)
-	total, success, err := b.broker.SendToChannel(ctx, channel, m)
+func (b *booter) SendToChannel(ctx context.Context, channel string, m *packet.Message) (total, success int32, err error) {
+	if b.stats.tracer != nil {
+		var span trace.Span
+		ctx, span = b.stats.tracer.Start(ctx, "cable.SendToChannel", trace.WithSpanKind(trace.SpanKindServer))
+		defer func() {
+			if err != nil {
+				span.SetStatus(codes.Error, err.Error())
+				span.RecordError(err)
+			} else {
+				span.SetStatus(codes.Ok, "")
+			}
+			span.End()
+		}()
+	}
+	total, success, err = b.broker.SendToChannel(ctx, channel, m)
 	if err != nil {
 		xlog.Error("Failed to send message to channel",
 			xlog.Err(err),
 			xlog.Str("channel", channel),
-			xlog.Str("kind", kindStr))
-	} else {
-		xlog.Info("Sent message to channel",
-			xlog.Str("channel", channel),
-			xlog.I32("total", total),
-			xlog.I32("success", success),
-			xlog.Str("kind", kindStr))
+			xlog.Int("kind", int(m.Kind)))
+		return 0, 0, err
 	}
 	return total, success, err
 }
@@ -282,12 +306,14 @@ func (b *booter) SendToKafka(ctx context.Context, topic, toUserID, toChannel str
 	ctx = b.stats.KafkaBegin(ctx, &KafkaBegin{
 		BeginTime: startTime,
 		Topic:     topic,
+		Op:        "produce",
 	})
 	defer func() {
 		b.stats.KafkaEnd(ctx, &KafkaEnd{
 			EndTime: time.Now(),
 			Topic:   topic,
 			Error:   err,
+			Op:      "produce",
 		})
 	}()
 	headers := &KafkaHeader{

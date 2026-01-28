@@ -189,18 +189,18 @@ func (p *peerClient) sendToAll(ctx context.Context, m *packet.Message) (total, s
 	return resp.Total, resp.Success, nil
 }
 
-// sendToTargets sends a message to specific target clients on the peer broker.
+// sendToUser sends a message to the specified target clients connected to the peer broker.
 //
 // Parameters:
 // - ctx: Context for the request
-// - m: Message to send to target clients
-// - tragets: Map of client IDs to network protocols specifying the target clients
+// - m: Message to send to the target clients
+// - cids: Map of client IDs to network protocols specifying the target clients
 //
 // Returns:
-// - int32: Total number of targets attempted to send to
+// - int32: Total number of clients attempted to send to
 // - int32: Number of successful sends
 // - error: Error if the peer is not ready or sending fails, nil otherwise
-func (p *peerClient) sendToTargets(ctx context.Context, m *packet.Message, tragets map[string]string) (total, success int32, err error) {
+func (p *peerClient) sendToUser(ctx context.Context, m *packet.Message, cids map[string]string) (total, success int32, err error) {
 	if !p.isReady() {
 		return 0, 0, xerr.PeerNotReady
 	}
@@ -210,9 +210,39 @@ func (p *peerClient) sendToTargets(ctx context.Context, m *packet.Message, trage
 	}
 	req := &pb.MessageReq{
 		Message: data,
-		Targets: tragets,
+		Targets: cids,
 	}
-	resp, err := p.rpc.SendToTargets(ctx, req)
+	resp, err := p.rpc.SendToUser(ctx, req)
+	if err != nil {
+		return 0, 0, err
+	}
+	return resp.Total, resp.Success, nil
+}
+
+// sendToChannel sends a message to the specified channel clients connected to the peer broker.
+//
+// Parameters:
+// - ctx: Context for the request
+// - m: Message to send to the channel clients
+// - cids: Map of client IDs to network protocols specifying the channel clients
+//
+// Returns:
+// - int32: Total number of clients attempted to send to
+// - int32: Number of successful sends
+// - error: Error if the peer is not ready or sending fails, nil otherwise
+func (p *peerClient) sendToChannel(ctx context.Context, m *packet.Message, cids map[string]string) (total, success int32, err error) {
+	if !p.isReady() {
+		return 0, 0, xerr.PeerNotReady
+	}
+	data, err := coder.Marshal(m)
+	if err != nil {
+		return 0, 0, err
+	}
+	req := &pb.MessageReq{
+		Message: data,
+		Targets: cids,
+	}
+	resp, err := p.rpc.SendToChannel(ctx, req)
 	if err != nil {
 		return 0, 0, err
 	}

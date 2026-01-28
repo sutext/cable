@@ -32,7 +32,10 @@ data:
 
     # Log Format: text, json
     logFormat: "text"
-
+    # Service Name
+    serviceName: cable
+    # Service Version
+    serviceVersion: 1.0.0
     # Trace Configuration
     trace:
       enabled: true
@@ -45,7 +48,6 @@ data:
       interval: 10
       tenantID: cable
       otlpEndpoint: http://mimir-gateway/otlp/v1/metrics
-      serviceName: cable
 
     # Kafka Configuration
     kafka:
