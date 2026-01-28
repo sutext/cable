@@ -14,9 +14,6 @@ type GrpcHandler struct {
 }
 
 type ConnBegin struct {
-	UserID    string // User ID associated with the client
-	ClientIP  string // IP address of the client
-	ClientID  string // Client ID of the connection
 	BeginTime time.Time
 }
 
@@ -28,8 +25,6 @@ type ConnEnd struct {
 }
 
 type MessageBegin struct {
-	ID          uint16 // Message ID of the message
-	Qos         packet.MessageQos
 	Kind        packet.MessageKind
 	Network     string
 	BeginTime   time.Time
@@ -47,9 +42,9 @@ type MessageEnd struct {
 }
 
 type RequestBegin struct {
-	ID         uint16 // Request ID of the request
 	Method     string // Method name of the request
-	BodySize   int    // Size of the request body in bytes
+	Network    string
+	BodySize   int // Size of the request body in bytes
 	BeginTime  time.Time
 	IsIncoming bool
 }
@@ -57,6 +52,8 @@ type RequestBegin struct {
 type RequestEnd struct {
 	Error      error
 	EndTime    time.Time
+	Method     string
+	Network    string
 	BodySize   int
 	BeginTime  time.Time
 	StatusCode packet.StatusCode

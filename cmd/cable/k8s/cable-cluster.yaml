@@ -35,7 +35,7 @@ data:
 
     # Trace Configuration
     trace:
-      enabled: false
+      enabled: true
       otlpEndpoint: otel-collector:4317
       serviceName: cable
 

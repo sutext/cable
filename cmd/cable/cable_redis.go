@@ -8,14 +8,12 @@ import (
 )
 
 type RedisBegin struct {
-	Key       string
-	Type      string
+	Cmd       string
 	BeginTime time.Time
 }
 
 type RedisEnd struct {
-	Key       string
-	Type      string
+	Cmd       string
 	Error     error
 	EndTime   time.Time
 	BeginTime time.Time
@@ -62,14 +60,12 @@ func (c *redisClient) Close() error {
 func (c *redisClient) HDel(ctx context.Context, key string, fields ...string) (int64, error) {
 	beginTime := time.Now()
 	ctx = c.handler.RedisBegin(ctx, &RedisBegin{
-		Type:      "HDel",
-		Key:       key,
+		Cmd:       "HDel",
 		BeginTime: beginTime,
 	})
 	i, err := c.impl.HDel(ctx, key, fields...).Result()
 	c.handler.RedisEnd(ctx, &RedisEnd{
-		Type:      "HDel",
-		Key:       key,
+		Cmd:       "HDel",
 		BeginTime: beginTime,
 		EndTime:   time.Now(),
 		Error:     err,
@@ -79,14 +75,12 @@ func (c *redisClient) HDel(ctx context.Context, key string, fields ...string) (i
 func (c *redisClient) HSet(ctx context.Context, key string, values ...any) (int64, error) {
 	beginTime := time.Now()
 	ctx = c.handler.RedisBegin(ctx, &RedisBegin{
-		Type:      "HSet",
-		Key:       key,
+		Cmd:       "HSet",
 		BeginTime: beginTime,
 	})
 	i, err := c.impl.HSet(ctx, key, values...).Result()
 	c.handler.RedisEnd(ctx, &RedisEnd{
-		Type:      "HSet",
-		Key:       key,
+		Cmd:       "HSet",
 		BeginTime: beginTime,
 		EndTime:   time.Now(),
 		Error:     err,
@@ -96,14 +90,12 @@ func (c *redisClient) HSet(ctx context.Context, key string, values ...any) (int6
 func (c *redisClient) HGetAll(ctx context.Context, key string) (map[string]string, error) {
 	beginTime := time.Now()
 	ctx = c.handler.RedisBegin(ctx, &RedisBegin{
-		Type:      "HGetAll",
-		Key:       key,
+		Cmd:       "HGetAll",
 		BeginTime: beginTime,
 	})
 	m, err := c.impl.HGetAll(ctx, key).Result()
 	c.handler.RedisEnd(ctx, &RedisEnd{
-		Type:      "HGetAll",
-		Key:       key,
+		Cmd:       "HGetAll",
 		BeginTime: beginTime,
 		EndTime:   time.Now(),
 		Error:     err,

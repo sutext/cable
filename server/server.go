@@ -267,8 +267,6 @@ func (s *server) SendMessage(ctx context.Context, cid string, p *packet.Message)
 	if s.statsHandler != nil {
 		beginTime := time.Now()
 		ctx = s.statsHandler.MessageBegin(ctx, &stats.MessageBegin{
-			ID:          p.ID,
-			Qos:         p.Qos,
 			Kind:        p.Kind,
 			Network:     s.network,
 			BeginTime:   beginTime,
@@ -312,8 +310,8 @@ func (s *server) SendRequest(ctx context.Context, cid string, p *packet.Request)
 	if s.statsHandler != nil {
 		beginTime := time.Now()
 		ctx = s.statsHandler.RequestBegin(ctx, &stats.RequestBegin{
-			ID:         p.ID,
 			Method:     p.Method,
+			Network:    s.network,
 			BodySize:   len(p.Body),
 			BeginTime:  beginTime,
 			IsIncoming: false,
@@ -322,6 +320,7 @@ func (s *server) SendRequest(ctx context.Context, cid string, p *packet.Request)
 			end := &stats.RequestEnd{
 				Error:      err,
 				EndTime:    time.Now(),
+				Network:    s.network,
 				BeginTime:  beginTime,
 				IsIncoming: false,
 			}
@@ -366,9 +365,6 @@ func (s *server) OnConnect(c network.Conn, p *packet.Connect) error {
 	if s.statsHandler != nil {
 		beginTime := time.Now()
 		ctx = s.statsHandler.ConnectBegin(ctx, &stats.ConnBegin{
-			UserID:    p.Identity.UserID,
-			ClientIP:  c.IP(),
-			ClientID:  p.Identity.ClientID,
 			BeginTime: beginTime,
 		})
 		defer s.statsHandler.ConnectEnd(ctx, &stats.ConnEnd{
@@ -447,8 +443,6 @@ func (s *server) onMessage(c network.Conn, p *packet.Message) {
 	if s.statsHandler != nil {
 		beginTime := time.Now()
 		ctx = s.statsHandler.MessageBegin(ctx, &stats.MessageBegin{
-			ID:          p.ID,
-			Qos:         p.Qos,
 			Kind:        p.Kind,
 			Network:     s.network,
 			BeginTime:   beginTime,
@@ -488,8 +482,8 @@ func (s *server) onRequest(c network.Conn, p *packet.Request) {
 	if s.statsHandler != nil {
 		beginTime := time.Now()
 		ctx = s.statsHandler.RequestBegin(ctx, &stats.RequestBegin{
-			ID:         p.ID,
 			Method:     p.Method,
+			Network:    s.network,
 			BodySize:   len(p.Body),
 			BeginTime:  beginTime,
 			IsIncoming: true,
@@ -498,6 +492,8 @@ func (s *server) onRequest(c network.Conn, p *packet.Request) {
 			s.statsHandler.RequestEnd(ctx, &stats.RequestEnd{
 				Error:      err,
 				EndTime:    time.Now(),
+				Method:     p.Method,
+				Network:    s.network,
 				BodySize:   len(res.Body),
 				BeginTime:  beginTime,
 				StatusCode: res.Code,
