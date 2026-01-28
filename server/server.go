@@ -270,6 +270,7 @@ func (s *server) SendMessage(ctx context.Context, cid string, p *packet.Message)
 			ID:          p.ID,
 			Qos:         p.Qos,
 			Kind:        p.Kind,
+			Network:     s.network,
 			BeginTime:   beginTime,
 			IsIncoming:  false,
 			PayloadSize: len(p.Payload),
@@ -277,6 +278,7 @@ func (s *server) SendMessage(ctx context.Context, cid string, p *packet.Message)
 		defer s.statsHandler.MessageEnd(ctx, &stats.MessageEnd{
 			Error:      err,
 			EndTime:    time.Now(),
+			Network:    s.network,
 			BeginTime:  beginTime,
 			IsIncoming: false,
 		})
@@ -448,6 +450,7 @@ func (s *server) onMessage(c network.Conn, p *packet.Message) {
 			ID:          p.ID,
 			Qos:         p.Qos,
 			Kind:        p.Kind,
+			Network:     s.network,
 			BeginTime:   beginTime,
 			IsIncoming:  true,
 			PayloadSize: len(p.Payload),
@@ -455,6 +458,7 @@ func (s *server) onMessage(c network.Conn, p *packet.Message) {
 		defer s.statsHandler.MessageEnd(ctx, &stats.MessageEnd{
 			Kind:       p.Kind,
 			Error:      err,
+			Network:    s.network,
 			EndTime:    time.Now(),
 			BeginTime:  beginTime,
 			IsIncoming: true,

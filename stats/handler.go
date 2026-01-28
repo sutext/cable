@@ -31,6 +31,7 @@ type MessageBegin struct {
 	ID          uint16 // Message ID of the message
 	Qos         packet.MessageQos
 	Kind        packet.MessageKind
+	Network     string
 	BeginTime   time.Time
 	IsIncoming  bool
 	PayloadSize int // Size of the payload in bytes
@@ -39,6 +40,7 @@ type MessageBegin struct {
 type MessageEnd struct {
 	Kind       packet.MessageKind
 	Error      error
+	Network    string
 	EndTime    time.Time
 	BeginTime  time.Time
 	IsIncoming bool

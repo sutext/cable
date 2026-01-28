@@ -10,6 +10,7 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
 	"go.opentelemetry.io/otel/propagation"
 	metricsdk "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -37,6 +38,7 @@ type statistics struct {
 	kafkaDuration   messagingconv.ProcessDuration
 	connectDuration ConnectDuraion
 	messageDuration MessageDuraion
+	messageTotal    metric.Int64Counter
 	requestDuration rpcconv.ServerDuration
 }
 
@@ -77,6 +79,14 @@ func newStats(config *config) *statistics {
 		}
 		s.messageDuration, err = NewMessageDuration(meter)
 		if err != nil {
+			otel.Handle(err)
+		}
+		s.messageTotal, err = meter.Int64Counter("cable.message.total",
+			metric.WithDescription("Total number of messages processed"),
+			metric.WithUnit("1"),
+		)
+		if err != nil {
+			s.messageTotal = &noop.Int64Counter{}
 			otel.Handle(err)
 		}
 		s.requestDuration, err = rpcconv.NewServerDuration(meter)
@@ -198,12 +208,18 @@ func (s *statistics) MessageBegin(ctx context.Context, info *stats.MessageBegin)
 	if info.IsIncoming {
 		ctx, _ = s.tracer.Start(ctx, "cable.message.receive",
 			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(attribute.Int("cable.message.kind", int(info.Kind))),
+			trace.WithAttributes(
+				attribute.Int("cable.message.kind", int(info.Kind)),
+				attribute.String("cable.message.network", info.Network),
+			),
 		)
 	} else {
 		opts := []trace.SpanStartOption{
 			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(attribute.Int("cable.message.kind", int(info.Kind))),
+			trace.WithAttributes(
+				attribute.Int("cable.message.kind", int(info.Kind)),
+				attribute.String("cable.message.network", info.Network),
+			),
 		}
 		if s := trace.SpanContextFromContext(ctx); s.IsValid() && s.IsRemote() {
 			opts = append(opts, trace.WithLinks(trace.Link{SpanContext: s}))
@@ -232,12 +248,15 @@ func (s *statistics) MessageEnd(ctx context.Context, info *stats.MessageEnd) {
 	} else {
 		inout = "sent"
 	}
-	elapsedTime := float64(info.EndTime.Sub(info.BeginTime)) / float64(time.Millisecond)
-	s.messageDuration.Record(ctx, elapsedTime,
+	attrs := []attribute.KeyValue{
 		attribute.Int("kind", int(info.Kind)),
 		attribute.Bool("isok", info.Error == nil),
 		attribute.String("inout", inout),
-	)
+		attribute.String("network", info.Network),
+	}
+	elapsedTime := float64(info.EndTime.Sub(info.BeginTime)) / float64(time.Millisecond)
+	s.messageDuration.Record(ctx, elapsedTime, attrs...)
+	s.messageTotal.Add(ctx, 1, metric.WithAttributes(attrs...))
 }
 
 // TagRequest implements stats.Handler.
