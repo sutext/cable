@@ -69,7 +69,7 @@ func newStats(config *config) *statistics {
 			xlog.Error("Failed to initialize tracing", xlog.Err(err))
 		}
 		s.traceProvider = provider
-		s.tracer = s.traceProvider.Tracer("cable.stats", trace.WithInstrumentationVersion("1.0.0"))
+		s.tracer = s.traceProvider.Tracer("sutext.github.io/cable/stats", trace.WithInstrumentationVersion("1.0.0"))
 	}
 	if config.Metrics.Enabled {
 		provider, err := s.initMeter(config.Metrics)
@@ -78,7 +78,7 @@ func newStats(config *config) *statistics {
 			xlog.Error("Failed to initialize metrics", xlog.Err(err))
 		}
 		s.meterProvider = provider
-		meter := s.meterProvider.Meter("cable.stats", metric.WithInstrumentationVersion("1.0.0"))
+		meter := s.meterProvider.Meter("sutext.github.io/cable/stats", metric.WithInstrumentationVersion("1.0.0"))
 		s.kafkaDuration = newDuration(meter, "cable.kafka.duration", " Kafka processing duration in milliseconds")
 		s.redisDuration = newDuration(meter, "cable.redis.duration", " Redis processing duration in milliseconds")
 		s.connectDuration = newDuration(meter, "cable.connect.duration", " Connect packet processing duration in milliseconds")
