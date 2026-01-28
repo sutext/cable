@@ -168,7 +168,7 @@ func NewBroker(opts ...Option) Broker {
 	if options.brokerID > 0 {
 		b.id = options.brokerID
 	} else {
-		b.id = getBrokerID()
+		b.id = BrokerID()
 	}
 	b.logger = xlog.With("BROKER", b.id)
 	b.handler = options.handler

@@ -59,54 +59,54 @@ func newRedis(config *config, handler redisHandler) *redisClient {
 func (c *redisClient) Close() error {
 	return c.impl.Close()
 }
-func (c *redisClient) HDel(ctx context.Context, key string, fields ...string) *redis.IntCmd {
+func (c *redisClient) HDel(ctx context.Context, key string, fields ...string) (int64, error) {
 	beginTime := time.Now()
 	ctx = c.handler.RedisBegin(ctx, &RedisBegin{
 		Type:      "HDel",
 		Key:       key,
 		BeginTime: beginTime,
 	})
-	cmd := c.impl.HDel(ctx, key, fields...)
+	i, err := c.impl.HDel(ctx, key, fields...).Result()
 	c.handler.RedisEnd(ctx, &RedisEnd{
 		Type:      "HDel",
 		Key:       key,
 		BeginTime: beginTime,
 		EndTime:   time.Now(),
-		Error:     cmd.Err(),
+		Error:     err,
 	})
-	return cmd
+	return i, err
 }
-func (c *redisClient) HSet(ctx context.Context, key string, values ...any) *redis.IntCmd {
+func (c *redisClient) HSet(ctx context.Context, key string, values ...any) (int64, error) {
 	beginTime := time.Now()
 	ctx = c.handler.RedisBegin(ctx, &RedisBegin{
 		Type:      "HSet",
 		Key:       key,
 		BeginTime: beginTime,
 	})
-	cmd := c.impl.HSet(ctx, key, values...)
+	i, err := c.impl.HSet(ctx, key, values...).Result()
 	c.handler.RedisEnd(ctx, &RedisEnd{
 		Type:      "HSet",
 		Key:       key,
 		BeginTime: beginTime,
 		EndTime:   time.Now(),
-		Error:     cmd.Err(),
+		Error:     err,
 	})
-	return cmd
+	return i, err
 }
-func (c *redisClient) HGetAll(ctx context.Context, key string) *redis.MapStringStringCmd {
+func (c *redisClient) HGetAll(ctx context.Context, key string) (map[string]string, error) {
 	beginTime := time.Now()
 	ctx = c.handler.RedisBegin(ctx, &RedisBegin{
 		Type:      "HGetAll",
 		Key:       key,
 		BeginTime: beginTime,
 	})
-	cmd := c.impl.HGetAll(ctx, key)
+	m, err := c.impl.HGetAll(ctx, key).Result()
 	c.handler.RedisEnd(ctx, &RedisEnd{
 		Type:      "HGetAll",
 		Key:       key,
 		BeginTime: beginTime,
 		EndTime:   time.Now(),
-		Error:     cmd.Err(),
+		Error:     err,
 	})
-	return cmd
+	return m, err
 }

@@ -19,7 +19,6 @@ import (
 )
 
 type booter struct {
-	brokerID string
 	redis    *redisClient
 	config   *config
 	broker   cluster.Broker
@@ -79,8 +78,6 @@ func newBooter(config *config) *booter {
 		cluster.WithStatsHandler(b.stats),
 		cluster.WithGrpcStatsHandler(grpcHandler),
 	)
-
-	b.brokerID = fmt.Sprintf("%d", b.broker.ID())
 	b.grpcApi = newGRPC(b)
 	b.httpApi = newHTTP(b)
 	return b
@@ -202,13 +199,13 @@ func (b *booter) ListChannels(ctx context.Context, uid string) (map[string]strin
 	if b.redis == nil {
 		return nil, nil
 	}
-	return b.redis.HGetAll(ctx, b.userKey(uid)).Result()
+	return b.redis.HGetAll(ctx, b.userKey(uid))
 }
 func (b *booter) JoinChannel(ctx context.Context, uid string, channels map[string]string) error {
 	if b.redis == nil {
 		return nil
 	}
-	_, err := b.redis.HSet(ctx, b.userKey(uid), "channels", channels).Result()
+	_, err := b.redis.HSet(ctx, b.userKey(uid), "channels", channels)
 	if err != nil {
 		return err
 	}
@@ -219,7 +216,7 @@ func (b *booter) LeaveChannel(ctx context.Context, uid string, channels map[stri
 	if b.redis == nil {
 		return nil
 	}
-	_, err := b.redis.HSet(ctx, b.userKey(uid), "channels", channels).Result()
+	_, err := b.redis.HSet(ctx, b.userKey(uid), "channels", channels)
 	if err != nil {
 		return err
 	}

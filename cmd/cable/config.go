@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"gopkg.in/yaml.v3"
+	"sutext.github.io/cable/cluster"
 	"sutext.github.io/cable/packet"
 )
 
@@ -102,6 +103,9 @@ func readConfig(path string) (*config, error) {
 	// Validate config
 	if err := cfg.validate(); err != nil {
 		return nil, err
+	}
+	if cfg.BrokerID == 0 {
+		cfg.BrokerID = cluster.BrokerID()
 	}
 	return cfg, nil
 }

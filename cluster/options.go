@@ -203,7 +203,7 @@ func WithGrpcStatsHandler(handler stats.GrpcHandler) Option {
 //
 // Returns:
 // - uint64: Unique broker ID
-func getBrokerID() uint64 {
+func BrokerID() uint64 {
 	if hostname, err := os.Hostname(); err == nil {
 		strs := strings.Split(hostname, "-")
 		if len(strs) > 1 {

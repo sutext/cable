@@ -81,7 +81,7 @@ func newStats(config *config) *statistics {
 		if err != nil {
 			otel.Handle(err)
 		}
-		s.messageTotal, err = meter.Int64Counter("cable.message.total",
+		s.messageTotal, err = meter.Int64Counter("cable.message.test.total",
 			metric.WithDescription("Total number of messages processed"),
 			metric.WithUnit("1"),
 		)
@@ -95,6 +95,34 @@ func newStats(config *config) *statistics {
 		}
 	}
 	return s
+}
+func (s *statistics) runTest(ctx context.Context) {
+	go func() {
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		var i int
+		for {
+			select {
+			case <-ticker.C:
+				i++
+				var inout string
+				if i%2 == 0 {
+					inout = "receive"
+				} else {
+					inout = "sent"
+				}
+				attrs := []attribute.KeyValue{
+					attribute.Int("kind", int(i%2)),
+					attribute.Bool("isok", i%2 == 0),
+					attribute.String("inout", inout),
+					attribute.String("network", "tcp"),
+				}
+				s.messageTotal.Add(ctx, 1, metric.WithAttributes(attrs...))
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 }
 func (b *statistics) initTrace(conf traceConfig) (*tracesdk.TracerProvider, error) {
 	ctx := context.Background()
