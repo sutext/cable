@@ -69,7 +69,7 @@ type Handler interface {
 type ConnnectHadler interface {
 	ConnectBegin(ctx context.Context, info *ConnBegin) context.Context
 	ConnectEnd(ctx context.Context, info *ConnEnd)
-	Disconnect(ctx context.Context）
+	Disconnect(ctx context.Context)
 }
 type MessageHandler interface {
 	MessageBegin(ctx context.Context, info *MessageBegin) context.Context

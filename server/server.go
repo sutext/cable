@@ -432,6 +432,9 @@ func (s *server) OnClose(c network.Conn) {
 	}
 	if s.conns.Delete(id.ClientID) {
 		s.closeHandler(id)
+		if s.statsHandler != nil {
+			s.statsHandler.Disconnect(context.Background())
+		}
 	}
 }
 
