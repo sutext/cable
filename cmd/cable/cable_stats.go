@@ -41,15 +41,52 @@ func (f milliDuration) Record(ctx context.Context, value float64, labels ...attr
 	f.Float64Histogram.Record(ctx, value, metric.WithAttributeSet(attribute.NewSet(labels...)))
 }
 
+type onlineCounter struct {
+	metric.Int64UpDownCounter
+}
+
+func newCounter(meter metric.Meter, name string, description string) onlineCounter {
+	c, err := meter.Int64UpDownCounter(name,
+		metric.WithUnit("1"),
+		metric.WithDescription(description),
+	)
+	if err != nil {
+		otel.Handle(err)
+		return onlineCounter{noop.Int64UpDownCounter{}}
+	}
+	return onlineCounter{c}
+}
+func (c onlineCounter) Add(ctx context.Context, value int64, labels ...attribute.KeyValue) {
+	c.Int64UpDownCounter.Add(ctx, value, metric.WithAttributeSet(attribute.NewSet(labels...)))
+}
+
+type queueGauge struct {
+	metric.Int64Gauge
+}
+
+func newGauge(meter metric.Meter, name string, description string) queueGauge {
+	g, err := meter.Int64Gauge(name,
+		metric.WithUnit("1"),
+		metric.WithDescription(description),
+	)
+	if err != nil {
+		otel.Handle(err)
+		return queueGauge{noop.Int64Gauge{}}
+	}
+	return queueGauge{g}
+}
+func (g queueGauge) Record(ctx context.Context, value int64, labels ...attribute.KeyValue) {
+	g.Int64Gauge.Record(ctx, value, metric.WithAttributeSet(attribute.NewSet(labels...)))
+}
+
 type statistics struct {
-	stats.Handler
-	kafkaHandler
-	redisHandler
 	brokerID        uint64
 	config          *config
 	tracer          trace.Tracer
 	traceProvider   *tracesdk.TracerProvider
 	meterProvider   *metricsdk.MeterProvider
+	queueLength     queueGauge
+	onlineUsers     onlineCounter
 	redisDuration   milliDuration
 	kafkaDuration   milliDuration
 	connectDuration milliDuration
@@ -79,6 +116,8 @@ func newStats(config *config) *statistics {
 		}
 		s.meterProvider = provider
 		meter := s.meterProvider.Meter("sutext.github.io/cable/stats", metric.WithInstrumentationVersion("1.0.0"))
+		s.queueLength = newGauge(meter, "cable.queue.length", " Number of messages in the queue")
+		s.onlineUsers = newCounter(meter, "cable.online.users", " Number of online users")
 		s.kafkaDuration = newDuration(meter, "cable.kafka.duration", " Kafka processing duration in milliseconds")
 		s.redisDuration = newDuration(meter, "cable.redis.duration", " Redis processing duration in milliseconds")
 		s.connectDuration = newDuration(meter, "cable.connect.duration", " Connect packet processing duration in milliseconds")
@@ -87,7 +126,7 @@ func newStats(config *config) *statistics {
 	}
 	return s
 }
-func (b *statistics) initTrace(conf traceConfig) (*tracesdk.TracerProvider, error) {
+func (s *statistics) initTrace(conf traceConfig) (*tracesdk.TracerProvider, error) {
 	ctx := context.Background()
 	exporter, err := otlptracegrpc.New(ctx,
 		otlptracegrpc.WithEndpoint(conf.OTLPEndpoint),
@@ -97,10 +136,10 @@ func (b *statistics) initTrace(conf traceConfig) (*tracesdk.TracerProvider, erro
 		return nil, err
 	}
 	r, err := resource.New(ctx, resource.WithAttributes(
-		semconv.ServiceVersion(b.config.ServiceVersion),
-		semconv.ServiceName(b.config.ServiceName),
-		semconv.ServiceNamespace(b.config.ServiceName),
-		semconv.ServiceInstanceID(fmt.Sprintf("%d", b.brokerID)),
+		semconv.ServiceVersion(s.config.ServiceVersion),
+		semconv.ServiceName(s.config.ServiceName),
+		semconv.ServiceNamespace(s.config.ServiceName),
+		semconv.ServiceInstanceID(fmt.Sprintf("%d", s.brokerID)),
 	))
 	if err != nil {
 		return nil, err
@@ -117,7 +156,7 @@ func (b *statistics) initTrace(conf traceConfig) (*tracesdk.TracerProvider, erro
 	xlog.Info("OTel tracing initialized", xlog.Str("otle_endpoint", conf.OTLPEndpoint))
 	return tracerProvider, nil
 }
-func (b *statistics) initMeter(conf metricsConfig) (*metricsdk.MeterProvider, error) {
+func (s *statistics) initMeter(conf metricsConfig) (*metricsdk.MeterProvider, error) {
 	ctx := context.Background()
 	otlpExporter, err := otlpmetrichttp.New(ctx,
 		otlpmetrichttp.WithEndpointURL(conf.OTLPEndpoint),
@@ -136,22 +175,22 @@ func (b *statistics) initMeter(conf metricsConfig) (*metricsdk.MeterProvider, er
 		metricsdk.WithTimeout(5*time.Second),
 	)
 	r, err := resource.New(ctx, resource.WithAttributes(
-		semconv.ServiceVersion(b.config.ServiceVersion),
-		semconv.ServiceName(b.config.ServiceName),
-		semconv.ServiceNamespace(b.config.ServiceName),
-		semconv.ServiceInstanceID(fmt.Sprintf("%d", b.brokerID)),
+		semconv.ServiceVersion(s.config.ServiceVersion),
+		semconv.ServiceName(s.config.ServiceName),
+		semconv.ServiceNamespace(s.config.ServiceName),
+		semconv.ServiceInstanceID(fmt.Sprintf("%d", s.brokerID)),
 	))
 	if err != nil {
 		return nil, err
 	}
-	b.meterProvider = metricsdk.NewMeterProvider(
+	s.meterProvider = metricsdk.NewMeterProvider(
 		metricsdk.WithReader(reader),
 		metricsdk.WithResource(r),
 	)
 	// Set global meter provider
-	otel.SetMeterProvider(b.meterProvider)
+	otel.SetMeterProvider(s.meterProvider)
 	xlog.Info("OTel metrics initialized", xlog.Str("otlp_endpoint", conf.OTLPEndpoint))
-	return b.meterProvider, nil
+	return s.meterProvider, nil
 }
 func (s *statistics) Shutdown(ctx context.Context) (err error) {
 	if s.traceProvider != nil {
@@ -190,11 +229,15 @@ func (s *statistics) ConnectEnd(ctx context.Context, info *stats.ConnEnd) {
 			span.End()
 		}
 	}
-
+	if info.Error == nil {
+		s.onlineUsers.Add(ctx, 1)
+	}
 	elapsedTime := float64(info.EndTime.Sub(info.BeginTime)) / float64(time.Millisecond)
 	s.connectDuration.Record(ctx, elapsedTime, attribute.String("ack_code", info.Code.String()))
 }
-
+func (s *statistics) Disconnect(ctx context.Context) {
+	s.onlineUsers.Add(ctx, -1)
+}
 func (s *statistics) MessageBegin(ctx context.Context, info *stats.MessageBegin) context.Context {
 	if s.tracer == nil {
 		return ctx
@@ -341,4 +384,8 @@ func (s *statistics) KafkaEnd(ctx context.Context, info *KafkaEnd) {
 		attribute.String("topic", info.Topic),
 		attribute.Bool("isok", info.Error == nil),
 	)
+}
+
+func (s *statistics) UpdateQueue(ctx context.Context, qsize int32) {
+	s.queueLength.Record(ctx, int64(qsize))
 }

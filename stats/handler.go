@@ -61,10 +61,24 @@ type RequestEnd struct {
 }
 
 type Handler interface {
+	ConnnectHadler
+	MessageHandler
+	RequestHandler
+	QueueHandler
+}
+type ConnnectHadler interface {
 	ConnectBegin(ctx context.Context, info *ConnBegin) context.Context
 	ConnectEnd(ctx context.Context, info *ConnEnd)
+	Disconnect(ctx context.Context）
+}
+type MessageHandler interface {
 	MessageBegin(ctx context.Context, info *MessageBegin) context.Context
 	MessageEnd(ctx context.Context, info *MessageEnd)
+}
+type RequestHandler interface {
 	RequestBegin(ctx context.Context, info *RequestBegin) context.Context
 	RequestEnd(ctx context.Context, info *RequestEnd)
+}
+type QueueHandler interface {
+	UpdateQueue(ctx context.Context, qsize int32)
 }

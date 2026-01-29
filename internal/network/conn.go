@@ -13,6 +13,7 @@ import (
 	"sutext.github.io/cable/internal/keepalive"
 	"sutext.github.io/cable/internal/queue"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/stats"
 	"sutext.github.io/cable/xerr"
 	"sutext.github.io/cable/xlog"
 )
@@ -30,6 +31,7 @@ type delegate interface {
 	OnPacket(c Conn, p packet.Packet)
 	OnConnect(c Conn, p *packet.Connect) error
 	QueueCapacity() int32
+	StatsHandler() stats.Handler
 }
 type Transport interface {
 	Close(ctx context.Context) error
@@ -248,12 +250,25 @@ func (c *conn) SendPacket(ctx context.Context, p packet.Packet) error {
 	if err != nil {
 		return err
 	}
-	return c.sendQueue.Push(ctx, false, func() {
+	err = c.sendQueue.Push(ctx, false, func() {
+		if c == nil {
+			return
+		}
 		err := c.raw.WriteData(data)
 		if err != nil {
 			c.logger.Warn("write data error", xlog.Err(err))
 		}
+		if h := c.delegate.StatsHandler(); h != nil {
+			h.UpdateQueue(ctx, c.sendQueue.Len())
+		}
 	})
+	if err != nil {
+		return err
+	}
+	if h := c.delegate.StatsHandler(); h != nil {
+		h.UpdateQueue(ctx, c.sendQueue.Len())
+	}
+	return nil
 }
 func (c *conn) jumpPacket(ctx context.Context, p packet.Packet) error {
 	if c.IsClosed() {
@@ -263,12 +278,22 @@ func (c *conn) jumpPacket(ctx context.Context, p packet.Packet) error {
 	if err != nil {
 		return err
 	}
-	return c.sendQueue.Push(ctx, true, func() {
+	err = c.sendQueue.Push(ctx, true, func() {
 		err := c.raw.WriteData(data)
 		if err != nil {
 			c.logger.Warn("write jump data error", xlog.Err(err))
 		}
+		if h := c.delegate.StatsHandler(); h != nil {
+			h.UpdateQueue(ctx, c.sendQueue.Len())
+		}
 	})
+	if err != nil {
+		return err
+	}
+	if h := c.delegate.StatsHandler(); h != nil {
+		h.UpdateQueue(ctx, c.sendQueue.Len())
+	}
+	return nil
 }
 
 func getAddrIp(addr string) string {

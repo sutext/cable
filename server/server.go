@@ -352,6 +352,9 @@ func (s *server) GetConn(cid string) (network.Conn, bool) {
 func (s *server) QueueCapacity() int32 {
 	return s.queueCapacity
 }
+func (s *server) StatsHandler() stats.Handler {
+	return s.statsHandler
+}
 
 // OnConnect handles new client connections.
 //

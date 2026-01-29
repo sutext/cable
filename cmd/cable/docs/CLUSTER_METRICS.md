@@ -1,198 +1,185 @@
-# 集群级消息吞吐量统计指南
+# Cluster Metrics
 
-## 架构概述
+Cable uses OpenTelemetry for distributed tracing and metrics collection. This document describes the available metrics, traces, and configuration options.
 
-Cable 集群使用 Prometheus 进行分布式指标收集和聚合：
+## Metrics
 
-1. **每个 broker 节点**独立暴露 metrics 端口（默认 8888)
-2. **Prometheus** 定期抓取所有节点的指标数据
-3. **PromQL 查询**聚合计算集群总吞吐量
+### cable.queue.length
 
-## 指标说明
+- **Type:** Int64Gauge
+- **Unit:** 1
+- **Description:** Number of messages in the queue
 
-### 上行消息指标
+### cable.online.users
 
-- `cable_messages_up_total{broker_id, kind}`: 上行消息总数
-- `cable_messages_up_duration_seconds{broker_id, kind}`: 上行消息处理时长
+- **Type:** Int64UpDownCounter
+- **Unit:** 1
+- **Description:** Number of online users
 
-### 下行消息指标
+Labels:
+- (none)
 
-- `cable_messages_down_total{broker_id, kind, target_type}`: 下行消息总数
-- `cable_messages_down_duration_seconds{broker_id, kind, target_type}`: 下行消息处理时长
+### cable.connect.duration
 
-**标签说明**:
-- `broker_id`: broker 节点 ID
-- `kind`: 消息类型（数字）
-- `target_type`: 目标类型（all/user/channel）
+- **Type:** Float64Histogram
+- **Unit:** ms
+- **Description:** Connect packet processing duration in milliseconds
 
-## PromQL 查询示例
+Labels:
+- `ack_code`: ACK code returned during connection
 
-### 1. 集群总上行消息速率
+### cable.message.duration
 
-```promql
-# 每秒上行消息数（所有 broker，所有消息类型）
-sum(rate(cable_messages_up_total[5m]))
+- **Type:** Float64Histogram
+- **Unit:** ms
+- **Description:** Message packet processing duration in milliseconds
 
-# 每秒上行消息数（按消息类型分组）
-sum(rate(cable_messages_up_total[5m])) by (kind)
+Labels:
+- `kind`: Message kind (integer)
+- `isok`: Whether the operation succeeded (true/false)
+- `inout`: Direction of the message (in/out)
+- `network`: Network type
 
-# 每秒上行消息数（按 broker 分组）
-sum(rate(cable_messages_up_total[5m])) by (broker_id)
+### cable.request.duration
 
-# 每秒上行消息数（按 broker 和消息类型分组）
-sum(rate(cable_messages_up_total[5m])) by (broker_id, kind)
-```
+- **Type:** Float64Histogram
+- **Unit:** ms
+- **Description:** Request packet processing duration in milliseconds
 
-### 2. 集群总下行消息速率
+Labels:
+- `isok`: Whether the operation succeeded (true/false)
+- `method`: Request method
+- `network`: Network type
+- `inout`: Direction of the request (in/out)
 
-```promql
-# 每秒下行消息数（所有 broker，所有目标类型）
-sum(rate(cable_messages_down_total[5m]))
+### cable.redis.duration
 
-# 每秒下行消息数（按目标类型分组）
-sum(rate(cable_messages_down_total[5m])) by (target_type)
+- **Type:** Float64Histogram
+- **Unit:** ms
+- **Description:** Redis processing duration in milliseconds
 
-# 每秒下行消息数（按 broker 和目标类型分组）
-sum(rate(cable_messages_down_total[5m])) by (broker_id, target_type)
+Labels:
+- `isok`: Whether the operation succeeded (true/false)
+- `cmd`: Redis command name
 
-# 每秒下行消息数（按消息类型和目标类型分组）
-sum(rate(cable_messages_down_total[5m])) by (kind, target_type)
-```
+### cable.kafka.duration
 
-### 3. 集群总吞吐量（上行 + 下行）
+- **Type:** Float64Histogram
+- **Unit:** ms
+- **Description:** Kafka processing duration in milliseconds
 
-```promql
-# 每秒总消息数（上行 + 下行）
-sum(rate(cable_messages_up_total[5m])) + sum(rate(cable_messages_down_total[5m]))
+Labels:
+- `op`: Kafka operation type
+- `topic`: Kafka topic name
+- `isok`: Whether the operation succeeded (true/false)
 
-# 按消息类型分组
-sum(rate(cable_messages_up_total[5m])) by (kind) + sum(rate(cable_messages_down_total[5m])) by (kind)
-```
+## Traces
 
-### 4. 消息处理延迟
+### cable.connect.in
 
-```promql
-# 上行消息平均处理延迟（秒）
-avg(rate(cable_messages_up_duration_seconds_sum[5m]) / rate(cable_messages_up_duration_seconds_count[5m]))
+- **Kind:** Server
+- **Description:** Connect packet processing trace
+- **Attributes:**
+  - (none additional)
 
-# 下行消息平均处理延迟（秒）
-avg(rate(cable_messages_down_duration_seconds_sum[5m]) / rate(cable_messages_down_duration_seconds_count[5m]))
+### cable.message.{inout}
 
-# 按 broker 分组的上行消息延迟
-avg(rate(cable_messages_up_duration_seconds_sum[5m]) / rate(cable_messages_up_duration_seconds_count[5m])) by (broker_id)
+- **Kind:** Server (in) / Client (out)
+- **Description:** Message packet processing trace
+- **Attributes:**
+  - `cable.message.kind`: Message kind (integer)
+  - `cable.message.network`: Network type
 
-# 按 target_type 分组的下行消息延迟
-avg(rate(cable_messages_down_duration_seconds_sum[5m]) / rate(cable_messages_down_duration_seconds_count[5m])) by (target_type)
-```
+### cable.request.{inout}
 
-### 5. P99 延迟
+- **Kind:** Server (in) / Client (out)
+- **Description:** Request packet processing trace
+- **Attributes:**
+  - `cable.request.method`: Request method
+  - `cable.request.network`: Network type
 
-```promql
-# 上行消息 P99 延迟
-histogram_quantile(0.99, sum(rate(cable_messages_up_duration_seconds_bucket[5m])) by (le, broker_id))
+### cable.redis.{cmd}
 
-# 下行消息 P99 延迟
-histogram_quantile(0.99, sum(rate(cable_messages_down_duration_seconds_bucket[5m])) by (le, broker_id, target_type))
-```
+- **Kind:** Client
+- **Description:** Redis command execution trace
+- **Attributes:**
+  - (none additional)
 
-### 6. Broker 负载均衡分析
+### cable.kafka.{op}
 
-```promql
-# 各 broker 的上行消息占比
-sum(rate(cable_messages_up_total[5m])) by (broker_id) / sum(rate(cable_messages_up_total[5m]))
+- **Kind:** Client
+- **Description:** Kafka operation trace
+- **Attributes:**
+  - `cable.kafka.topic`: Kafka topic name
 
-# 各 broker 的下行消息占比
-sum(rate(cable_messages_down_total[5m])) by (broker_id) / sum(rate(cable_messages_down_total[5m]))
-```
+## Configuration
 
-## Grafana 面板示例
-
-### 面板 1: 集群总吞吐量
-
-```promql
-sum(rate(cable_messages_up_total[5m])) + sum(rate(cable_messages_down_total[5m]))
-```
-
-### 面板 2: 各 Broker 吞吐量对比
-
-```promql
-sum(rate(cable_messages_up_total[5m])) by (broker_id) + sum(rate(cable_messages_down_total[5m])) by (broker_id)
-```
-
-### 面板 3: 消息类型分布
-
-```promql
-sum(rate(cable_messages_up_total[5m])) by (kind)
-```
-
-### 面板 4: 消息处理延迟趋势
-
-```promql
-avg(rate(cable_messages_up_duration_seconds_sum[5m]) / rate(cable_messages_up_duration_seconds_count[5m]))
-```
-
-## 配置说明
-
-### Broker 配置示例
-
-每个 broker 需要配置不同的 metrics 端口：
+### Tracing Configuration
 
 ```yaml
-# broker1.yaml
-brokerid: 1
-metrics:
+trace:
   enabled: true
-  port: 9090
-  path: /metrics
-
-# broker2.yaml
-brokerid: 2
-metrics:
-  enabled: true
-  port: 9091
-  path: /metrics
-
-# broker3.yaml
-brokerid: 3
-metrics:
-  enabled: true
-  port: 9092
-  path: /metrics
+  otlp_endpoint: "localhost:4317"
 ```
 
-### Prometheus 配置
+- **enabled:** Enable/disable tracing
+- **otlp_endpoint:** OTLP gRPC endpoint for trace export
 
-参考 [prometheus.yml](prometheus.yml) 配置文件。
-
-## 监控告警规则示例
+### Metrics Configuration
 
 ```yaml
-groups:
-  - name: cable_cluster_alerts
-    rules:
-      # 集群总吞吐量过低
-      - alert: LowClusterThroughput
-        expr: sum(rate(cable_messages_up_total[5m])) + sum(rate(cable_messages_down_total[5m])) < 100
-        for: 5m
-        annotations:
-          summary: "集群吞吐量过低"
+metrics:
+  enabled: true
+  otlp_endpoint: "http://localhost:4318/v1/metrics"
+  tenant_id: "your-tenant-id"
+  interval: 10
+```
 
-      # 单个 broker 吞吐量异常
-      - alert: BrokerThroughputAnomaly
-        expr: |
-          abs(
-            sum(rate(cable_messages_up_total[5m])) by (broker_id) 
-            - avg(sum(rate(cable_messages_up_total[5m])))
-          ) / avg(sum(rate(cable_messages_up_total[5m])) > 0.5
-        for: 10m
-        annotations:
-          summary: "Broker {{ $labels.broker_id }} 吞吐量异常"
+- **enabled:** Enable/disable metrics collection
+- **otlp_endpoint:** OTLP HTTP endpoint for metric export
+- **tenant_id:** Tenant ID for multi-tenancy (used as X-Scope-OrgID header)
+- **interval:** Export interval in seconds (default: 10)
 
-      # 消息处理延迟过高
-      - alert: HighMessageLatency
-        expr: |
-          avg(rate(cable_messages_up_duration_seconds_sum[5m]) / rate(cable_messages_up_duration_seconds_count[5m])) > 1
-        for: 5m
-        annotations:
-          summary: "消息处理延迟过高"
+## Resource Attributes
+
+All metrics and traces include the following resource attributes:
+- `service.name`: Service name
+- `service.namespace`: Service namespace
+- `service.version`: Service version
+- `service.instance.id`: Unique broker instance ID
+
+## Example Prometheus Queries
+
+### Online Users
+
+```promql
+sum(cable_online_users)
+```
+
+### Average Kafka Duration by Topic
+
+```promql
+sum(rate(cable_kafka_duration_sum{topic="your-topic"}[5m]))
+  /
+sum(rate(cable_kafka_duration_count{topic="your-topic"}[5m]))
+```
+
+### 95th Percentile Message Duration
+
+```promql
+histogram_quantile(0.95, sum(rate(cable_message_duration_bucket[5m])) by (le))
+```
+
+### Redis Error Rate
+
+```promql
+sum(rate(cable_redis_duration_bucket{isok="false"}[5m]))
+  /
+sum(rate(cable_redis_duration_count[5m]))
+```
+
+### Queue Length by Broker
+
+```promql
+cable_queue_length
 ```
