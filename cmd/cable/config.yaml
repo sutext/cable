@@ -19,7 +19,7 @@ httpPort: 1888
 peerPort: 4567
 
 # Log Level: debug, info, warn, error
-logLevel: "error"
+logLevel: "info"
 
 # Log Format: text, json
 logFormat: "text"

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -32,10 +31,6 @@ func main() {
 		logger = xlog.NewText(conf.Level().Level())
 	}
 	xlog.SetDefault(logger)
-	ctx := context.Background()
-	ctx, cancel := context.WithCancelCause(ctx)
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	if conf.Pprof {
 		go func() {
 			if err := http.ListenAndServe(":6060", nil); err != nil {
@@ -43,27 +38,17 @@ func main() {
 			}
 		}()
 	}
-	go func() {
-		<-sigs
-		cancel(fmt.Errorf("cable signal received"))
-	}()
 	boot := newBooter(conf)
 	boot.Start()
 	xlog.Info("cable server started")
-	<-ctx.Done()
-	done := make(chan struct{})
-	go func() {
-		if err := boot.Shutdown(context.Background()); err != nil {
-			xlog.Error("cable server shutdown :", xlog.Err(err))
-		}
-		close(done)
-	}()
-	timeout := time.NewTimer(time.Second * 15)
-	defer timeout.Stop()
-	select {
-	case <-timeout.C:
-		xlog.Warn("cable server graceful shutdown timeout")
-	case <-done:
-		xlog.Debug("cable server graceful shutdown")
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+	<-sigs
+	xlog.Info("cable server shutting down")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
+	defer cancel()
+	if err := boot.Shutdown(ctx); err != nil {
+		xlog.Error("cable server shutdown :", xlog.Err(err))
 	}
+	xlog.Info("cable server shutdown gracefully")
 }
