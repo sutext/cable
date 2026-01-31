@@ -25,18 +25,13 @@ type kafkaConfig struct {
 	Enabled bool     `yaml:"enabled"`
 	Brokers []string `yaml:"brokers"`
 }
-type redisSingle struct {
-	DB         int    `yaml:"db"`
-	Enabled    bool   `yaml:"enabled"`
-	Address    string `yaml:"address"`
-	Password   string `yaml:"password"`
-	UserPrefix string `yaml:"userPrefix"`
-}
-type redisCluster struct {
+type redisConfig struct {
+	DB         int      `yaml:"db"`
 	Enabled    bool     `yaml:"enabled"`
 	Password   string   `yaml:"password"`
 	Addresses  []string `yaml:"addresses"`
-	UserPrefix string   `yaml:"userPrefix"`
+	AuthPrefix string   `yaml:"authPrefix"`
+	JoinPrefix string   `yaml:"joinPrefix"`
 }
 type resendType string
 
@@ -63,8 +58,14 @@ type metricsConfig struct {
 	Interval     int    `yaml:"interval"`
 	OTLPEndpoint string `yaml:"otlpEndpoint"`
 }
+type authConfig struct {
+	Method  string `yaml:"method"`  // "jwt" or "static" or "redis" or "remote"
+	Secret  string `yaml:"secret"`  // only used when method is "jwt" or "static"
+	AuthURL string `yaml:"authURL"` // only used when method is "remote"
+}
 
 type config struct {
+	Auth           authConfig                   `yaml:"auth"`
 	Pprof          bool                         `yaml:"pprof"`
 	BrokerID       uint64                       `yaml:"brokerid"`
 	GrpcPort       uint16                       `yaml:"grpcPort"`
@@ -78,8 +79,7 @@ type config struct {
 	Trace          traceConfig                  `yaml:"trace"`
 	Metrics        metricsConfig                `yaml:"metrics"`
 	Kafka          kafkaConfig                  `yaml:"kafka"`
-	Redis          redisSingle                  `yaml:"redis"`
-	RedisCluster   redisCluster                 `yaml:"redisCluster"`
+	Redis          redisConfig                  `yaml:"redis"`
 	MessageRoute   map[packet.MessageKind]route `yaml:"messageRoute"`
 	Listeners      []listener                   `yaml:"listeners"`
 }
@@ -156,24 +156,19 @@ func (c *config) validate() error {
 			return fmt.Errorf("kafka enabled but first broker is empty")
 		}
 	}
-	if c.RedisCluster.Enabled {
-		if len(c.RedisCluster.Addresses) == 0 {
-			return fmt.Errorf("redis cluster enabled but addresses are empty")
-		}
-		if c.RedisCluster.Addresses[0] == "" {
-			return fmt.Errorf("redis cluster enabled but first address is empty")
-		}
-		if c.RedisCluster.UserPrefix == "" {
-			return fmt.Errorf("redis cluster enabled but user prefix is empty")
-		}
-	}
 	if c.Redis.Enabled {
-		if c.Redis.Address == "" {
+		if len(c.Redis.Addresses) == 0 {
 			return fmt.Errorf("redis enabled but address is empty")
 		}
-		if c.Redis.UserPrefix == "" {
+		if c.Redis.JoinPrefix == "" {
 			return fmt.Errorf("redis enabled but user prefix is empty")
 		}
+	}
+	if c.Auth.Method != "pass" && c.Auth.Method != "jwt" && c.Auth.Method != "static" && c.Auth.Method != "redis" && c.Auth.Method != "remote" {
+		return fmt.Errorf("invalid auth method: %s", c.Auth.Method)
+	}
+	if c.Auth.Method == "remote" && c.Auth.AuthURL == "" {
+		return fmt.Errorf("auth method is remote but auth URL is empty")
 	}
 	if c.MessageRoute == nil {
 		return fmt.Errorf("message route is nil")

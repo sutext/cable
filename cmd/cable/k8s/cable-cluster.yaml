@@ -58,23 +58,22 @@ data:
         - "kafka-broker-2.kafka-broker:9092"
 
     # Redis Configuration
+    # Redis is used for session management and message routing.
+    # If Addresses more than one, it will use redis cluster mode.
     redis:
       db: 0
-      enabled: false
-      address: "redis-master:6379"
-      password: ""
-      userPrefix: "cable-user-channels:"
-
-    # Redis Cluster Configuration
-    redisCluster:
       enabled: true
       password: ""
       addresses: 
         - "redis-cluster-0.redis-cluster:6379"
         - "redis-cluster-1.redis-cluster:6379"
         - "redis-cluster-2.redis-cluster:6379"
-      userPrefix: "cable-user-channels:"
+      joinPrefix: "cable-user-join:"
+      authPrefix: "cable-user-auth:"
 
+    # Auth Configuration
+    auth:
+      method: pass
     # Message Route Configuration
     messageRoute:
       # Example message routes, adjust based on your actual message types

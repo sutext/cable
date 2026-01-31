@@ -15,21 +15,7 @@ spec:
       targetPort: 9093
       name: controller
   clusterIP: None
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: kafka-cluster
-  namespace: default
-spec:
-  selector:
-    app: kafka-broker
-  ports:
-    - protocol: TCP
-      port: 9092
-      targetPort: 9092
-      name: client
-  type: LoadBalancer
+
 ---
 apiVersion: apps/v1
 kind: StatefulSet

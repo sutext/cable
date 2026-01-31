@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
 	"github.com/IBM/sarama"
+	"github.com/golang-jwt/jwt/v5"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
@@ -132,10 +134,69 @@ func (b *booter) Shutdown(ctx context.Context) error {
 	b.stats.Shutdown(ctx)
 	return b.broker.Shutdown(ctx)
 }
+func (b *booter) parseJWT(tokenString string, key string) (jwt.MapClaims, error) {
+	claims := jwt.MapClaims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return key, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if token.Valid {
+		return claims, nil
+	}
+	return nil, fmt.Errorf("invalid token")
+}
 
 // -- Handler methods --
 func (b *booter) OnUserConnect(ctx context.Context, p *packet.Connect) packet.ConnectCode {
-	return packet.ConnectAccepted
+	auth := b.config.Auth
+	switch auth.Method {
+	case "pass":
+		return packet.ConnectAccepted
+	case "jwt":
+		claims, err := b.parseJWT(p.Identity.Password, auth.Secret)
+		if err != nil {
+			xlog.Error("Failed to authenticate user", xlog.Err(err))
+			return packet.ConnectAuthfail
+		}
+		if claims["sub"] != p.Identity.UserID {
+			return packet.ConnectAuthfail
+		}
+		return packet.ConnectAccepted
+	case "static":
+		if p.Identity.Password != auth.Secret {
+			return packet.ConnectAuthfail
+		}
+		return packet.ConnectAccepted
+	case "redis":
+		pwd, err := b.redis.Get(ctx, b.config.Redis.AuthPrefix+p.Identity.UserID)
+		if err != nil {
+			xlog.Error("Failed to authenticate user", xlog.Err(err))
+			return packet.ConnectAuthfail
+		}
+		if pwd != p.Identity.Password {
+			return packet.ConnectAuthfail
+		}
+		return packet.ConnectAccepted
+	case "remote":
+		res, err := http.Get(fmt.Sprintf("%s?uid=%s&pwd=%s", auth.AuthURL, p.Identity.UserID, p.Identity.Password))
+		if err != nil {
+			xlog.Error("Failed to authenticate user", xlog.Err(err))
+			return packet.ConnectAuthfail
+		}
+		if res.StatusCode != http.StatusOK {
+			xlog.Error("Failed to authenticate user", xlog.Str("status", res.Status))
+			return packet.ConnectAuthfail
+		}
+		return packet.ConnectAccepted
+	default:
+		xlog.Error("Invalid authentication method", xlog.Str("method", auth.Method))
+		return packet.ConnectAuthfail
+	}
 }
 func (b *booter) OnUserClosed(id *packet.Identity) {
 
@@ -194,20 +255,17 @@ func (b *booter) GetUserChannels(uid string) (map[string]string, error) {
 	return b.ListChannels(context.Background(), uid)
 }
 
-func (b *booter) userKey(uid string) string {
-	return fmt.Sprintf("%s:%s", b.config.Redis.UserPrefix, uid)
-}
 func (b *booter) ListChannels(ctx context.Context, uid string) (map[string]string, error) {
 	if b.redis == nil {
 		return nil, nil
 	}
-	return b.redis.HGetAll(ctx, b.userKey(uid))
+	return b.redis.HGetAll(ctx, b.redis.JoinKey(uid))
 }
 func (b *booter) JoinChannel(ctx context.Context, uid string, channels map[string]string) error {
 	if b.redis == nil {
 		return nil
 	}
-	_, err := b.redis.HSet(ctx, b.userKey(uid), channels)
+	_, err := b.redis.HSet(ctx, b.redis.JoinKey(uid), channels)
 	if err != nil {
 		return err
 	}
@@ -222,7 +280,7 @@ func (b *booter) LeaveChannel(ctx context.Context, uid string, channels map[stri
 	for channel := range channels {
 		keys = append(keys, channel)
 	}
-	_, err := b.redis.HDel(ctx, b.userKey(uid), keys...)
+	_, err := b.redis.HDel(ctx, b.redis.JoinKey(uid), keys...)
 	if err != nil {
 		return err
 	}

@@ -130,7 +130,7 @@ type ConnectCode uint8
 // ConnectCode constants.
 const (
 	ConnectAccepted    ConnectCode = 0 // Connection accepted
-	ConnectRejected    ConnectCode = 1 // Connection rejected
+	ConnectAuthfail    ConnectCode = 1 // Connection rejected
 	ConnectDuplicate   ConnectCode = 2 // Duplicate connection detected
 	ConnectServerError ConnectCode = 3 // Server error occurred
 )
@@ -140,7 +140,7 @@ func (c ConnectCode) String() string {
 	switch c {
 	case ConnectAccepted:
 		return "Connection Accepted"
-	case ConnectRejected:
+	case ConnectAuthfail:
 		return "Connection Rejected"
 	case ConnectDuplicate:
 		return "Connection Duplicate"

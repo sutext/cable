@@ -48,21 +48,21 @@ kafka:
   brokers:
     - "localhost:9092"
 # Redis Configuration
-# redis and redisCluster are mutually exclusive, only one can be enabled at a time.
+# Redis is used for session management and message routing.
+# If Addresses more than one, it will use redis cluster mode.
 redis:
   enabled: false
   db : 0
-  address: "localhost:6379"
-  password: ""
-  userPrefix: "cable-user-channels:"
-# Redis Cluster Configuration
-# redis and redisCluster are mutually exclusive, only one can be enabled at a time.
-redisCluster:
-  enabled: false
-  password: ""
   addresses: 
     - "localhost:6379"
-  userPrefix: "cable-user-channels:"
+  password: ""
+  joinPrefix: "cable-user-join:"
+  authPrefix: "cable-user-auth:"
+
+# Auth Configuration
+auth:
+  method: "pass"
+
 # Message Route Configuration
 messageRoute:
   # Example message routes, adjust based on your actual message types

@@ -70,21 +70,7 @@ spec:
       targetPort: 16379
       name: gossip
   clusterIP: None
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: redis-cluster-external
-  namespace: default
-spec:
-  selector:
-    app: redis-cluster
-  ports:
-    - protocol: TCP
-      port: 6379
-      targetPort: 6379
-      name: client
-  type: LoadBalancer
+
 ---
 apiVersion: apps/v1
 kind: StatefulSet

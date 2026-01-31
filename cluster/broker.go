@@ -588,7 +588,7 @@ func (b *broker) onUserConnect(ctx context.Context, p *packet.Connect, net strin
 	}
 	if err := b.cluster.SubmitOperation(context.Background(), op); err != nil {
 		b.logger.Error("Failed to submit user connect op", xlog.Err(err))
-		return packet.ConnectRejected
+		return packet.ConnectAuthfail
 	}
 	return packet.ConnectAccepted
 }

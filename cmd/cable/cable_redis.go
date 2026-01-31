@@ -26,6 +26,8 @@ type redisHandler interface {
 
 type redisImpl interface {
 	Close() error
+	Get(ctx context.Context, key string) *redis.StringCmd
+	Set(ctx context.Context, key string, value any, expiration time.Duration) *redis.StatusCmd
 	HDel(ctx context.Context, key string, fields ...string) *redis.IntCmd
 	// HSet accepts values in following formats:
 	//
@@ -56,30 +58,68 @@ type redisImpl interface {
 }
 
 type redisClient struct {
-	impl    redisImpl
-	handler redisHandler
+	impl       redisImpl
+	handler    redisHandler
+	joinPrefix string
+	authPrefix string
 }
 
 func newRedis(config *config, handler redisHandler) *redisClient {
-	if config.Redis.Enabled {
+	if !config.Redis.Enabled {
+		return nil
+	}
+	if len(config.Redis.Addresses) == 1 {
 		cli := redis.NewClient(&redis.Options{
-			Addr:     config.Redis.Address,
+			Addr:     config.Redis.Addresses[0],
 			Password: config.Redis.Password,
 			DB:       config.Redis.DB,
 		})
-		return &redisClient{impl: cli, handler: handler}
+		return &redisClient{impl: cli, handler: handler, joinPrefix: config.Redis.JoinPrefix, authPrefix: config.Redis.AuthPrefix}
 	}
-	if config.RedisCluster.Enabled {
-		cli := redis.NewClusterClient(&redis.ClusterOptions{
-			Addrs:    config.RedisCluster.Addresses,
-			Password: config.RedisCluster.Password,
-		})
-		return &redisClient{impl: cli, handler: handler}
-	}
-	return nil
+	cli := redis.NewClusterClient(&redis.ClusterOptions{
+		Addrs:    config.Redis.Addresses,
+		Password: config.Redis.Password,
+	})
+	return &redisClient{impl: cli, handler: handler, joinPrefix: config.Redis.JoinPrefix, authPrefix: config.Redis.AuthPrefix}
 }
 func (c *redisClient) Close() error {
 	return c.impl.Close()
+}
+func (c *redisClient) JoinKey(uid string) string {
+	return c.joinPrefix + ":" + uid
+}
+func (c *redisClient) AuthKey(uid string) string {
+	return c.authPrefix + ":" + uid
+}
+func (c *redisClient) Get(ctx context.Context, key string) (string, error) {
+	beginTime := time.Now()
+	ctx = c.handler.RedisBegin(ctx, &RedisBegin{
+		Cmd:       "Get",
+		BeginTime: beginTime,
+	})
+	i, err := c.impl.Get(ctx, key).Result()
+	c.handler.RedisEnd(ctx, &RedisEnd{
+		Cmd:       "HDel",
+		BeginTime: beginTime,
+		EndTime:   time.Now(),
+		Error:     err,
+	})
+	return i, err
+}
+func (c *redisClient) Set(ctx context.Context, key string, value any, expiration time.Duration) error {
+	beginTime := time.Now()
+	ctx = c.handler.RedisBegin(ctx, &RedisBegin{
+		Cmd:       "Set",
+		BeginTime: beginTime,
+	})
+	err := c.impl.Set(ctx, key, value, expiration).Err()
+	c.handler.RedisEnd(ctx, &RedisEnd{
+		Cmd:       "Set",
+		BeginTime: beginTime,
+		EndTime:   time.Now(),
+		Error:     err,
+	})
+	return err
 }
 func (c *redisClient) HDel(ctx context.Context, key string, fields ...string) (int64, error) {
 	beginTime := time.Now()
