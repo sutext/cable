@@ -323,3 +323,24 @@ func (p *peerClient) sendRaftMessage(ctx context.Context, msg raftpb.Message) er
 	_, err = p.rpc.SendRaftMessage(ctx, req)
 	return err
 }
+func (p *peerClient) startListener(ctx context.Context, network string) error {
+	if !p.isReady() {
+		return xerr.PeerNotReady
+	}
+	req := &pb.StartReq{
+		Network: network,
+	}
+	_, err := p.rpc.StartListener(ctx, req)
+	return err
+
+}
+func (p *peerClient) stopListener(ctx context.Context, network string) error {
+	if !p.isReady() {
+		return xerr.PeerNotReady
+	}
+	req := &pb.StartReq{
+		Network: network,
+	}
+	_, err := p.rpc.StopListener(ctx, req)
+	return err
+}

@@ -152,3 +152,11 @@ func (m *mockBroker) ListUsers(ctx context.Context, brokerID uint64) (map[string
 func (m *mockBroker) HandleRequest(method string, handler server.RequestHandler) {
 	// Do nothing
 }
+
+func (m *mockBroker) StartListener(ctx context.Context, network string) error {
+	return nil
+}
+
+func (m *mockBroker) StopListener(ctx context.Context, network string) error {
+	return nil
+}

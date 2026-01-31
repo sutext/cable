@@ -63,7 +63,7 @@ func (l *Listener) ISStarted() bool {
 //
 // Parameters:
 // - opts: Additional server options to apply when starting
-func (l *Listener) Start(opts ...server.Option) {
+func (l *Listener) Start() {
 	if !l.started.CompareAndSwap(false, true) {
 		return
 	}

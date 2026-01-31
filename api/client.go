@@ -32,6 +32,8 @@ type Client interface {
 	JoinChannel(ctx context.Context, uid string, channels map[string]string) (err error)
 	LeaveChannel(ctx context.Context, uid string, channels map[string]string) (err error)
 	ListChannels(ctx context.Context, uid string) (channels map[string]string, err error)
+	StartListener(ctx context.Context, network string) error
+	StopListener(ctx context.Context, network string) error
 }
 type client struct {
 	mu     sync.Mutex
@@ -216,4 +218,22 @@ func (c *client) ListChannels(ctx context.Context, uid string) (channels map[str
 		return nil, err
 	}
 	return resp.Channels, nil
+}
+func (c *client) StartListener(ctx context.Context, network string) error {
+	if !c.IsReady() {
+		return ErrClientNotReady
+	}
+	_, err := c.rpc.StartListener(ctx, &pb.ListenerReq{
+		Network: network,
+	})
+	return err
+}
+func (c *client) StopListener(ctx context.Context, network string) error {
+	if !c.IsReady() {
+		return ErrClientNotReady
+	}
+	_, err := c.rpc.StopListener(ctx, &pb.ListenerReq{
+		Network: network,
+	})
+	return err
 }

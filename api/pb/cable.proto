@@ -57,6 +57,9 @@ message OnlineResp{
 message ChannelsResp{
     map<string,string> channels = 1;
 }
+message ListenerReq{
+    string network = 1;
+}
 // CableService is the service definition for the Cable API.
 service CableService{
     // IsOnline checks whether a user is online.
@@ -77,4 +80,8 @@ service CableService{
     rpc LeaveChannel(JoinReq) returns (EmptyResp){}
     // ListChannels lists all channels a user is joined.
     rpc ListChannels(UserReq) returns (ChannelsResp){}
+    // StartListener starts a listener of specific network.
+    rpc StartListener(ListenerReq) returns (EmptyResp){}
+    // StopListener stops a listener of specific network.
+    rpc StopListener(ListenerReq) returns (EmptyResp){}
 }

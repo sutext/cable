@@ -57,7 +57,9 @@ message Status{
  map<uint64,int32> channel_count = 9;
  map<uint64,RaftProgress> raft_progress = 10;
 }
-
+message StartReq{
+  string network = 1;
+}
 // The greeting service definition.
 service PeerService {
   // Inspect provides peer inspection info.
@@ -76,4 +78,8 @@ service PeerService {
   rpc SendToChannel (MessageReq) returns (MessageResp) {}
   // SendRaftMessage handles a Raft message from another node
   rpc SendRaftMessage (RaftMessage) returns (Empty) {}
+  // StartListener starts a listener of specified network
+  rpc StartListener (StartReq) returns (Empty) {}
+  // StopListener stops a listener of specified network
+  rpc StopListener (StartReq) returns (Empty) {}
 }

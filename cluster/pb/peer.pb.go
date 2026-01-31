@@ -523,6 +523,50 @@ func (x *Status) GetRaftProgress() map[uint64]*RaftProgress {
 	return nil
 }
 
+type StartReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Network       string                 `protobuf:"bytes,1,opt,name=network,proto3" json:"network,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StartReq) Reset() {
+	*x = StartReq{}
+	mi := &file_cluster_pb_peer_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StartReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StartReq) ProtoMessage() {}
+
+func (x *StartReq) ProtoReflect() protoreflect.Message {
+	mi := &file_cluster_pb_peer_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StartReq.ProtoReflect.Descriptor instead.
+func (*StartReq) Descriptor() ([]byte, []int) {
+	return file_cluster_pb_peer_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *StartReq) GetNetwork() string {
+	if x != nil {
+		return x.Network
+	}
+	return ""
+}
+
 var File_cluster_pb_peer_proto protoreflect.FileDescriptor
 
 const file_cluster_pb_peer_proto_rawDesc = "" +
@@ -582,7 +626,9 @@ const file_cluster_pb_peer_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\x1aQ\n" +
 	"\x11RaftProgressEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12&\n" +
-	"\x05value\x18\x02 \x01(\v2\x10.pb.RaftProgressR\x05value:\x028\x012\xd2\x02\n" +
+	"\x05value\x18\x02 \x01(\v2\x10.pb.RaftProgressR\x05value:\x028\x01\"$\n" +
+	"\bStartReq\x12\x18\n" +
+	"\anetwork\x18\x01 \x01(\tR\anetwork2\xa9\x03\n" +
 	"\vPeerService\x12\"\n" +
 	"\aInspect\x12\t.pb.Empty\x1a\n" +
 	".pb.Status\"\x00\x12/\n" +
@@ -592,7 +638,9 @@ const file_cluster_pb_peer_proto_rawDesc = "" +
 	"\n" +
 	"SendToUser\x12\x0e.pb.MessageReq\x1a\x0f.pb.MessageResp\"\x00\x122\n" +
 	"\rSendToChannel\x12\x0e.pb.MessageReq\x1a\x0f.pb.MessageResp\"\x00\x12/\n" +
-	"\x0fSendRaftMessage\x12\x0f.pb.RaftMessage\x1a\t.pb.Empty\"\x00B\x06Z\x04./pbb\x06proto3"
+	"\x0fSendRaftMessage\x12\x0f.pb.RaftMessage\x1a\t.pb.Empty\"\x00\x12*\n" +
+	"\rStartListener\x12\f.pb.StartReq\x1a\t.pb.Empty\"\x00\x12)\n" +
+	"\fStopListener\x12\f.pb.StartReq\x1a\t.pb.Empty\"\x00B\x06Z\x04./pbb\x06proto3"
 
 var (
 	file_cluster_pb_peer_proto_rawDescOnce sync.Once
@@ -606,7 +654,7 @@ func file_cluster_pb_peer_proto_rawDescGZIP() []byte {
 	return file_cluster_pb_peer_proto_rawDescData
 }
 
-var file_cluster_pb_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_cluster_pb_peer_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_cluster_pb_peer_proto_goTypes = []any{
 	(*Empty)(nil),        // 0: pb.Empty
 	(*IsOnlineReq)(nil),  // 1: pb.IsOnlineReq
@@ -617,22 +665,23 @@ var file_cluster_pb_peer_proto_goTypes = []any{
 	(*RaftMessage)(nil),  // 6: pb.RaftMessage
 	(*RaftProgress)(nil), // 7: pb.RaftProgress
 	(*Status)(nil),       // 8: pb.Status
-	nil,                  // 9: pb.IsOnlineReq.TargetsEntry
-	nil,                  // 10: pb.MessageReq.TargetsEntry
-	nil,                  // 11: pb.KickConnReq.TargetsEntry
-	nil,                  // 12: pb.Status.UserCountEntry
-	nil,                  // 13: pb.Status.ClientCountEntry
-	nil,                  // 14: pb.Status.ChannelCountEntry
-	nil,                  // 15: pb.Status.RaftProgressEntry
+	(*StartReq)(nil),     // 9: pb.StartReq
+	nil,                  // 10: pb.IsOnlineReq.TargetsEntry
+	nil,                  // 11: pb.MessageReq.TargetsEntry
+	nil,                  // 12: pb.KickConnReq.TargetsEntry
+	nil,                  // 13: pb.Status.UserCountEntry
+	nil,                  // 14: pb.Status.ClientCountEntry
+	nil,                  // 15: pb.Status.ChannelCountEntry
+	nil,                  // 16: pb.Status.RaftProgressEntry
 }
 var file_cluster_pb_peer_proto_depIdxs = []int32{
-	9,  // 0: pb.IsOnlineReq.targets:type_name -> pb.IsOnlineReq.TargetsEntry
-	10, // 1: pb.MessageReq.targets:type_name -> pb.MessageReq.TargetsEntry
-	11, // 2: pb.KickConnReq.targets:type_name -> pb.KickConnReq.TargetsEntry
-	12, // 3: pb.Status.user_count:type_name -> pb.Status.UserCountEntry
-	13, // 4: pb.Status.client_count:type_name -> pb.Status.ClientCountEntry
-	14, // 5: pb.Status.channel_count:type_name -> pb.Status.ChannelCountEntry
-	15, // 6: pb.Status.raft_progress:type_name -> pb.Status.RaftProgressEntry
+	10, // 0: pb.IsOnlineReq.targets:type_name -> pb.IsOnlineReq.TargetsEntry
+	11, // 1: pb.MessageReq.targets:type_name -> pb.MessageReq.TargetsEntry
+	12, // 2: pb.KickConnReq.targets:type_name -> pb.KickConnReq.TargetsEntry
+	13, // 3: pb.Status.user_count:type_name -> pb.Status.UserCountEntry
+	14, // 4: pb.Status.client_count:type_name -> pb.Status.ClientCountEntry
+	15, // 5: pb.Status.channel_count:type_name -> pb.Status.ChannelCountEntry
+	16, // 6: pb.Status.raft_progress:type_name -> pb.Status.RaftProgressEntry
 	7,  // 7: pb.Status.RaftProgressEntry.value:type_name -> pb.RaftProgress
 	0,  // 8: pb.PeerService.Inspect:input_type -> pb.Empty
 	1,  // 9: pb.PeerService.IsOnline:input_type -> pb.IsOnlineReq
@@ -641,15 +690,19 @@ var file_cluster_pb_peer_proto_depIdxs = []int32{
 	3,  // 12: pb.PeerService.SendToUser:input_type -> pb.MessageReq
 	3,  // 13: pb.PeerService.SendToChannel:input_type -> pb.MessageReq
 	6,  // 14: pb.PeerService.SendRaftMessage:input_type -> pb.RaftMessage
-	8,  // 15: pb.PeerService.Inspect:output_type -> pb.Status
-	2,  // 16: pb.PeerService.IsOnline:output_type -> pb.IsOnlineResp
-	0,  // 17: pb.PeerService.KickConn:output_type -> pb.Empty
-	4,  // 18: pb.PeerService.SendToAll:output_type -> pb.MessageResp
-	4,  // 19: pb.PeerService.SendToUser:output_type -> pb.MessageResp
-	4,  // 20: pb.PeerService.SendToChannel:output_type -> pb.MessageResp
-	0,  // 21: pb.PeerService.SendRaftMessage:output_type -> pb.Empty
-	15, // [15:22] is the sub-list for method output_type
-	8,  // [8:15] is the sub-list for method input_type
+	9,  // 15: pb.PeerService.StartListener:input_type -> pb.StartReq
+	9,  // 16: pb.PeerService.StopListener:input_type -> pb.StartReq
+	8,  // 17: pb.PeerService.Inspect:output_type -> pb.Status
+	2,  // 18: pb.PeerService.IsOnline:output_type -> pb.IsOnlineResp
+	0,  // 19: pb.PeerService.KickConn:output_type -> pb.Empty
+	4,  // 20: pb.PeerService.SendToAll:output_type -> pb.MessageResp
+	4,  // 21: pb.PeerService.SendToUser:output_type -> pb.MessageResp
+	4,  // 22: pb.PeerService.SendToChannel:output_type -> pb.MessageResp
+	0,  // 23: pb.PeerService.SendRaftMessage:output_type -> pb.Empty
+	0,  // 24: pb.PeerService.StartListener:output_type -> pb.Empty
+	0,  // 25: pb.PeerService.StopListener:output_type -> pb.Empty
+	17, // [17:26] is the sub-list for method output_type
+	8,  // [8:17] is the sub-list for method input_type
 	8,  // [8:8] is the sub-list for extension type_name
 	8,  // [8:8] is the sub-list for extension extendee
 	0,  // [0:8] is the sub-list for field type_name
@@ -666,7 +719,7 @@ func file_cluster_pb_peer_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_cluster_pb_peer_proto_rawDesc), len(file_cluster_pb_peer_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   16,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

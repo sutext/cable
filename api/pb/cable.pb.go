@@ -543,6 +543,50 @@ func (x *ChannelsResp) GetChannels() map[string]string {
 	return nil
 }
 
+type ListenerReq struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Network       string                 `protobuf:"bytes,1,opt,name=network,proto3" json:"network,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListenerReq) Reset() {
+	*x = ListenerReq{}
+	mi := &file_api_pb_cable_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListenerReq) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListenerReq) ProtoMessage() {}
+
+func (x *ListenerReq) ProtoReflect() protoreflect.Message {
+	mi := &file_api_pb_cable_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListenerReq.ProtoReflect.Descriptor instead.
+func (*ListenerReq) Descriptor() ([]byte, []int) {
+	return file_api_pb_cable_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *ListenerReq) GetNetwork() string {
+	if x != nil {
+		return x.Network
+	}
+	return ""
+}
+
 var File_api_pb_cable_proto protoreflect.FileDescriptor
 
 const file_api_pb_cable_proto_rawDesc = "" +
@@ -583,7 +627,9 @@ const file_api_pb_cable_proto_rawDesc = "" +
 	"\bchannels\x18\x01 \x03(\v2\x1e.pb.ChannelsResp.ChannelsEntryR\bchannels\x1a;\n" +
 	"\rChannelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\xa5\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"'\n" +
+	"\vListenerReq\x12\x18\n" +
+	"\anetwork\x18\x01 \x01(\tR\anetwork2\x8a\x04\n" +
 	"\fCableService\x12)\n" +
 	"\bIsOnline\x12\v.pb.UserReq\x1a\x0e.pb.OnlineResp\"\x00\x12(\n" +
 	"\bKickUser\x12\v.pb.UserReq\x1a\r.pb.EmptyResp\"\x00\x12,\n" +
@@ -594,7 +640,9 @@ const file_api_pb_cable_proto_rawDesc = "" +
 	"\rSendToChannel\x12\x10.pb.ToChannelReq\x1a\v.pb.MsgResp\"\x00\x12+\n" +
 	"\vJoinChannel\x12\v.pb.JoinReq\x1a\r.pb.EmptyResp\"\x00\x12,\n" +
 	"\fLeaveChannel\x12\v.pb.JoinReq\x1a\r.pb.EmptyResp\"\x00\x12/\n" +
-	"\fListChannels\x12\v.pb.UserReq\x1a\x10.pb.ChannelsResp\"\x00B\x06Z\x04./pbb\x06proto3"
+	"\fListChannels\x12\v.pb.UserReq\x1a\x10.pb.ChannelsResp\"\x00\x121\n" +
+	"\rStartListener\x12\x0f.pb.ListenerReq\x1a\r.pb.EmptyResp\"\x00\x120\n" +
+	"\fStopListener\x12\x0f.pb.ListenerReq\x1a\r.pb.EmptyResp\"\x00B\x06Z\x04./pbb\x06proto3"
 
 var (
 	file_api_pb_cable_proto_rawDescOnce sync.Once
@@ -608,7 +656,7 @@ func file_api_pb_cable_proto_rawDescGZIP() []byte {
 	return file_api_pb_cable_proto_rawDescData
 }
 
-var file_api_pb_cable_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_api_pb_cable_proto_msgTypes = make([]protoimpl.MessageInfo, 13)
 var file_api_pb_cable_proto_goTypes = []any{
 	(*EmptyResp)(nil),    // 0: pb.EmptyResp
 	(*ToAllReq)(nil),     // 1: pb.ToAllReq
@@ -620,12 +668,13 @@ var file_api_pb_cable_proto_goTypes = []any{
 	(*KickNodeReq)(nil),  // 7: pb.KickNodeReq
 	(*OnlineResp)(nil),   // 8: pb.OnlineResp
 	(*ChannelsResp)(nil), // 9: pb.ChannelsResp
-	nil,                  // 10: pb.JoinReq.ChannelsEntry
-	nil,                  // 11: pb.ChannelsResp.ChannelsEntry
+	(*ListenerReq)(nil),  // 10: pb.ListenerReq
+	nil,                  // 11: pb.JoinReq.ChannelsEntry
+	nil,                  // 12: pb.ChannelsResp.ChannelsEntry
 }
 var file_api_pb_cable_proto_depIdxs = []int32{
-	10, // 0: pb.JoinReq.channels:type_name -> pb.JoinReq.ChannelsEntry
-	11, // 1: pb.ChannelsResp.channels:type_name -> pb.ChannelsResp.ChannelsEntry
+	11, // 0: pb.JoinReq.channels:type_name -> pb.JoinReq.ChannelsEntry
+	12, // 1: pb.ChannelsResp.channels:type_name -> pb.ChannelsResp.ChannelsEntry
 	6,  // 2: pb.CableService.IsOnline:input_type -> pb.UserReq
 	6,  // 3: pb.CableService.KickUser:input_type -> pb.UserReq
 	7,  // 4: pb.CableService.KickNode:input_type -> pb.KickNodeReq
@@ -635,17 +684,21 @@ var file_api_pb_cable_proto_depIdxs = []int32{
 	5,  // 8: pb.CableService.JoinChannel:input_type -> pb.JoinReq
 	5,  // 9: pb.CableService.LeaveChannel:input_type -> pb.JoinReq
 	6,  // 10: pb.CableService.ListChannels:input_type -> pb.UserReq
-	8,  // 11: pb.CableService.IsOnline:output_type -> pb.OnlineResp
-	0,  // 12: pb.CableService.KickUser:output_type -> pb.EmptyResp
-	0,  // 13: pb.CableService.KickNode:output_type -> pb.EmptyResp
-	4,  // 14: pb.CableService.SendToAll:output_type -> pb.MsgResp
-	4,  // 15: pb.CableService.SendToUser:output_type -> pb.MsgResp
-	4,  // 16: pb.CableService.SendToChannel:output_type -> pb.MsgResp
-	0,  // 17: pb.CableService.JoinChannel:output_type -> pb.EmptyResp
-	0,  // 18: pb.CableService.LeaveChannel:output_type -> pb.EmptyResp
-	9,  // 19: pb.CableService.ListChannels:output_type -> pb.ChannelsResp
-	11, // [11:20] is the sub-list for method output_type
-	2,  // [2:11] is the sub-list for method input_type
+	10, // 11: pb.CableService.StartListener:input_type -> pb.ListenerReq
+	10, // 12: pb.CableService.StopListener:input_type -> pb.ListenerReq
+	8,  // 13: pb.CableService.IsOnline:output_type -> pb.OnlineResp
+	0,  // 14: pb.CableService.KickUser:output_type -> pb.EmptyResp
+	0,  // 15: pb.CableService.KickNode:output_type -> pb.EmptyResp
+	4,  // 16: pb.CableService.SendToAll:output_type -> pb.MsgResp
+	4,  // 17: pb.CableService.SendToUser:output_type -> pb.MsgResp
+	4,  // 18: pb.CableService.SendToChannel:output_type -> pb.MsgResp
+	0,  // 19: pb.CableService.JoinChannel:output_type -> pb.EmptyResp
+	0,  // 20: pb.CableService.LeaveChannel:output_type -> pb.EmptyResp
+	9,  // 21: pb.CableService.ListChannels:output_type -> pb.ChannelsResp
+	0,  // 22: pb.CableService.StartListener:output_type -> pb.EmptyResp
+	0,  // 23: pb.CableService.StopListener:output_type -> pb.EmptyResp
+	13, // [13:24] is the sub-list for method output_type
+	2,  // [2:13] is the sub-list for method input_type
 	2,  // [2:2] is the sub-list for extension type_name
 	2,  // [2:2] is the sub-list for extension extendee
 	0,  // [0:2] is the sub-list for field type_name
@@ -662,7 +715,7 @@ func file_api_pb_cable_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_pb_cable_proto_rawDesc), len(file_api_pb_cable_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   13,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

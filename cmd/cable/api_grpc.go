@@ -131,3 +131,11 @@ func (s *grpcServer) ListChannels(ctx context.Context, req *pb.UserReq) (*pb.Cha
 		Channels: channels,
 	}, nil
 }
+func (s *grpcServer) StartListener(ctx context.Context, req *pb.ListenerReq) (*pb.EmptyResp, error) {
+	err := s.broker.StartListener(ctx, req.Network)
+	return &pb.EmptyResp{}, err
+}
+func (s *grpcServer) StopListener(ctx context.Context, req *pb.ListenerReq) (*pb.EmptyResp, error) {
+	err := s.broker.StopListener(ctx, req.Network)
+	return &pb.EmptyResp{}, err
+}

@@ -197,10 +197,9 @@ func (c *cluster) GetPeer(id uint64) (*peerClient, bool) {
 //
 // Parameters:
 // - f: Function to apply to each peer client
-func (c *cluster) RangePeers(f func(uint64, *peerClient)) {
+func (c *cluster) RangePeers(f func(uint64, *peerClient) bool) {
 	c.peers.Range(func(key uint64, value *peerClient) bool {
-		f(key, value)
-		return true
+		return f(key, value)
 	})
 }
 

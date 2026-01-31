@@ -5,6 +5,7 @@ package cluster
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -140,6 +141,24 @@ type Broker interface {
 	// Returns:
 	// - error: Error if registration fails, nil otherwise
 	HandleRequest(method string, handler server.RequestHandler)
+	// StartListener starts a listener for the given network.
+	//
+	// Parameters:
+	// - ctx: Context for the operation
+	// - network: Network to start the listener for
+	//
+	// Returns:
+	// - error: Error if starting the listener fails, nil otherwise
+	StartListener(ctx context.Context, network string) error
+	// StopListener stops a listener for the given network.
+	//
+	// Parameters:
+	// - ctx: Context for the operation
+	// - network: Network to stop the listener for
+	//
+	// Returns:
+	// - error: Error if stopping the listener fails, nil otherwise
+	StopListener(ctx context.Context, network string) error
 }
 
 // broker implements the Broker interface and manages client connections, channels, and message routing.
@@ -261,7 +280,7 @@ func (b *broker) Inspects(ctx context.Context) ([]*pb.Status, error) {
 	ss := make([]*pb.Status, 0, b.cluster.size)
 	ss = append(ss, b.inspect())
 	wg := sync.WaitGroup{}
-	b.cluster.RangePeers(func(id uint64, cli *peerClient) {
+	b.cluster.RangePeers(func(id uint64, cli *peerClient) bool {
 		wg.Go(func() {
 			s, err := cli.inspect(ctx)
 			if err != nil {
@@ -270,6 +289,7 @@ func (b *broker) Inspects(ctx context.Context) ([]*pb.Status, error) {
 			}
 			ss = append(ss, s)
 		})
+		return true
 	})
 	wg.Wait()
 	return ss, nil
@@ -358,7 +378,7 @@ func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (int32, int32
 		total.Add(t)
 		success.Add(s)
 	})
-	b.cluster.RangePeers(func(id uint64, peer *peerClient) {
+	b.cluster.RangePeers(func(id uint64, peer *peerClient) bool {
 		wg.Go(func() {
 			if t, s, err := peer.sendToAll(ctx, m); err == nil {
 				total.Add(t)
@@ -367,6 +387,7 @@ func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (int32, int32
 				b.logger.Error("send to all from peer failed", xlog.Peer(id), xlog.Err(err))
 			}
 		})
+		return true
 	})
 	wg.Wait()
 	return total.Load(), success.Load(), nil
@@ -510,6 +531,32 @@ func (b *broker) ListUsers(ctx context.Context, brokerID uint64) (map[string]map
 		return true
 	})
 	return users, nil
+}
+func (b *broker) StartListener(ctx context.Context, network string) error {
+	err := b.startListener(network)
+	if err != nil {
+		return err
+	}
+	b.cluster.RangePeers(func(id uint64, peer *peerClient) bool {
+		if err = peer.startListener(ctx, network); err != nil {
+			return false
+		}
+		return true
+	})
+	return err
+}
+func (b *broker) StopListener(ctx context.Context, network string) error {
+	err := b.stopListener(network)
+	if err != nil {
+		return err
+	}
+	b.cluster.RangePeers(func(id uint64, peer *peerClient) bool {
+		if err = peer.stopListener(ctx, network); err != nil {
+			return false
+		}
+		return true
+	})
+	return err
 }
 
 // HandleRequest registers a handler for a specific request method.
@@ -693,6 +740,21 @@ func (b *broker) kickConn(targets map[string]string) {
 			l.KickConn(cid)
 		}
 	}
+}
+func (b *broker) startListener(network string) error {
+	l, ok := b.listeners[network]
+	if !ok {
+		return fmt.Errorf("listener for network %s not found", network)
+	}
+	l.Start()
+	return nil
+}
+func (b *broker) stopListener(network string) error {
+	l, ok := b.listeners[network]
+	if !ok {
+		return fmt.Errorf("listener for network %s not found", network)
+	}
+	return l.Shutdown(context.Background())
 }
 
 // sendToAll sends a message to all local clients.

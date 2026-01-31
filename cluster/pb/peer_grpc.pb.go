@@ -26,6 +26,8 @@ const (
 	PeerService_SendToUser_FullMethodName      = "/pb.PeerService/SendToUser"
 	PeerService_SendToChannel_FullMethodName   = "/pb.PeerService/SendToChannel"
 	PeerService_SendRaftMessage_FullMethodName = "/pb.PeerService/SendRaftMessage"
+	PeerService_StartListener_FullMethodName   = "/pb.PeerService/StartListener"
+	PeerService_StopListener_FullMethodName    = "/pb.PeerService/StopListener"
 )
 
 // PeerServiceClient is the client API for PeerService service.
@@ -50,6 +52,10 @@ type PeerServiceClient interface {
 	SendToChannel(ctx context.Context, in *MessageReq, opts ...grpc.CallOption) (*MessageResp, error)
 	// SendRaftMessage handles a Raft message from another node
 	SendRaftMessage(ctx context.Context, in *RaftMessage, opts ...grpc.CallOption) (*Empty, error)
+	// StartListener starts a listener of specified network
+	StartListener(ctx context.Context, in *StartReq, opts ...grpc.CallOption) (*Empty, error)
+	// StopListener stops a listener of specified network
+	StopListener(ctx context.Context, in *StartReq, opts ...grpc.CallOption) (*Empty, error)
 }
 
 type peerServiceClient struct {
@@ -130,6 +136,26 @@ func (c *peerServiceClient) SendRaftMessage(ctx context.Context, in *RaftMessage
 	return out, nil
 }
 
+func (c *peerServiceClient) StartListener(ctx context.Context, in *StartReq, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, PeerService_StartListener_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *peerServiceClient) StopListener(ctx context.Context, in *StartReq, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, PeerService_StopListener_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PeerServiceServer is the server API for PeerService service.
 // All implementations must embed UnimplementedPeerServiceServer
 // for forward compatibility.
@@ -152,6 +178,10 @@ type PeerServiceServer interface {
 	SendToChannel(context.Context, *MessageReq) (*MessageResp, error)
 	// SendRaftMessage handles a Raft message from another node
 	SendRaftMessage(context.Context, *RaftMessage) (*Empty, error)
+	// StartListener starts a listener of specified network
+	StartListener(context.Context, *StartReq) (*Empty, error)
+	// StopListener stops a listener of specified network
+	StopListener(context.Context, *StartReq) (*Empty, error)
 	mustEmbedUnimplementedPeerServiceServer()
 }
 
@@ -182,6 +212,12 @@ func (UnimplementedPeerServiceServer) SendToChannel(context.Context, *MessageReq
 }
 func (UnimplementedPeerServiceServer) SendRaftMessage(context.Context, *RaftMessage) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method SendRaftMessage not implemented")
+}
+func (UnimplementedPeerServiceServer) StartListener(context.Context, *StartReq) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartListener not implemented")
+}
+func (UnimplementedPeerServiceServer) StopListener(context.Context, *StartReq) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method StopListener not implemented")
 }
 func (UnimplementedPeerServiceServer) mustEmbedUnimplementedPeerServiceServer() {}
 func (UnimplementedPeerServiceServer) testEmbeddedByValue()                     {}
@@ -330,6 +366,42 @@ func _PeerService_SendRaftMessage_Handler(srv interface{}, ctx context.Context, 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PeerService_StartListener_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PeerServiceServer).StartListener(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PeerService_StartListener_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PeerServiceServer).StartListener(ctx, req.(*StartReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PeerService_StopListener_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PeerServiceServer).StopListener(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PeerService_StopListener_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PeerServiceServer).StopListener(ctx, req.(*StartReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PeerService_ServiceDesc is the grpc.ServiceDesc for PeerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -364,6 +436,14 @@ var PeerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SendRaftMessage",
 			Handler:    _PeerService_SendRaftMessage_Handler,
+		},
+		{
+			MethodName: "StartListener",
+			Handler:    _PeerService_StartListener_Handler,
+		},
+		{
+			MethodName: "StopListener",
+			Handler:    _PeerService_StopListener_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

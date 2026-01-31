@@ -195,3 +195,11 @@ func (s *peerServer) SendRaftMessage(ctx context.Context, req *pb.RaftMessage) (
 	}
 	return &pb.Empty{}, nil
 }
+func (s *peerServer) StartListener(ctx context.Context, req *pb.StartReq) (*pb.Empty, error) {
+	err := s.broker.startListener(req.Network)
+	return &pb.Empty{}, err
+}
+func (s *peerServer) StopListener(ctx context.Context, req *pb.StartReq) (*pb.Empty, error) {
+	err := s.broker.stopListener(req.Network)
+	return &pb.Empty{}, err
+}

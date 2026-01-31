@@ -28,6 +28,8 @@ const (
 	CableService_JoinChannel_FullMethodName   = "/pb.CableService/JoinChannel"
 	CableService_LeaveChannel_FullMethodName  = "/pb.CableService/LeaveChannel"
 	CableService_ListChannels_FullMethodName  = "/pb.CableService/ListChannels"
+	CableService_StartListener_FullMethodName = "/pb.CableService/StartListener"
+	CableService_StopListener_FullMethodName  = "/pb.CableService/StopListener"
 )
 
 // CableServiceClient is the client API for CableService service.
@@ -54,6 +56,10 @@ type CableServiceClient interface {
 	LeaveChannel(ctx context.Context, in *JoinReq, opts ...grpc.CallOption) (*EmptyResp, error)
 	// ListChannels lists all channels a user is joined.
 	ListChannels(ctx context.Context, in *UserReq, opts ...grpc.CallOption) (*ChannelsResp, error)
+	// StartListener starts a listener of specific network.
+	StartListener(ctx context.Context, in *ListenerReq, opts ...grpc.CallOption) (*EmptyResp, error)
+	// StopListener stops a listener of specific network.
+	StopListener(ctx context.Context, in *ListenerReq, opts ...grpc.CallOption) (*EmptyResp, error)
 }
 
 type cableServiceClient struct {
@@ -154,6 +160,26 @@ func (c *cableServiceClient) ListChannels(ctx context.Context, in *UserReq, opts
 	return out, nil
 }
 
+func (c *cableServiceClient) StartListener(ctx context.Context, in *ListenerReq, opts ...grpc.CallOption) (*EmptyResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EmptyResp)
+	err := c.cc.Invoke(ctx, CableService_StartListener_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *cableServiceClient) StopListener(ctx context.Context, in *ListenerReq, opts ...grpc.CallOption) (*EmptyResp, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(EmptyResp)
+	err := c.cc.Invoke(ctx, CableService_StopListener_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CableServiceServer is the server API for CableService service.
 // All implementations must embed UnimplementedCableServiceServer
 // for forward compatibility.
@@ -178,6 +204,10 @@ type CableServiceServer interface {
 	LeaveChannel(context.Context, *JoinReq) (*EmptyResp, error)
 	// ListChannels lists all channels a user is joined.
 	ListChannels(context.Context, *UserReq) (*ChannelsResp, error)
+	// StartListener starts a listener of specific network.
+	StartListener(context.Context, *ListenerReq) (*EmptyResp, error)
+	// StopListener stops a listener of specific network.
+	StopListener(context.Context, *ListenerReq) (*EmptyResp, error)
 	mustEmbedUnimplementedCableServiceServer()
 }
 
@@ -214,6 +244,12 @@ func (UnimplementedCableServiceServer) LeaveChannel(context.Context, *JoinReq) (
 }
 func (UnimplementedCableServiceServer) ListChannels(context.Context, *UserReq) (*ChannelsResp, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListChannels not implemented")
+}
+func (UnimplementedCableServiceServer) StartListener(context.Context, *ListenerReq) (*EmptyResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method StartListener not implemented")
+}
+func (UnimplementedCableServiceServer) StopListener(context.Context, *ListenerReq) (*EmptyResp, error) {
+	return nil, status.Error(codes.Unimplemented, "method StopListener not implemented")
 }
 func (UnimplementedCableServiceServer) mustEmbedUnimplementedCableServiceServer() {}
 func (UnimplementedCableServiceServer) testEmbeddedByValue()                      {}
@@ -398,6 +434,42 @@ func _CableService_ListChannels_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CableService_StartListener_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListenerReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CableServiceServer).StartListener(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CableService_StartListener_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CableServiceServer).StartListener(ctx, req.(*ListenerReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CableService_StopListener_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListenerReq)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CableServiceServer).StopListener(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CableService_StopListener_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CableServiceServer).StopListener(ctx, req.(*ListenerReq))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // CableService_ServiceDesc is the grpc.ServiceDesc for CableService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -440,6 +512,14 @@ var CableService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListChannels",
 			Handler:    _CableService_ListChannels_Handler,
+		},
+		{
+			MethodName: "StartListener",
+			Handler:    _CableService_StartListener_Handler,
+		},
+		{
+			MethodName: "StopListener",
+			Handler:    _CableService_StopListener_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
