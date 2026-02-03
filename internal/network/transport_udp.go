@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/stats"
 	"sutext.github.io/cable/xlog"
 )
 
@@ -63,14 +64,28 @@ func (l *transportUDP) handleConn(conn *net.UDPConn, addr *net.UDPAddr, p packet
 			l.logger.Warn("unknown udp clientID", xlog.Str("clientID", cid))
 			return
 		}
-		go l.delegate.OnPacket(c, p)
+		go c.RecvPacket(p)
 		return
+	}
+	ctx := context.Background()
+	var err error
+	handler := l.delegate.StatsHandler()
+	if handler != nil {
+		beginTime := time.Now()
+		ctx = handler.ConnectBegin(ctx, &stats.ConnBegin{
+			BeginTime: beginTime,
+		})
+		defer handler.ConnectEnd(ctx, &stats.ConnEnd{
+			BeginTime: beginTime,
+			EndTime:   time.Now(),
+			Error:     err,
+		})
 	}
 	connPacket := p.(*packet.Connect)
 	uc := newUDPConn(connPacket.Identity, conn, addr)
 	c := newConn(uc, l.delegate)
-	if err := l.delegate.OnConnect(c, connPacket); err != nil {
-		l.logger.Error("connect error", xlog.Err(err))
+	if code := l.delegate.OnConnect(ctx, c, connPacket); code != packet.ConnectAccepted {
+		err = code
 		return
 	}
 	uc.ping = newPinger(c, time.Second*25, time.Second*5)

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/stats"
 	"sutext.github.io/cable/xlog"
 )
 
@@ -58,30 +59,10 @@ func (l *transportTCP) Listen(address string) error {
 		go l.handleConn(conn)
 	}
 }
+
 func (l *transportTCP) handleConn(conn net.Conn) {
-	timer := time.AfterFunc(time.Second*10, func() {
-		l.logger.Warn("waite conn packet timeout")
-		packet.WriteTo(conn, packet.NewClose(packet.CloseAuthTimeout))
-		conn.Close()
-	})
-	p, err := packet.ReadFrom(conn)
-	timer.Stop()
+	c, err := l.doConnecton(conn)
 	if err != nil {
-		l.logger.Error("failed to read packet", xlog.Err(err))
-		packet.WriteTo(conn, packet.NewClose(packet.AsCloseCode(err)))
-		conn.Close()
-		return
-	}
-	if p.Type() != packet.CONNECT {
-		l.logger.Error("first packet is not connect packet", xlog.Str("packetType", p.Type().String()))
-		packet.WriteTo(conn, packet.NewClose(packet.AsCloseCode(err)))
-		conn.Close()
-		return
-	}
-	connPacket := p.(*packet.Connect)
-	c := newTCPConn(connPacket.Identity, getAddrIp(conn.RemoteAddr().String()), conn, l.delegate)
-	if err := l.delegate.OnConnect(c, connPacket); err != nil {
-		l.logger.Error("connect error", xlog.Err(err))
 		return
 	}
 	for {
@@ -90,8 +71,35 @@ func (l *transportTCP) handleConn(conn net.Conn) {
 			c.CloseCode(packet.AsCloseCode(err))
 			return
 		}
-		go l.delegate.OnPacket(c, p)
+		go c.RecvPacket(p)
 	}
+}
+func (l *transportTCP) doConnecton(conn net.Conn) (Conn, error) {
+	ctx := context.Background()
+	var err error
+	handler := l.delegate.StatsHandler()
+	if handler != nil {
+		beginTime := time.Now()
+		ctx = handler.ConnectBegin(ctx, &stats.ConnBegin{
+			BeginTime: beginTime,
+		})
+		defer handler.ConnectEnd(ctx, &stats.ConnEnd{
+			BeginTime: beginTime,
+			EndTime:   time.Now(),
+			Error:     err,
+		})
+	}
+	var connPacket *packet.Connect
+	connPacket, err = waitConnPacket(ctx, conn, l.delegate)
+	if err != nil {
+		return nil, err
+	}
+	c := newTCPConn(connPacket.Identity, getAddrIp(conn.RemoteAddr().String()), conn, l.delegate)
+	code := l.delegate.OnConnect(ctx, c, connPacket)
+	if code != packet.ConnectAccepted {
+		return nil, code
+	}
+	return c, nil
 }
 
 type tcpConn struct {
@@ -109,7 +117,6 @@ func (c *tcpConn) IP() string {
 func (c *tcpConn) Close() error {
 	return c.raw.Close()
 }
-
 func (c *tcpConn) WriteData(data []byte) error {
 	_, err := c.raw.Write(data)
 	return err

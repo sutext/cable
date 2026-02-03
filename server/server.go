@@ -57,6 +57,7 @@ type server struct {
 	address        string                          // Server address to listen on
 	network        string                          // Network protocol
 	transport      network.Transport               // Network transport implementation
+	connTimeout    int32                           // Connection timeout in seconds
 	queueCapacity  int32                           // Maximum sending queue capacity
 	statsHandler   stats.Handler                   // Handler for statistics events
 	closeHandler   ClosedHandler                   // Handler for connection close events
@@ -74,7 +75,7 @@ type server struct {
 // Returns:
 // - Server: A new Server instance
 func New(address string, opts ...Option) Server {
-	options := NewOptions(opts...)
+	options := newOptions(opts...)
 	s := &server{
 		logger:         options.logger,
 		address:        address,
@@ -349,76 +350,14 @@ func (s *server) Logger() *xlog.Logger {
 func (s *server) GetConn(cid string) (network.Conn, bool) {
 	return s.conns.Get(cid)
 }
+func (s *server) ConnTimeout() int32 {
+	return s.connTimeout
+}
 func (s *server) QueueCapacity() int32 {
 	return s.queueCapacity
 }
 func (s *server) StatsHandler() stats.Handler {
 	return s.statsHandler
-}
-
-// OnConnect handles new client connections.
-//
-// Parameters:
-// - p: Connect packet from client
-// - c: Connection that was accepted
-func (s *server) OnConnect(c network.Conn, p *packet.Connect) error {
-	ctx := context.Background()
-	var err error
-	var code packet.ConnectCode
-	if s.statsHandler != nil {
-		beginTime := time.Now()
-		ctx = s.statsHandler.ConnectBegin(ctx, &stats.ConnBegin{
-			BeginTime: beginTime,
-		})
-		defer s.statsHandler.ConnectEnd(ctx, &stats.ConnEnd{
-			BeginTime: beginTime,
-			EndTime:   time.Now(),
-			Error:     err,
-			Code:      code,
-		})
-	}
-	code = s.connectHandler(ctx, p)
-	if code != packet.ConnectAccepted {
-		c.ConnackCode(code)
-		c.Close()
-		err = code
-		s.logger.Error("failed to handle connect", xlog.Err(err), xlog.Uid(p.Identity.UserID), xlog.Cid(p.Identity.ClientID))
-		return err
-	}
-	if old, loaded := s.conns.Swap(p.Identity.ClientID, c); loaded {
-		old.CloseCode(packet.CloseDuplicateLogin)
-	}
-	c.ConnackCode(packet.ConnectAccepted)
-	return nil
-}
-
-// OnPacket handles incoming packets from clients.
-//
-// Parameters:
-// - p: Packet received from client
-// - c: Connection that received the packet
-func (s *server) OnPacket(c network.Conn, p packet.Packet) {
-	if s.closed.Load() {
-		return
-	}
-	switch p.Type() {
-	case packet.MESSAGE:
-		s.onMessage(c, p.(*packet.Message))
-	case packet.MESSACK:
-		c.RecvMessack(p.(*packet.Messack))
-	case packet.REQUEST:
-		s.onRequest(c, p.(*packet.Request))
-	case packet.RESPONSE:
-		c.RecvResponse(p.(*packet.Response))
-	case packet.PING:
-		c.SendPong()
-	case packet.PONG:
-		c.RecvPong()
-	case packet.CLOSE:
-		c.Close()
-	default:
-		break
-	}
 }
 
 // OnClose handles connection close events.
@@ -438,13 +377,31 @@ func (s *server) OnClose(c network.Conn) {
 	}
 }
 
-// onMessage handles incoming message packets from clients.
+// OnConnect handles new client connections.
+//
+// Parameters:
+// - p: Connect packet from client
+// - c: Connection that was accepted
+func (s *server) OnConnect(ctx context.Context, c network.Conn, p *packet.Connect) packet.ConnectCode {
+	code := s.connectHandler(ctx, p)
+	if code != packet.ConnectAccepted {
+		c.ConnackCode(code)
+		c.Close()
+		return code
+	}
+	if old, loaded := s.conns.Swap(p.Identity.ClientID, c); loaded {
+		old.CloseCode(packet.CloseDuplicateLogin)
+	}
+	c.ConnackCode(packet.ConnectAccepted)
+	return code
+}
+
+// OnMessage handles incoming message packets from clients.
 //
 // Parameters:
 // - c: Connection that received the message
 // - p: Message packet received
-func (s *server) onMessage(c network.Conn, p *packet.Message) {
-	ctx := context.Background()
+func (s *server) OnMessage(ctx context.Context, c network.Conn, p *packet.Message) {
 	var err error
 	if s.statsHandler != nil {
 		beginTime := time.Now()
@@ -481,8 +438,7 @@ func (s *server) onMessage(c network.Conn, p *packet.Message) {
 // Parameters:
 // - c: Connection that received the request
 // - p: Request packet received
-func (s *server) onRequest(c network.Conn, p *packet.Request) {
-	ctx := context.Background()
+func (s *server) OnRequest(ctx context.Context, c network.Conn, p *packet.Request) {
 	var err error
 	var res *packet.Response
 	if s.statsHandler != nil {

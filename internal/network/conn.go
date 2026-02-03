@@ -3,6 +3,7 @@ package network
 import (
 	"context"
 	"crypto/tls"
+	"io"
 	"math"
 	"net/http"
 	"strings"
@@ -28,8 +29,10 @@ type delegate interface {
 	Logger() *xlog.Logger
 	GetConn(cid string) (Conn, bool)
 	OnClose(c Conn)
-	OnPacket(c Conn, p packet.Packet)
-	OnConnect(c Conn, p *packet.Connect) error
+	OnConnect(ctx context.Context, c Conn, p *packet.Connect) packet.ConnectCode
+	OnMessage(ctx context.Context, c Conn, p *packet.Message)
+	OnRequest(ctx context.Context, c Conn, p *packet.Request)
+	ConnTimeout() int32
 	QueueCapacity() int32
 	StatsHandler() stats.Handler
 }
@@ -43,16 +46,13 @@ type Conn interface {
 	Close() error
 	IsIdle() bool
 	IsClosed() bool
-	SendPong() error
-	RecvPong()
 	SendPing(ctx context.Context) error
+	RecvPacket(p packet.Packet)
 	CloseCode(code packet.CloseCode) error
 	ConnackCode(code packet.ConnectCode) error
 	SendPacket(ctx context.Context, p packet.Packet) error
 	SendMessage(ctx context.Context, p *packet.Message) error
 	SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error)
-	RecvMessack(p *packet.Messack)
-	RecvResponse(p *packet.Response)
 }
 type conn struct {
 	raw          rawconn
@@ -197,14 +197,37 @@ func (c *conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Resp
 		return nil, ctx.Err()
 	}
 }
-func (c *conn) RecvPong() {
+func (c *conn) RecvPacket(p packet.Packet) {
+	if c.closed.Load() {
+		return
+	}
+	switch p.Type() {
+	case packet.MESSAGE:
+		c.delegate.OnMessage(context.Background(), c, p.(*packet.Message))
+	case packet.MESSACK:
+		c.recvMessack(p.(*packet.Messack))
+	case packet.REQUEST:
+		c.delegate.OnRequest(context.Background(), c, p.(*packet.Request))
+	case packet.RESPONSE:
+		c.recvResponse(p.(*packet.Response))
+	case packet.PING:
+		c.SendPong()
+	case packet.PONG:
+		c.recvPong()
+	case packet.CLOSE:
+		c.Close()
+	default:
+		break
+	}
+}
+func (c *conn) recvPong() {
 	c.pingLock.Lock()
 	if c.pingChan != nil {
 		c.pingChan <- struct{}{}
 	}
 	c.pingLock.Unlock()
 }
-func (c *conn) RecvMessack(p *packet.Messack) {
+func (c *conn) recvMessack(p *packet.Messack) {
 	c.messageLock.Lock()
 	ch, ok := c.messageTasks[p.ID()]
 	if ok {
@@ -215,7 +238,7 @@ func (c *conn) RecvMessack(p *packet.Messack) {
 		c.logger.Error("message task not found", xlog.U16("id", p.ID()))
 	}
 }
-func (c *conn) RecvResponse(p *packet.Response) {
+func (c *conn) recvResponse(p *packet.Response) {
 	c.requestLock.Lock()
 	ch, ok := c.requestTasks[p.ID()]
 	if ok {
@@ -270,6 +293,7 @@ func (c *conn) SendPacket(ctx context.Context, p packet.Packet) error {
 	}
 	return nil
 }
+
 func (c *conn) jumpPacket(ctx context.Context, p packet.Packet) error {
 	if c.IsClosed() {
 		return xerr.ConnectionIsClosed
@@ -346,4 +370,27 @@ func (p *pinger) SendPing() {
 			p.conn.CloseCode(packet.ClosePingTimeOut)
 		}
 	}
+}
+func waitConnPacket(ctx context.Context, conn io.ReadWriteCloser, d delegate) (*packet.Connect, error) {
+	l := d.Logger()
+	timer := time.AfterFunc(time.Second*time.Duration(d.ConnTimeout()), func() {
+		l.Error("waite conn packet timeout")
+		packet.WriteTo(conn, packet.NewClose(packet.CloseAuthTimeout))
+		conn.Close()
+	})
+	p, err := packet.ReadFrom(conn)
+	timer.Stop()
+	if err != nil {
+		l.Error("failed to read packet", xlog.Err(err))
+		packet.WriteTo(conn, packet.NewClose(packet.AsCloseCode(err)))
+		conn.Close()
+		return nil, err
+	}
+	if p.Type() != packet.CONNECT {
+		l.Error("first packet is not connect packet", xlog.Str("packetType", p.Type().String()))
+		packet.WriteTo(conn, packet.NewClose(packet.CloseInvalidPacket))
+		conn.Close()
+		return nil, packet.CloseInvalidPacket
+	}
+	return p.(*packet.Connect), nil
 }

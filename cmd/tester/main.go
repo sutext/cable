@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"log/slog"
 	"math/rand/v2"
 	"os"
 	"time"
@@ -91,19 +90,8 @@ func (c *config) validate() error {
 	}
 	return nil
 }
-func (c *config) Level() slog.Level {
-	switch c.LogLevel {
-	case "debug":
-		return slog.LevelDebug
-	case "info":
-		return slog.LevelInfo
-	case "warn":
-		return slog.LevelWarn
-	case "error":
-		return slog.LevelError
-	default:
-		return slog.LevelInfo
-	}
+func (c *config) Level() xlog.Level {
+	return xlog.ParseLevel(c.LogLevel)
 }
 func (c *config) randomUserID() string {
 	return fmt.Sprintf("u%d", rand.IntN(c.MaxUserID))
@@ -212,9 +200,9 @@ func main() {
 	}
 	var logger *xlog.Logger
 	if conf.LogFormat == "json" {
-		logger = xlog.NewJSON(conf.Level().Level())
+		logger = xlog.NewJSON(conf.Level())
 	} else {
-		logger = xlog.NewText(conf.Level().Level())
+		logger = xlog.NewText(conf.Level())
 	}
 	var clients safe.RMap[string, *Client]
 	xlog.SetDefault(logger)

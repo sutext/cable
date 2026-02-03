@@ -233,7 +233,7 @@ func (s *statistics) ConnectEnd(ctx context.Context, info *stats.ConnEnd) {
 		s.onlineUsers.Add(ctx, 1)
 	}
 	elapsedTime := float64(info.EndTime.Sub(info.BeginTime)) / float64(time.Millisecond)
-	s.connectDuration.Record(ctx, elapsedTime, attribute.String("ack_code", info.Code.String()))
+	s.connectDuration.Record(ctx, elapsedTime)
 }
 func (s *statistics) Disconnect(ctx context.Context) {
 	s.onlineUsers.Add(ctx, -1)

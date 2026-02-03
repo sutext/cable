@@ -9,6 +9,7 @@ import (
 
 	"golang.org/x/net/websocket"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/stats"
 	"sutext.github.io/cable/xlog"
 )
 
@@ -59,30 +60,8 @@ func (l *transportWebSocket) Listen(address string) error {
 	return l.httpServer.ListenAndServe()
 }
 func (l *transportWebSocket) handleConn(conn *websocket.Conn) {
-	timer := time.AfterFunc(time.Second*10, func() {
-		l.logger.Warn("waite conn packet timeout")
-		packet.WriteTo(conn, packet.NewClose(packet.CloseAuthTimeout))
-		conn.Close()
-	})
-	p, err := packet.ReadFrom(conn)
-	timer.Stop()
+	c, err := l.doConnecton(conn)
 	if err != nil {
-		l.logger.Error("failed to read packet", xlog.Err(err))
-		packet.WriteTo(conn, packet.NewClose(packet.AsCloseCode(err)))
-		conn.Close()
-		return
-	}
-	if p.Type() != packet.CONNECT {
-		l.logger.Error("first packet is not connect packet", xlog.Str("packetType", p.Type().String()))
-		packet.WriteTo(conn, packet.NewClose(packet.AsCloseCode(err)))
-		conn.Close()
-		return
-	}
-	connPacket := p.(*packet.Connect)
-	realIp := getRealIP(conn.Request())
-	c := newWSConn(connPacket.Identity, realIp, conn, l.delegate)
-	if err := l.delegate.OnConnect(c, connPacket); err != nil {
-		l.logger.Error("connect error", xlog.Err(err))
 		return
 	}
 	for {
@@ -91,8 +70,36 @@ func (l *transportWebSocket) handleConn(conn *websocket.Conn) {
 			c.CloseCode(packet.AsCloseCode(err))
 			return
 		}
-		go l.delegate.OnPacket(c, p)
+		go c.RecvPacket(p)
 	}
+}
+func (l *transportWebSocket) doConnecton(conn *websocket.Conn) (Conn, error) {
+	ctx := context.Background()
+	var err error
+	handler := l.delegate.StatsHandler()
+	if handler != nil {
+		beginTime := time.Now()
+		ctx = handler.ConnectBegin(ctx, &stats.ConnBegin{
+			BeginTime: beginTime,
+		})
+		defer handler.ConnectEnd(ctx, &stats.ConnEnd{
+			BeginTime: beginTime,
+			EndTime:   time.Now(),
+			Error:     err,
+		})
+	}
+	var connPacket *packet.Connect
+	connPacket, err = waitConnPacket(ctx, conn, l.delegate)
+	if err != nil {
+		return nil, err
+	}
+	realIp := getRealIP(conn.Request())
+	c := newWSConn(connPacket.Identity, realIp, conn, l.delegate)
+	code := l.delegate.OnConnect(ctx, c, connPacket)
+	if code != packet.ConnectAccepted {
+		return nil, code
+	}
+	return c, nil
 }
 
 type wsConn struct {

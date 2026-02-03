@@ -39,17 +39,35 @@ func Error(msg string, fields ...slog.Attr) {
 
 // Logger wraps a slog.Logger with additional functionality.
 type Logger struct {
-	json bool         // Whether the logger uses JSON format
-	s    *slog.Logger // Underlying slog.Logger instance
+	s *slog.Logger // Underlying slog.Logger instance
 }
+type Level int
 
 // Log level constants.
 const (
-	LevelDebug slog.Level = slog.LevelDebug // Debug level logging
-	LevelInfo  slog.Level = slog.LevelInfo  // Info level logging
-	LevelWarn  slog.Level = slog.LevelWarn  // Warning level logging
-	LevelError slog.Level = slog.LevelError // Error level logging
+	LevelDebug Level = 0  // Debug level logging
+	LevelInfo  Level = 2  // Info level logging
+	LevelWarn  Level = 4  // Warning level logging
+	LevelError Level = 8  // Error level logging
+	LevelFatal Level = 16 // Fatal level logging
 )
+
+func (l Level) slevel() slog.Level {
+	switch l {
+	case LevelDebug:
+		return slog.LevelDebug
+	case LevelInfo:
+		return slog.LevelInfo
+	case LevelWarn:
+		return slog.LevelWarn
+	case LevelError:
+		return slog.LevelError
+	case LevelFatal:
+		return slog.Level(LevelFatal)
+	default:
+		return slog.LevelInfo
+	}
+}
 
 // Re-exported slog attribute constructors for convenience.
 var (
@@ -124,42 +142,42 @@ func With(args ...any) *Logger {
 	return Defualt().With(args...)
 }
 
-// WithLevel creates a new logger with the specified level based on the default logger.
-func WithLevel(level slog.Level) *Logger {
-	return Defualt().WithLevel(level)
-}
-
 // ParseLevel parses a string level into a slog.Level.
 // Returns LevelInfo for unknown levels.
-func ParseLevel(level string) slog.Level {
+func ParseLevel(level string) Level {
 	switch level {
 	case "debug":
-		return slog.LevelDebug
+		return LevelDebug
 	case "info":
-		return slog.LevelInfo
+		return LevelInfo
 	case "warn":
-		return slog.LevelWarn
+		return LevelWarn
 	case "error":
-		return slog.LevelError
+		return LevelError
+	case "fatal":
+		return LevelFatal
 	default:
-		return slog.LevelInfo
+		return LevelInfo
 	}
 }
 
 // NewText creates a new logger with text output format.
-func NewText(level slog.Level) *Logger {
+func NewText(level Level) *Logger {
 	handler := slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
-		Level: level,
+		Level: level.slevel(),
 	})
-	return &Logger{s: slog.New(handler), json: false}
+	return &Logger{s: slog.New(handler)}
 }
 
 // NewJSON creates a new logger with JSON output format.
-func NewJSON(level slog.Level) *Logger {
+func NewJSON(level Level) *Logger {
 	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: level,
+		Level: level.slevel(),
 	})
-	return &Logger{s: slog.New(handler), json: true}
+	return &Logger{s: slog.New(handler)}
+}
+func New(raw *slog.Logger) *Logger {
+	return &Logger{s: raw}
 }
 
 // Defualt returns the default logger instance.
@@ -176,15 +194,6 @@ func SetDefault(l *Logger) {
 // With creates a new logger with additional attributes added to this logger.
 func (l *Logger) With(args ...any) *Logger {
 	return &Logger{s: l.s.With(args...)}
-}
-
-// WithLevel creates a new logger with the specified level.
-// Maintains the same output format (text or JSON) as the original logger.
-func (l *Logger) WithLevel(level slog.Level) *Logger {
-	if l.json {
-		return NewJSON(level)
-	}
-	return NewText(level)
 }
 
 // Debug logs a debug message with optional fields.
@@ -205,4 +214,7 @@ func (l *Logger) Warn(msg string, fields ...slog.Attr) {
 // Error logs an error message with optional fields.
 func (l *Logger) Error(msg string, fields ...slog.Attr) {
 	l.s.LogAttrs(context.Background(), slog.LevelError, msg, fields...)
+}
+func (l *Logger) Fatal(msg string, fields ...slog.Attr) {
+	l.s.LogAttrs(context.Background(), slog.Level(LevelFatal), msg, fields...)
 }

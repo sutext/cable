@@ -26,9 +26,9 @@ func main() {
 	}
 	var logger *xlog.Logger
 	if conf.LogFormat == "json" {
-		logger = xlog.NewJSON(conf.Level().Level())
+		logger = xlog.NewJSON(conf.Level())
 	} else {
-		logger = xlog.NewText(conf.Level().Level())
+		logger = xlog.NewText(conf.Level())
 	}
 	xlog.SetDefault(logger)
 	if conf.Pprof {

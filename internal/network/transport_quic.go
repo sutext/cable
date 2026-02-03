@@ -6,6 +6,7 @@ import (
 
 	"golang.org/x/net/quic"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/stats"
 	"sutext.github.io/cable/xlog"
 )
 
@@ -49,29 +50,8 @@ func (l *transportQUIC) Listen(address string) error {
 	}
 }
 func (l *transportQUIC) handleConn(stream *quic.Stream, ip string) {
-	timer := time.AfterFunc(time.Second*10, func() {
-		l.logger.Warn("waite conn packet timeout")
-		packet.WriteTo(stream, packet.NewClose(packet.CloseAuthTimeout))
-		stream.Close()
-	})
-	p, err := packet.ReadFrom(stream)
-	timer.Stop()
+	c, err := l.doConnecton(stream, ip)
 	if err != nil {
-		l.logger.Error("failed to read packet", xlog.Err(err))
-		packet.WriteTo(stream, packet.NewClose(packet.AsCloseCode(err)))
-		stream.Close()
-		return
-	}
-	if p.Type() != packet.CONNECT {
-		l.logger.Error("first packet is not connect packet", xlog.Str("packetType", p.Type().String()))
-		packet.WriteTo(stream, packet.NewClose(packet.AsCloseCode(err)))
-		stream.Close()
-		return
-	}
-	connPacket := p.(*packet.Connect)
-	c := newQUICConn(connPacket.Identity, ip, stream, l.delegate)
-	if err := l.delegate.OnConnect(c, connPacket); err != nil {
-		l.logger.Error("connect error", xlog.Err(err))
 		return
 	}
 	for {
@@ -80,8 +60,35 @@ func (l *transportQUIC) handleConn(stream *quic.Stream, ip string) {
 			c.CloseCode(packet.AsCloseCode(err))
 			return
 		}
-		go l.delegate.OnPacket(c, p)
+		go c.RecvPacket(p)
 	}
+}
+func (l *transportQUIC) doConnecton(conn *quic.Stream, ip string) (Conn, error) {
+	ctx := context.Background()
+	var err error
+	handler := l.delegate.StatsHandler()
+	if handler != nil {
+		beginTime := time.Now()
+		ctx = handler.ConnectBegin(ctx, &stats.ConnBegin{
+			BeginTime: beginTime,
+		})
+		defer handler.ConnectEnd(ctx, &stats.ConnEnd{
+			BeginTime: beginTime,
+			EndTime:   time.Now(),
+			Error:     err,
+		})
+	}
+	var connPacket *packet.Connect
+	connPacket, err = waitConnPacket(ctx, conn, l.delegate)
+	if err != nil {
+		return nil, err
+	}
+	c := newQUICConn(connPacket.Identity, ip, conn, l.delegate)
+	code := l.delegate.OnConnect(ctx, c, connPacket)
+	if code != packet.ConnectAccepted {
+		return nil, code
+	}
+	return c, nil
 }
 
 type quicConn struct {

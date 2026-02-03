@@ -49,6 +49,7 @@ type options struct {
 	network        string         // network protocol to use
 	tlsConfig      *tls.Config    // TLS configuration for secure protocols
 	quicConfig     *quic.Config   // QUIC configuration for QUIC protocol
+	connTimeout    int32          // connection timeout in seconds
 	queueCapacity  int32          // capacity of the send queue
 	statsHandler   stats.Handler  // handler for statistics events
 	closeHandler   ClosedHandler  // handler for connection close events
@@ -64,10 +65,11 @@ type options struct {
 //
 // Returns:
 // - *options: A new options instance with the given options applied
-func NewOptions(opts ...Option) *options {
+func newOptions(opts ...Option) *options {
 	var options = &options{
 		logger:        xlog.With("GROUP", "SERVER"),
 		network:       NetworkTCP,
+		connTimeout:   10,
 		queueCapacity: 1024,
 		closeHandler: func(p *packet.Identity) {
 			// Default empty close handler
@@ -180,6 +182,9 @@ func WithRequest(handler RequestHandler) Option {
 }
 func WithStatsHandler(handler stats.Handler) Option {
 	return Option{f: func(o *options) { o.statsHandler = handler }}
+}
+func WithConnTimeout(timeout int32) Option {
+	return Option{f: func(o *options) { o.connTimeout = timeout }}
 }
 
 // WithSendQueue sets the capacity of the send queue.

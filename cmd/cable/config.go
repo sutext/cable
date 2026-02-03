@@ -2,12 +2,12 @@ package main
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 
 	"gopkg.in/yaml.v3"
 	"sutext.github.io/cable/cluster"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/xlog"
 )
 
 type tlsConfig struct {
@@ -205,17 +205,6 @@ func (c *config) validate() error {
 	}
 	return nil
 }
-func (c *config) Level() slog.Level {
-	switch c.LogLevel {
-	case "debug":
-		return slog.LevelDebug
-	case "info":
-		return slog.LevelInfo
-	case "warn":
-		return slog.LevelWarn
-	case "error":
-		return slog.LevelError
-	default:
-		return slog.LevelInfo
-	}
+func (c *config) Level() xlog.Level {
+	return xlog.ParseLevel(c.LogLevel)
 }
