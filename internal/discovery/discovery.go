@@ -89,6 +89,7 @@ func (m *discovery) Serve() error {
 		}
 		m.req(id, ipaddr)
 		ec := coder.NewEncoder()
+		defer ec.Free()
 		ec.WriteUInt64(m.id)
 		ec.WriteString(m.ipaddr)
 		resp := req.Response(packet.StatusOK, ec.Bytes())
@@ -146,6 +147,7 @@ func (m *discovery) Request() (r map[uint64]string, err error) {
 	ec.WriteString(m.ipaddr)
 	req := packet.NewRequest("discovery", ec.Bytes())
 	reqdata, err := packet.Marshal(req)
+	ec.Free()
 	if err != nil {
 		return r, err
 	}

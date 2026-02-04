@@ -5,13 +5,14 @@ package coder
 
 import (
 	"encoding/binary"
-	"io"
 )
 
 // Encoder defines methods for encoding various data types into a binary buffer.
 // The encoded data can be retrieved using the Bytes() method.
 // All encoding methods use big-endian byte order for multi-byte values.
 type Encoder interface {
+	// Free releases the resources used by the encoder.
+	Free()
 	// Bytes returns the encoded binary data.
 	Bytes() []byte
 	// WriteBytes writes a slice of bytes directly to the buffer.
@@ -56,7 +57,6 @@ type Encoder interface {
 // Implements io.Reader interface for compatibility with standard library functions.
 // All decoding methods use big-endian byte order for multi-byte values.
 type Decoder interface {
-	io.Reader
 	// ReadBytes reads exactly l bytes from the buffer.
 	// Returns an error if there are not enough bytes remaining.
 	ReadBytes(l uint64) ([]byte, error)
@@ -101,241 +101,236 @@ type Decoder interface {
 // NewEncoder creates a new Encoder with an optional initial buffer capacity.
 // If no capacity is provided, defaults to 256 bytes.
 // The buffer will automatically grow as needed.
-func NewEncoder(cap ...int) Encoder {
-	if len(cap) > 0 && cap[0] > 0 {
-		return &coder{pos: 0, buf: make([]byte, 0, cap[0])}
-	}
-	return &coder{pos: 0, buf: make([]byte, 0, 256)}
+func NewEncoder() Encoder {
+	return _pool.get()
 }
 
 // NewDecoder creates a new Decoder that reads from the provided byte slice.
 // The decoder maintains an internal position pointer that advances as data is read.
 func NewDecoder(bytes []byte) Decoder {
-	return &coder{pos: 0, buf: bytes}
+	return &decoder{pos: 0, buf: bytes}
 }
 
-// coder implements both Encoder and Decoder interfaces.
+// encoder implements both Encoder and Decoder interfaces.
 // Maintains a buffer for encoding/decoding and a position pointer for decoding.
-type coder struct {
-	pos uint64 // Current position in the buffer for reading
-	buf []byte // Buffer containing encoded data
+type encoder struct {
+	buf  []byte
+	pool encPool
 }
 
-func (b *coder) Bytes() []byte {
-	return b.buf
+func (e *encoder) Free() {
+	e.buf = e.buf[:0]
+	e.pool.put(e)
+}
+func (e *encoder) Bytes() []byte {
+	return e.buf
 }
 
 // Write bytes directly
-func (b *coder) WriteBytes(p []byte) {
-	b.buf = append(b.buf, p...)
+func (e *encoder) WriteBytes(p []byte) {
+	e.buf = append(e.buf, p...)
 }
 
 // Write UInt 8/16/32/64
-func (b *coder) WriteUInt8(i uint8) {
-	b.buf = append(b.buf, i)
+func (e *encoder) WriteUInt8(i uint8) {
+	e.buf = append(e.buf, i)
 }
-func (b *coder) WriteUInt16(i uint16) {
-	b.buf = binary.BigEndian.AppendUint16(b.buf, i)
+func (e *encoder) WriteUInt16(i uint16) {
+	e.buf = binary.BigEndian.AppendUint16(e.buf, i)
 }
-func (b *coder) WriteUInt32(i uint32) {
-	b.buf = binary.BigEndian.AppendUint32(b.buf, i)
+func (e *encoder) WriteUInt32(i uint32) {
+	e.buf = binary.BigEndian.AppendUint32(e.buf, i)
 }
-func (b *coder) WriteUInt64(i uint64) {
-	b.buf = binary.BigEndian.AppendUint64(b.buf, i)
+func (e *encoder) WriteUInt64(i uint64) {
+	e.buf = binary.BigEndian.AppendUint64(e.buf, i)
 }
 
-func (b *coder) WriteBool(bo bool) {
+func (e *encoder) WriteBool(bo bool) {
 	if bo {
-		b.WriteUInt8(1)
+		e.WriteUInt8(1)
 	} else {
-		b.WriteUInt8(0)
+		e.WriteUInt8(0)
 	}
 }
 
 // Write Int 8/16/32/64
-func (b *coder) WriteInt8(i int8) {
-	b.WriteUInt8(uint8(i))
+func (e *encoder) WriteInt8(i int8) {
+	e.WriteUInt8(uint8(i))
 }
-func (b *coder) WriteInt16(i int16) {
-	b.WriteUInt16(uint16(i))
+func (e *encoder) WriteInt16(i int16) {
+	e.WriteUInt16(uint16(i))
 }
-func (b *coder) WriteInt32(i int32) {
-	b.WriteUInt32(uint32(i))
+func (e *encoder) WriteInt32(i int32) {
+	e.WriteUInt32(uint32(i))
 }
-func (b *coder) WriteInt64(i int64) {
-	b.WriteUInt64(uint64(i))
+func (e *encoder) WriteInt64(i int64) {
+	e.WriteUInt64(uint64(i))
 }
 
 // Write Varint
-func (b *coder) WriteVarint(i uint64) {
-	b.buf = binary.AppendUvarint(b.buf, i)
+func (e *encoder) WriteVarint(i uint64) {
+	e.buf = binary.AppendUvarint(e.buf, i)
 }
 
 // Write Binary Data with Varint Length Prefix
-func (b *coder) WriteData(data []byte) {
+func (e *encoder) WriteData(data []byte) {
 	l := len(data)
-	b.WriteVarint(uint64(l))
+	e.WriteVarint(uint64(l))
 	if l > 0 {
-		b.WriteBytes(data)
+		e.WriteBytes(data)
 	}
 }
 
 // Write String with Varint Length Prefix
-func (b *coder) WriteString(s string) {
+func (e *encoder) WriteString(s string) {
 	bytes := []byte(s)
-	b.WriteData(bytes)
+	e.WriteData(bytes)
 }
-func (b *coder) WriteStrMap(m map[string]string) {
-	b.WriteVarint(uint64(len(m)))
+func (e *encoder) WriteStrMap(m map[string]string) {
+	e.WriteVarint(uint64(len(m)))
 	for k, v := range m {
-		b.WriteString(k)
-		b.WriteString(v)
+		e.WriteString(k)
+		e.WriteString(v)
 	}
 }
-func (b *coder) WriteStrings(ss []string) {
-	b.WriteVarint(uint64(len(ss)))
+func (e *encoder) WriteStrings(ss []string) {
+	e.WriteVarint(uint64(len(ss)))
 	for _, s := range ss {
-		b.WriteString(s)
+		e.WriteString(s)
 	}
 }
-func (b *coder) WriteUInt8Map(m map[uint8]string) {
-	b.WriteUInt8(uint8(len(m)))
+func (e *encoder) WriteUInt8Map(m map[uint8]string) {
+	e.WriteUInt8(uint8(len(m)))
 	for k, v := range m {
-		b.WriteUInt8(k)
-		b.WriteString(v)
+		e.WriteUInt8(k)
+		e.WriteString(v)
 	}
 }
 
-// implement io.Reader interface
-func (b *coder) Read(p []byte) (int, error) {
-	l := len(p)
-	n, err := b.ReadBytes(uint64(l))
-	if err != nil {
-		return 0, err
-	}
-	copy(p, n)
-	return len(p), nil
+type decoder struct {
+	pos uint64
+	buf []byte
 }
 
 // Read bytes directly
-func (b *coder) ReadBytes(l uint64) ([]byte, error) {
+func (d *decoder) ReadBytes(l uint64) ([]byte, error) {
 	if l == 0 {
 		return nil, nil
 	}
-	if b.pos+l > uint64(len(b.buf)) {
+	if d.pos+l > uint64(len(d.buf)) {
 		return nil, ErrBufferTooShort
 	}
-	p := b.buf[b.pos : b.pos+l]
-	b.pos += l
+	p := d.buf[d.pos : d.pos+l]
+	d.pos += l
 	return p, nil
 }
 
 // Read UInt 8/16/32/64
-func (b *coder) ReadUInt8() (uint8, error) {
-	if b.pos+1 > uint64(len(b.buf)) {
+func (d *decoder) ReadUInt8() (uint8, error) {
+	if d.pos+1 > uint64(len(d.buf)) {
 		return 0, ErrBufferTooShort
 	}
-	i := b.buf[b.pos]
-	b.pos++
+	i := d.buf[d.pos]
+	d.pos++
 	return i, nil
 }
-func (b *coder) ReadUInt16() (uint16, error) {
-	bytes, err := b.ReadBytes(2)
+func (d *decoder) ReadUInt16() (uint16, error) {
+	bytes, err := d.ReadBytes(2)
 	if err != nil {
 		return 0, err
 	}
 	return binary.BigEndian.Uint16(bytes), nil
 }
 
-func (b *coder) ReadUInt32() (uint32, error) {
-	bytes, err := b.ReadBytes(4)
+func (d *decoder) ReadUInt32() (uint32, error) {
+	bytes, err := d.ReadBytes(4)
 	if err != nil {
 		return 0, err
 	}
 	return binary.BigEndian.Uint32(bytes), nil
 }
 
-func (b *coder) ReadUInt64() (uint64, error) {
-	bytes, err := b.ReadBytes(8)
+func (d *decoder) ReadUInt64() (uint64, error) {
+	bytes, err := d.ReadBytes(8)
 	if err != nil {
 		return 0, err
 	}
 	return binary.BigEndian.Uint64(bytes), nil
 }
 
-func (b *coder) ReadBool() (bool, error) {
-	i, err := b.ReadUInt8()
+func (d *decoder) ReadBool() (bool, error) {
+	i, err := d.ReadUInt8()
 	if err != nil {
 		return false, err
 	}
 	return i == 1, nil
 }
-func (b *coder) ReadInt8() (int8, error) {
-	u, err := b.ReadUInt8()
+func (d *decoder) ReadInt8() (int8, error) {
+	u, err := d.ReadUInt8()
 	if err != nil {
 		return 0, err
 	}
 	return int8(u), nil
 }
-func (b *coder) ReadInt16() (int16, error) {
-	u, err := b.ReadUInt16()
+func (d *decoder) ReadInt16() (int16, error) {
+	u, err := d.ReadUInt16()
 	if err != nil {
 		return 0, err
 	}
 	return int16(u), nil
 }
-func (b *coder) ReadInt32() (int32, error) {
-	u, err := b.ReadUInt32()
+func (d *decoder) ReadInt32() (int32, error) {
+	u, err := d.ReadUInt32()
 	if err != nil {
 		return 0, err
 	}
 	return int32(u), nil
 }
-func (b *coder) ReadInt64() (int64, error) {
-	u, err := b.ReadUInt64()
+func (d *decoder) ReadInt64() (int64, error) {
+	u, err := d.ReadUInt64()
 	if err != nil {
 		return 0, err
 	}
 	return int64(u), nil
 }
 
-func (b *coder) ReadVarint() (uint64, error) {
-	varint, len := binary.Uvarint(b.buf[b.pos:])
+func (d *decoder) ReadVarint() (uint64, error) {
+	varint, len := binary.Uvarint(d.buf[d.pos:])
 	if len < 0 {
 		return 0, ErrVarintOverflow
 	}
 	if len == 0 {
 		return 0, ErrBufferTooShort
 	}
-	b.pos += uint64(len)
+	d.pos += uint64(len)
 	return varint, nil
 }
-func (b *coder) ReadString() (string, error) {
-	if bytes, err := b.ReadData(); err != nil {
+func (d *decoder) ReadString() (string, error) {
+	if bytes, err := d.ReadData(); err != nil {
 		return "", err
 	} else {
 		return string(bytes), nil
 	}
 }
-func (b *coder) ReadData() ([]byte, error) {
-	l, err := b.ReadVarint()
+func (d *decoder) ReadData() ([]byte, error) {
+	l, err := d.ReadVarint()
 	if err != nil {
 		return nil, err
 	}
-	return b.ReadBytes(l)
+	return d.ReadBytes(l)
 }
-func (b *coder) ReadStrMap() (map[string]string, error) {
-	l, err := b.ReadVarint()
+func (d *decoder) ReadStrMap() (map[string]string, error) {
+	l, err := d.ReadVarint()
 	if err != nil {
 		return nil, err
 	}
 	m := make(map[string]string)
 	for i := 0; i < int(l); i++ {
-		k, err := b.ReadString()
+		k, err := d.ReadString()
 		if err != nil {
 			return nil, err
 		}
-		v, err := b.ReadString()
+		v, err := d.ReadString()
 		if err != nil {
 			return nil, err
 		}
@@ -343,14 +338,14 @@ func (b *coder) ReadStrMap() (map[string]string, error) {
 	}
 	return m, nil
 }
-func (b *coder) ReadStrings() ([]string, error) {
-	l, err := b.ReadVarint()
+func (d *decoder) ReadStrings() ([]string, error) {
+	l, err := d.ReadVarint()
 	if err != nil {
 		return nil, err
 	}
 	ss := make([]string, l)
 	for i := 0; i < int(l); i++ {
-		s, err := b.ReadString()
+		s, err := d.ReadString()
 		if err != nil {
 			return nil, err
 		}
@@ -358,18 +353,18 @@ func (b *coder) ReadStrings() ([]string, error) {
 	}
 	return ss, nil
 }
-func (b *coder) ReadUInt8Map() (map[uint8]string, error) {
-	l, err := b.ReadUInt8()
+func (d *decoder) ReadUInt8Map() (map[uint8]string, error) {
+	l, err := d.ReadUInt8()
 	if err != nil {
 		return nil, err
 	}
 	m := make(map[uint8]string)
 	for i := 0; i < int(l); i++ {
-		k, err := b.ReadUInt8()
+		k, err := d.ReadUInt8()
 		if err != nil {
 			return nil, err
 		}
-		v, err := b.ReadString()
+		v, err := d.ReadString()
 		if err != nil {
 			return nil, err
 		}
@@ -377,12 +372,12 @@ func (b *coder) ReadUInt8Map() (map[uint8]string, error) {
 	}
 	return m, nil
 }
-func (b *coder) ReadAll() ([]byte, error) {
-	l := uint64(len(b.buf))
-	if b.pos >= l {
+func (d *decoder) ReadAll() ([]byte, error) {
+	l := uint64(len(d.buf))
+	if d.pos >= l {
 		return nil, nil
 	}
-	p := b.buf[b.pos:]
-	b.pos = l
+	p := d.buf[d.pos:]
+	d.pos = l
 	return p, nil
 }

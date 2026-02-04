@@ -5,6 +5,20 @@ import (
 	"testing"
 )
 
+func BenchmarkPacket(b *testing.B) {
+	b.RunParallel(func(p *testing.PB) {
+		for p.Next() {
+			testPacket(b, NewConnack(0))
+			testPacket(b, NewConnack(0))
+			testPacket(b, SmallMessage())
+			testPacket(b, BigMessage())
+			testPacket(b, NewPing())
+			testPacket(b, NewPong())
+			testPacket(b, NewClose(0))
+			testPacket(b, &Request{Method: "test"})
+		}
+	})
+}
 func TestPacket(t *testing.T) {
 	t.Run("Connect", func(t *testing.T) {
 		identity := Identity{"1", "2", "tok"}
@@ -55,7 +69,12 @@ func BigMessage() Packet {
 	msg.Set(PropertyClientID, "xxxxxx")
 	return msg
 }
-func testPacket(t *testing.T, p Packet) {
+
+type errorFunc interface {
+	Error(args ...any)
+}
+
+func testPacket(t errorFunc, p Packet) {
 	rw := &ReadWriter{}
 	p.Set(PropertyClientID, "test")
 	err := WriteTo(rw, p)

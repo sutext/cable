@@ -20,7 +20,7 @@ const (
 	MIN_LEN int = 0             // Minimum packet length
 	MID_LEN int = 0x3ff         // Medium packet length threshold (10 bits)
 	MAX_LEN int = 0x3_ffff_ffff // Maximum packet length (28 bits)
-	MAX_UDP int = MID_LEN + 2   // Maximum UDP packet size including header
+	MAX_UDP int = MID_LEN + 1   // Maximum UDP packet size including header
 )
 
 // Error defines error codes for packet processing.
@@ -219,34 +219,85 @@ func (p *pong) String() string {
 // Uses compact binary encoding for integers and varints.
 // Returns the encoded bytes and any error encountered.
 func Marshal(p Packet) ([]byte, error) {
-	header, data, err := pack(p)
+	ec := coder.NewEncoder()
+	defer ec.Free()
+	err := p.WriteTo(ec)
 	if err != nil {
 		return nil, err
 	}
-	bytes := make([]byte, len(header)+len(data))
+	data := ec.Bytes()
+	length := len(data)
+	if length > MAX_LEN {
+		return nil, ErrPacketSizeTooLarge
+	}
+	var header []byte
+	if length > MID_LEN {
+		bs := make([]byte, 0, 5)
+		for length > 0 {
+			bs = append(bs, byte(length&0xff))
+			length >>= 8
+		}
+		slices.Reverse(bs)
+		if bs[0] > 3 {
+			header = make([]byte, len(bs)+1)
+			copy(header[1:], bs)
+		} else {
+			header = bs
+		}
+		header[0] = byte(p.Type()<<4) | byte(len(header)-2)<<2 | header[0]
+	} else {
+		header = make([]byte, 2)
+		header[0] = byte(p.Type()<<4) | byte(length>>8)
+		header[1] = byte(length)
+	}
+	hl := len(header)
+	bytes := make([]byte, hl+len(data))
 	copy(bytes, header)
-	copy(bytes[len(header):], data)
+	copy(bytes[hl:], data)
 	return bytes, nil
 }
 
 // Unmarshal decodes the given bytes into a Packet object.
 // Returns the decoded packet and any error encountered.
 func Unmarshal(bytes []byte) (Packet, error) {
-	return ReadFrom(coder.NewDecoder(bytes))
+	dc := coder.NewDecoder(bytes)
+	// read header
+	header, err := dc.ReadBytes(2)
+	if err != nil {
+		return nil, err
+	}
+	//read length
+	byteCount := (header[0] >> 2) & 0x03
+	length := uint64(header[0]&0x03)<<8 | uint64(header[1])
+	if byteCount > 0 {
+		bs, err := dc.ReadBytes(uint64(byteCount))
+		if err != nil {
+			return nil, err
+		}
+		for _, b := range bs {
+			length = length<<8 | uint64(b)
+		}
+	}
+	// read data
+	var data []byte
+	if length > 0 {
+		data, err = dc.ReadBytes(length)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return unpack(header, data)
 }
 
 // WriteTo writes the given Packet to the provided io.Writer.
 // Encodes the packet to bytes and writes it to the writer.
 // Returns any error encountered during writing.
 func WriteTo(w io.Writer, p Packet) error {
-	header, data, err := pack(p)
+	data, err := Marshal(p)
 	if err != nil {
 		return err
 	}
-	bytes := make([]byte, len(header)+len(data))
-	copy(bytes, header)
-	copy(bytes[len(header):], data)
-	_, err = w.Write(bytes)
+	_, err = w.Write(data)
 	return err
 }
 
@@ -280,40 +331,6 @@ func ReadFrom(r io.Reader) (Packet, error) {
 		}
 	}
 	return unpack(header, data)
-}
-
-// pack is an internal function that encodes the given Packet object to header and data bytes.
-// The header contains the packet type and length, while the data contains the packet payload.
-// Returns the header bytes, data bytes, and any error encountered.
-func pack(p Packet) (header, data []byte, err error) {
-	data, err = coder.Marshal(p)
-	if err != nil {
-		return nil, nil, err
-	}
-	length := len(data)
-	if length > MAX_LEN {
-		return nil, nil, ErrPacketSizeTooLarge
-	}
-	if length > MID_LEN {
-		bs := make([]byte, 0, 5)
-		for length > 0 {
-			bs = append(bs, byte(length&0xff))
-			length >>= 8
-		}
-		slices.Reverse(bs)
-		if bs[0] > 3 {
-			header = make([]byte, len(bs)+1)
-			copy(header[1:], bs)
-		} else {
-			header = bs
-		}
-		header[0] = byte(p.Type()<<4) | byte(len(header)-2)<<2 | header[0]
-	} else {
-		header = make([]byte, 2)
-		header[0] = byte(p.Type()<<4) | byte(length>>8)
-		header[1] = byte(length)
-	}
-	return header, data, nil
 }
 
 // unpack is an internal function that decodes the given header and data bytes into the corresponding Packet object.

@@ -296,5 +296,6 @@ func (c *quicConn) Dail() error {
 
 // Close closes the QUIC endpoint and releases resources.
 func (c *quicConn) Close() error {
+	c.stream.Close()
 	return c.endpoint.Close(context.Background())
 }
