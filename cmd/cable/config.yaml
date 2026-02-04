@@ -18,12 +18,6 @@ httpPort: 1888
 # Peer Port for Cluster Communication
 peerPort: 4567
 
-# Log Level: debug, info, warn, error
-logLevel: "info"
-
-# Log Format: text, json
-logFormat: "text"
-
 # Service Name
 serviceName: cable
 
@@ -32,8 +26,14 @@ serviceVersion: 1.0.0
 
 # Trace Configuration
 trace:
-  enabled: false
+  enabled: true
   otlpEndpoint: 172.16.2.123:4317
+
+# Logger Configuration
+logger:
+  level: info # options: debug, info, warn, error, fatal
+  format: console # options: console, json
+  otlpEndpoint: #172.16.2.123:4317
 
 # Metrics Configuration
 metrics:

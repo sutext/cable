@@ -81,6 +81,7 @@ func (g queueGauge) Record(ctx context.Context, value int64, labels ...attribute
 
 type statistics struct {
 	brokerID        uint64
+	logger          *xlog.Logger
 	config          *config
 	tracer          trace.Tracer
 	traceProvider   *tracesdk.TracerProvider
@@ -98,12 +99,13 @@ func newStats(config *config) *statistics {
 	s := &statistics{
 		brokerID: config.BrokerID,
 		config:   config,
+		logger:   config.GetLogger(),
 	}
 	if config.Trace.Enabled {
 		provider, err := s.initTrace(config.Trace)
 		if err != nil {
 			otel.Handle(err)
-			xlog.Error("Failed to initialize tracing", xlog.Err(err))
+			s.logger.Error("Failed to initialize tracing", xlog.Err(err))
 		}
 		s.traceProvider = provider
 		s.tracer = s.traceProvider.Tracer("sutext.github.io/cable/stats", trace.WithInstrumentationVersion("1.0.0"))
@@ -112,7 +114,7 @@ func newStats(config *config) *statistics {
 		provider, err := s.initMeter(config.Metrics)
 		if err != nil {
 			otel.Handle(err)
-			xlog.Error("Failed to initialize metrics", xlog.Err(err))
+			s.logger.Error("Failed to initialize metrics", xlog.Err(err))
 		}
 		s.meterProvider = provider
 		meter := s.meterProvider.Meter("sutext.github.io/cable/stats", metric.WithInstrumentationVersion("1.0.0"))
@@ -153,7 +155,7 @@ func (s *statistics) initTrace(conf traceConfig) (*tracesdk.TracerProvider, erro
 		propagation.TraceContext{},
 		propagation.Baggage{},
 	))
-	xlog.Info("OTel tracing initialized", xlog.Str("otle_endpoint", conf.OTLPEndpoint))
+	s.logger.Info("OTel tracing initialized", xlog.Str("otle_endpoint", conf.OTLPEndpoint))
 	return tracerProvider, nil
 }
 func (s *statistics) initMeter(conf metricsConfig) (*metricsdk.MeterProvider, error) {
@@ -189,18 +191,18 @@ func (s *statistics) initMeter(conf metricsConfig) (*metricsdk.MeterProvider, er
 	)
 	// Set global meter provider
 	otel.SetMeterProvider(s.meterProvider)
-	xlog.Info("OTel metrics initialized", xlog.Str("otlp_endpoint", conf.OTLPEndpoint))
+	s.logger.Info("OTel metrics initialized", xlog.Str("otlp_endpoint", conf.OTLPEndpoint))
 	return s.meterProvider, nil
 }
 func (s *statistics) Shutdown(ctx context.Context) (err error) {
 	if s.traceProvider != nil {
 		if err = s.traceProvider.Shutdown(ctx); err != nil {
-			xlog.Error("Failed to shutdown tracer provider", xlog.Err(err))
+			s.logger.Error("Failed to shutdown tracer provider", xlog.Ctx(ctx), xlog.Err(err))
 		}
 	}
 	if s.meterProvider != nil {
 		if err = s.meterProvider.Shutdown(ctx); err != nil {
-			xlog.Error("Failed to shutdown meter provider", xlog.Err(err))
+			s.logger.Error("Failed to shutdown meter provider", xlog.Ctx(ctx), xlog.Err(err))
 		}
 	}
 	return err

@@ -46,7 +46,7 @@ type KafkaEnd struct {
 	BeginTime time.Time
 }
 
-type kafkaHandler interface {
+type KafkaHandler interface {
 	KafkaBegin(ctx context.Context, info *KafkaBegin) context.Context
 	KafkaEnd(ctx context.Context, info *KafkaEnd)
 }

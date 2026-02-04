@@ -129,12 +129,13 @@ func (t *config) randomMessage() *packet.Message {
 }
 
 type Client struct {
+	logger *xlog.Logger
 	config *config
 	cli    client.Client
 }
 
-func newClient(config *config) *Client {
-	result := &Client{config: config}
+func newClient(config *config, logger *xlog.Logger) *Client {
+	result := &Client{config: config, logger: logger}
 	uid := config.randomUserID()
 	cid := fmt.Sprintf("%d-%d", time.Now().UnixNano(), rand.Int64())
 	result.cli = client.New(config.randomEndpoint(),
@@ -161,12 +162,12 @@ func (c *Client) run() {
 		}
 		err := c.cli.SendMessage(context.Background(), msg)
 		if err != nil {
-			xlog.Error("send message error",
+			c.logger.Error("send message error",
 				xlog.Int("Kind", int(msg.Kind)),
 				xlog.Err(err),
 			)
 		} else {
-			xlog.Info("send message success",
+			c.logger.Info("send message success",
 				xlog.Int("Kind", int(msg.Kind)),
 			)
 		}
@@ -180,7 +181,7 @@ func (c *Client) OnStatus(status client.Status) {
 	}
 }
 func (c *Client) OnMessage(msg *packet.Message) error {
-	xlog.Info("receive message", xlog.Msg(string(msg.Payload)))
+	c.logger.Info("receive message", xlog.Msg(string(msg.Payload)))
 	return nil
 }
 func (c *Client) OnRequest(req *packet.Request) ([]byte, error) {
@@ -205,7 +206,6 @@ func main() {
 		logger = xlog.NewText(conf.Level())
 	}
 	var clients safe.RMap[string, *Client]
-	xlog.SetDefault(logger)
 	ctx := context.Background()
 	dur := time.Second * time.Duration(conf.MaxConns/conf.ConnSpeed)
 	ctx, cancel := context.WithTimeout(ctx, dur)
@@ -218,7 +218,7 @@ func main() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				c := newClient(conf)
+				c := newClient(conf, logger)
 				clients.Set(c.ID().ClientID, c)
 				go c.Connect()
 			}

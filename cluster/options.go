@@ -11,10 +11,12 @@ import (
 
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/stats"
+	"sutext.github.io/cable/xlog"
 )
 
 // Handler defines the callback methods for cluster events.
 type Handler interface {
+
 	// OnUserClosed is called when a client connection is closed.
 	//
 	// Parameters:
@@ -39,6 +41,8 @@ type Handler interface {
 	// Returns:
 	// - error: Error if message handling fails, nil otherwise
 	OnUserMessage(ctx context.Context, p *packet.Message, id *packet.Identity) error
+	// OnClusterReady is called when the cluster is ready to accept client connections.
+	OnClusterReady()
 	// GetUserChannels returns the list of channels a user has joined.
 	//
 	// Parameters:
@@ -48,6 +52,7 @@ type Handler interface {
 	// - map[string]string: List of channels the user has joined
 	// - error: Error if getting channels fails, nil otherwise
 	GetUserChannels(uid string) (channels map[string]string, err error) //uid join channels
+
 }
 
 // emptyHandler is a default implementation of Handler that does nothing.
@@ -72,8 +77,12 @@ func (h *emptyHandler) GetUserChannels(uid string) (channels map[string]string, 
 	return nil, nil
 }
 
+// OnClusterReady implements the Handler interface with empty implementation.
+func (h *emptyHandler) OnClusterReady() {}
+
 // options holds the configuration for the cluster.
 type options struct {
+	logger           *xlog.Logger
 	handler          Handler           // Handler for cluster events
 	brokerID         uint64            // Unique ID for the broker
 	peerPort         uint16            // Port for peer-to-peer communication
@@ -92,6 +101,7 @@ type options struct {
 // - *options: A new options instance with the given options applied
 func newOptions(opts ...Option) *options {
 	options := &options{
+		logger:      xlog.Default,
 		handler:     &emptyHandler{},
 		peerPort:    4567,
 		clusterSize: 3,
@@ -105,6 +115,12 @@ func newOptions(opts ...Option) *options {
 // Option is a function type for configuring the cluster using builder pattern.
 type Option struct {
 	f func(*options) // function that modifies options
+}
+
+func WithLogger(logger *xlog.Logger) Option {
+	return Option{func(o *options) {
+		o.logger = logger
+	}}
 }
 
 // WithHandler sets the handler for cluster events.

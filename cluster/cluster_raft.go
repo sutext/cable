@@ -346,11 +346,16 @@ func (c *cluster) sendRaftMessags(msgs []raftpb.Message) {
 // - ss: Soft state containing leader information
 func (c *cluster) applySoftState(ss *raft.SoftState) {
 	newLeader := ss.Lead
+	if newLeader == raft.None {
+		return
+	}
 	if c.leader.Load() != newLeader {
 		c.leader.Store(newLeader)
 		c.logger.Info("New leader elected", xlog.U64("leader", newLeader))
 	}
-	c.ready.Store(true)
+	if c.ready.CompareAndSwap(false, true) {
+		c.broker.onClusterReady()
+	}
 }
 
 // applyEntries applies the committed Raft entries to the cluster state.

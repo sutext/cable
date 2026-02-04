@@ -23,6 +23,7 @@ import (
 )
 
 type booter struct {
+	logger   *xlog.Logger
 	redis    *redisClient
 	config   *config
 	broker   cluster.Broker
@@ -40,7 +41,7 @@ func bool2byte(b bool) byte {
 	return 0
 }
 func newBooter(config *config) *booter {
-	b := &booter{config: config}
+	b := &booter{config: config, logger: config.GetLogger()}
 	liss := make([]*cluster.Listener, len(config.Listeners))
 	for i, l := range config.Listeners {
 		var tlsConfig *tls.Config
@@ -48,7 +49,7 @@ func newBooter(config *config) *booter {
 		if l.TLS != nil {
 			cert, err := tls.LoadX509KeyPair(l.TLS.CertFile, l.TLS.KeyFile)
 			if err != nil {
-				xlog.Error("Failed to load TLS certificate", xlog.Err(err))
+				b.logger.Error("Failed to load TLS certificate", xlog.Err(err))
 			} else {
 				tlsConfig = &tls.Config{
 					Certificates: []tls.Certificate{cert},
@@ -75,6 +76,7 @@ func newBooter(config *config) *booter {
 	}
 	b.stats = newStats(config)
 	b.broker = cluster.NewBroker(
+		cluster.WithLogger(b.logger),
 		cluster.WithBrokerID(b.config.BrokerID),
 		cluster.WithHandler(b),
 		cluster.WithClusterSize(config.ClusterSize),
@@ -86,19 +88,10 @@ func newBooter(config *config) *booter {
 	b.httpApi = newHTTP(b)
 	return b
 }
+
 func (b *booter) Start() {
-	b.redis = newRedis(b.config, b.stats)
+	b.startRedis()
 	b.startKafka()
-	go func() {
-		if err := b.grpcApi.Serve(); err != nil {
-			xlog.Error("Failed to start API server", xlog.Err(err))
-		}
-	}()
-	go func() {
-		if err := b.httpApi.Serve(); err != nil {
-			xlog.Error("Failed to start HTTP server", xlog.Err(err))
-		}
-	}()
 	b.broker.Start()
 }
 func (b *booter) startKafka() {
@@ -112,11 +105,11 @@ func (b *booter) startKafka() {
 	var err error
 	b.kafka, err = sarama.NewClient(b.config.Kafka.Brokers, kafkaConfig)
 	if err != nil {
-		xlog.Error("Failed to initialize Kafka client", xlog.Err(err))
+		b.logger.Error("Failed to initialize Kafka client", xlog.Err(err))
 	} else {
 		b.producer, err = sarama.NewSyncProducerFromClient(b.kafka)
 		if err != nil {
-			xlog.Error("Failed to initialize Kafka producer", xlog.Err(err))
+			b.logger.Error("Failed to initialize Kafka producer", xlog.Err(err))
 		}
 	}
 }
@@ -160,7 +153,7 @@ func (b *booter) OnUserConnect(ctx context.Context, p *packet.Connect) packet.Co
 	case "jwt":
 		claims, err := b.parseJWT(p.Identity.Password, auth.Secret)
 		if err != nil {
-			xlog.Error("Failed to authenticate user", xlog.Err(err))
+			b.logger.Error("Failed to authenticate user", xlog.Ctx(ctx), xlog.Err(err))
 			return packet.ConnectAuthfail
 		}
 		if claims["sub"] != p.Identity.UserID {
@@ -175,7 +168,7 @@ func (b *booter) OnUserConnect(ctx context.Context, p *packet.Connect) packet.Co
 	case "redis":
 		pwd, err := b.redis.Get(ctx, b.config.Redis.AuthPrefix+p.Identity.UserID)
 		if err != nil {
-			xlog.Error("Failed to authenticate user", xlog.Err(err))
+			b.logger.Error("Failed to authenticate user", xlog.Ctx(ctx), xlog.Err(err))
 			return packet.ConnectAuthfail
 		}
 		if pwd != p.Identity.Password {
@@ -185,16 +178,16 @@ func (b *booter) OnUserConnect(ctx context.Context, p *packet.Connect) packet.Co
 	case "remote":
 		res, err := http.Get(fmt.Sprintf("%s?uid=%s&pwd=%s", auth.AuthURL, p.Identity.UserID, p.Identity.Password))
 		if err != nil {
-			xlog.Error("Failed to authenticate user", xlog.Err(err))
+			b.logger.Error("Failed to authenticate user", xlog.Ctx(ctx), xlog.Err(err))
 			return packet.ConnectAuthfail
 		}
 		if res.StatusCode != http.StatusOK {
-			xlog.Error("Failed to authenticate user", xlog.Str("status", res.Status))
+			b.logger.Error("Failed to authenticate user", xlog.Ctx(ctx), xlog.Str("status", res.Status))
 			return packet.ConnectAuthfail
 		}
 		return packet.ConnectAccepted
 	default:
-		xlog.Error("Invalid authentication method", xlog.Str("method", auth.Method))
+		b.logger.Error("Invalid authentication method", xlog.Ctx(ctx), xlog.Str("method", auth.Method))
 		return packet.ConnectAuthfail
 	}
 }
@@ -237,7 +230,8 @@ func (b *booter) OnUserMessage(ctx context.Context, m *packet.Message, id *packe
 		// Do not resend, just process Kafka
 	default:
 		// Invalid resendType, do nothing
-		xlog.Warn("Invalid resendType in message route",
+		b.logger.Warn("Invalid resendType in message route",
+			xlog.Ctx(ctx),
 			xlog.Str("resendType", string(route.ResendType)),
 			xlog.Int("kind", int(m.Kind)))
 	}
@@ -250,7 +244,18 @@ func (b *booter) OnUserMessage(ctx context.Context, m *packet.Message, id *packe
 	wg.Wait()
 	return nil
 }
-
+func (b *booter) OnClusterReady() {
+	go func() {
+		if err := b.grpcApi.Serve(); err != nil {
+			b.logger.Error("Failed to start API server", xlog.Err(err))
+		}
+	}()
+	go func() {
+		if err := b.httpApi.Serve(); err != nil {
+			b.logger.Error("Failed to start HTTP server", xlog.Err(err))
+		}
+	}()
+}
 func (b *booter) GetUserChannels(uid string) (map[string]string, error) {
 	return b.ListChannels(context.Background(), uid)
 }
@@ -303,7 +308,7 @@ func (b *booter) SendToAll(ctx context.Context, m *packet.Message) (total, succe
 	}
 	total, success, err = b.broker.SendToAll(ctx, m)
 	if err != nil {
-		xlog.Error("Failed to send message to all", xlog.Err(err))
+		b.logger.Error("Failed to send message to all", xlog.Ctx(ctx), xlog.Err(err))
 		return 0, 0, err
 	}
 	return total, success, err
@@ -324,7 +329,8 @@ func (b *booter) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 	}
 	total, success, err = b.broker.SendToUser(ctx, uid, m)
 	if err != nil {
-		xlog.Error("Failed to send message to user",
+		b.logger.Error("Failed to send message to user",
+			xlog.Ctx(ctx),
 			xlog.Err(err),
 			xlog.Uid(uid),
 			xlog.Int("kind", int(m.Kind)))
@@ -348,7 +354,8 @@ func (b *booter) SendToChannel(ctx context.Context, channel string, m *packet.Me
 	}
 	total, success, err = b.broker.SendToChannel(ctx, channel, m)
 	if err != nil {
-		xlog.Error("Failed to send message to channel",
+		b.logger.Error("Failed to send message to channel",
+			xlog.Ctx(ctx),
 			xlog.Err(err),
 			xlog.Str("channel", channel),
 			xlog.Int("kind", int(m.Kind)))
@@ -399,12 +406,14 @@ func (b *booter) SendToKafka(ctx context.Context, topic, toUserID, toChannel str
 	}
 	partition, offset, err = b.producer.SendMessage(kafkaMsg)
 	if err != nil {
-		xlog.Error("Failed to send message to Kafka",
+		b.logger.Error("Failed to send message to Kafka",
+			xlog.Ctx(ctx),
 			xlog.Err(err),
 			xlog.Str("topic", topic),
 			xlog.Int("kind", int(m.Kind)))
 	} else {
-		xlog.Debug("Sent message to Kafka",
+		b.logger.Debug("Sent message to Kafka",
+			xlog.Ctx(ctx),
 			xlog.Str("topic", topic),
 			xlog.I32("partition", partition),
 			xlog.I64("offset", offset),

@@ -13,6 +13,7 @@ import (
 	"sutext.github.io/cable/api/pb"
 	"sutext.github.io/cable/cluster"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/xlog"
 )
 
 type grpcServer struct {
@@ -30,7 +31,8 @@ func newGRPC(booter *booter) *grpcServer {
 }
 
 func (s *grpcServer) Serve() error {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", s.booter.config.GrpcPort))
+	addr := fmt.Sprintf(":%d", s.booter.config.GrpcPort)
+	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
 	}
@@ -49,6 +51,7 @@ func (s *grpcServer) Serve() error {
 		grpc.StatsHandler(h),
 	)
 	pb.RegisterCableServiceServer(gs, s)
+	s.booter.logger.Info("grpc api server started", xlog.Str("addr", addr))
 	return gs.Serve(lis)
 }
 

@@ -67,7 +67,7 @@ type options struct {
 // - *options: A new options instance with the given options applied
 func newOptions(opts ...Option) *options {
 	var options = &options{
-		logger:        xlog.With("GROUP", "SERVER"),
+		logger:        xlog.Default,
 		network:       NetworkTCP,
 		connTimeout:   10,
 		queueCapacity: 1024,

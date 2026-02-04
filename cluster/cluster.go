@@ -80,7 +80,7 @@ func newCluster(broker *broker, opts *options) *cluster {
 		logger:    broker.logger,
 		stoped:    make(chan struct{}),
 		peerStats: opts.grpcStatsHandler.Client,
-		discovery: discovery.New(broker.id, opts.peerPort),
+		discovery: discovery.New(broker.id, opts.peerPort, broker.logger),
 	}
 	c.discovery.OnRequest(func(id uint64, addr string) {
 		c.AddBroker(context.Background(), id, addr)
@@ -90,6 +90,7 @@ func newCluster(broker *broker, opts *options) *cluster {
 
 // Stop stops the cluster and cleans up resources.
 func (c *cluster) Stop() {
+	c.ready.Store(false)
 	if err := c.discovery.Shutdown(); err != nil {
 		c.logger.Error("muticast shutdown", xlog.Err(err))
 	}

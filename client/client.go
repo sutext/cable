@@ -186,7 +186,6 @@ func (c *client) tryClose(err error) {
 	if c.id == nil {
 		return
 	}
-	c.logger.Error("try close", xlog.Err(err))
 	if c.status == StatusClosed || c.status == StatusClosing {
 		return
 	}
@@ -233,6 +232,9 @@ func (c *client) reconnect() error {
 		return err
 	}
 	if p.Type() != packet.CONNACK {
+		if p.Type() == packet.CLOSE {
+			return p.(*packet.Close).Code
+		}
 		return ErrConnectionFailed
 	}
 	ack := p.(*packet.Connack)

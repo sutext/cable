@@ -81,6 +81,7 @@ func New(address string, opts ...Option) Server {
 		address:        address,
 		network:        options.network,
 		statsHandler:   options.statsHandler,
+		connTimeout:    options.connTimeout,
 		queueCapacity:  options.queueCapacity,
 		closeHandler:   options.closeHandler,
 		connectHandler: options.connectHandler,
@@ -423,12 +424,12 @@ func (s *server) OnMessage(ctx context.Context, c network.Conn, p *packet.Messag
 	}
 	err = s.messageHandler(ctx, p, c.ID())
 	if err != nil {
-		s.logger.Error("failed to handle message", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
+		s.logger.Error("failed to handle message", xlog.Ctx(ctx), xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 		return
 	}
 	if p.Qos == packet.MessageQos1 {
 		if err = c.SendPacket(ctx, p.Ack()); err != nil {
-			s.logger.Error("failed to send messack", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
+			s.logger.Error("failed to send messack", xlog.Ctx(ctx), xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 		}
 	}
 }
@@ -467,7 +468,7 @@ func (s *server) OnRequest(ctx context.Context, c network.Conn, p *packet.Reques
 	body, rerr := s.requestHandler(ctx, p, c.ID())
 	if rerr != nil {
 		err = rerr
-		s.logger.Error("failed to handle request", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
+		s.logger.Error("failed to handle request", xlog.Ctx(ctx), xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 		code, ok := rerr.(packet.StatusCode)
 		if !ok {
 			code = packet.StatusInternalError
@@ -477,6 +478,6 @@ func (s *server) OnRequest(ctx context.Context, c network.Conn, p *packet.Reques
 		res = p.Response(packet.StatusOK, body)
 	}
 	if err = c.SendPacket(ctx, res); err != nil {
-		s.logger.Error("failed to send response", xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
+		s.logger.Error("failed to send response", xlog.Ctx(ctx), xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 	}
 }

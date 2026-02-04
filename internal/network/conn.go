@@ -305,7 +305,7 @@ func (c *conn) jumpPacket(ctx context.Context, p packet.Packet) error {
 	err = c.sendQueue.Push(ctx, true, func() {
 		err := c.raw.WriteData(data)
 		if err != nil {
-			c.logger.Warn("write jump data error", xlog.Err(err))
+			c.logger.Warn("write jump data error", xlog.Err(err), xlog.Str("packetType", p.Type().String()))
 		}
 		if h := c.delegate.StatsHandler(); h != nil {
 			h.UpdateQueue(ctx, c.sendQueue.Len())
@@ -374,20 +374,20 @@ func (p *pinger) SendPing() {
 func waitConnPacket(ctx context.Context, conn io.ReadWriteCloser, d delegate) (*packet.Connect, error) {
 	l := d.Logger()
 	timer := time.AfterFunc(time.Second*time.Duration(d.ConnTimeout()), func() {
-		l.Error("waite conn packet timeout")
+		l.Error("wait conn packet timeout", xlog.Ctx(ctx))
 		packet.WriteTo(conn, packet.NewClose(packet.CloseAuthTimeout))
 		conn.Close()
 	})
 	p, err := packet.ReadFrom(conn)
 	timer.Stop()
 	if err != nil {
-		l.Error("failed to read packet", xlog.Err(err))
+		l.Error("failed to read packet", xlog.Ctx(ctx), xlog.Err(err))
 		packet.WriteTo(conn, packet.NewClose(packet.AsCloseCode(err)))
 		conn.Close()
 		return nil, err
 	}
 	if p.Type() != packet.CONNECT {
-		l.Error("first packet is not connect packet", xlog.Str("packetType", p.Type().String()))
+		l.Error("first packet is not connect packet", xlog.Ctx(ctx), xlog.Str("packetType", p.Type().String()))
 		packet.WriteTo(conn, packet.NewClose(packet.CloseInvalidPacket))
 		conn.Close()
 		return nil, packet.CloseInvalidPacket

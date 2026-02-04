@@ -14,6 +14,7 @@ import (
 
 	"sutext.github.io/cable/cluster"
 	"sutext.github.io/cable/packet"
+	"sutext.github.io/cable/xlog"
 )
 
 // @title Cable HTTP API
@@ -113,6 +114,7 @@ func newHTTP(booter *booter) *httpServer {
 }
 
 func (s *httpServer) Serve() error {
+	s.booter.logger.Info("http api server started", xlog.Str("addr", s.hs.Addr))
 	return s.hs.ListenAndServe()
 }
 func (s *httpServer) Shutdown() error {

@@ -79,7 +79,7 @@ type Option struct {
 // newOptions creates a new Options instance with default values and applies the given options.
 func newOptions(options ...Option) *Options {
 	opts := &Options{
-		logger:            xlog.With("GROUP", "CLIENT"),
+		logger:            xlog.Default,
 		handler:           &emptyHandler{},
 		retrier:           NewRetrier(10, backoff.Exponential(time.Second, 1.5)),
 		pingTimeout:       time.Second * 5,

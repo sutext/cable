@@ -30,7 +30,7 @@ type discovery struct {
 	respChan chan *packet.Response
 }
 
-func New(id uint64, port uint16) Discovery {
+func New(id uint64, port uint16, logger *xlog.Logger) Discovery {
 	ip, err := getLocalIP()
 	if err != nil {
 		panic(err)
@@ -38,7 +38,7 @@ func New(id uint64, port uint16) Discovery {
 	m := &discovery{
 		id:     id,
 		ipaddr: fmt.Sprintf("%s:%d", ip, port),
-		logger: xlog.With("GROUP", "DISCOVERY"),
+		logger: logger,
 		addr:   &net.UDPAddr{IP: net.IPv4(224, 0, 0, 9), Port: 9999},
 	}
 	return m

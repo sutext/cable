@@ -190,7 +190,7 @@ func NewBroker(opts ...Option) Broker {
 	} else {
 		b.id = BrokerID()
 	}
-	b.logger = xlog.With("BROKER", b.id)
+	b.logger = options.logger.With(xlog.U64("BROKER", b.id))
 	b.handler = options.handler
 	b.listeners = make(map[string]*Listener)
 	for _, l := range options.listeners {
@@ -219,17 +219,20 @@ func (b *broker) ID() uint64 {
 // Returns:
 // - error: Error if starting fails, nil otherwise
 func (b *broker) Start() {
-	for _, l := range b.listeners {
-		if l.autoStart {
-			l.Start()
-		}
-	}
 	go func() {
 		if err := b.peerServer.Serve(); err != nil {
 			b.logger.Info("peer server stoped", xlog.Err(err))
 		}
 	}()
 	b.cluster.Start()
+}
+func (b *broker) onClusterReady() {
+	for _, l := range b.listeners {
+		if l.autoStart {
+			l.Start()
+		}
+	}
+	b.handler.OnClusterReady()
 }
 
 // Cluster returns the underlying cluster instance.
@@ -250,11 +253,11 @@ func (b *broker) Cluster() Cluster {
 func (b *broker) Shutdown(ctx context.Context) (err error) {
 	for _, l := range b.listeners {
 		if err = l.Shutdown(ctx); err != nil {
-			b.logger.Error("listener shutdown", xlog.Err(err))
+			b.logger.Error("listener shutdown", xlog.Ctx(ctx), xlog.Err(err))
 		}
 	}
 	if err = b.peerServer.Shutdown(ctx); err != nil {
-		b.logger.Error("peer server shutdown", xlog.Err(err))
+		b.logger.Error("peer server shutdown", xlog.Ctx(ctx), xlog.Err(err))
 	}
 	b.cluster.Stop()
 	return err
@@ -284,7 +287,7 @@ func (b *broker) Inspects(ctx context.Context) ([]*pb.Status, error) {
 		wg.Go(func() {
 			s, err := cli.inspect(ctx)
 			if err != nil {
-				b.logger.Error("inspect peer failed", xlog.Peer(id), xlog.Err(err))
+				b.logger.Error("inspect peer failed", xlog.Ctx(ctx), xlog.Peer(id), xlog.Err(err))
 				return
 			}
 			ss = append(ss, s)
@@ -342,7 +345,7 @@ func (b *broker) KickUser(ctx context.Context, uid string) {
 			if peer, ok := b.cluster.GetPeer(id); ok {
 				if cids, ok := value.Get(uid); ok {
 					if err := peer.kickConn(ctx, cids.Load()); err != nil {
-						b.logger.Error("kick user from peer failed", xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
+						b.logger.Error("kick user from peer failed", xlog.Ctx(ctx), xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
 					}
 				}
 			}
@@ -384,7 +387,7 @@ func (b *broker) SendToAll(ctx context.Context, m *packet.Message) (int32, int32
 				total.Add(t)
 				success.Add(s)
 			} else {
-				b.logger.Error("send to all from peer failed", xlog.Peer(id), xlog.Err(err))
+				b.logger.Error("send to all from peer failed", xlog.Ctx(ctx), xlog.Peer(id), xlog.Err(err))
 			}
 		})
 		return true
@@ -428,7 +431,7 @@ func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 							total.Add(t)
 							success.Add(s)
 						} else {
-							b.logger.Error("send to user from peer failed", xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
+							b.logger.Error("send to user from peer failed", xlog.Ctx(ctx), xlog.Peer(id), xlog.Uid(uid), xlog.Err(err))
 						}
 					})
 				}
@@ -475,7 +478,7 @@ func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Me
 							total.Add(t)
 							success.Add(s)
 						} else {
-							b.logger.Error("send to user from peer failed", xlog.Peer(id), xlog.Channel(channel), xlog.Err(err))
+							b.logger.Error("send to user from peer failed", xlog.Ctx(ctx), xlog.Peer(id), xlog.Channel(channel), xlog.Err(err))
 						}
 					})
 				}
@@ -606,6 +609,7 @@ func (b *broker) onUserConnect(ctx context.Context, p *packet.Connect, net strin
 		}
 		if cnet, ok := value.GetKey(p.Identity.UserID, p.Identity.ClientID); ok {
 			b.logger.Info("duplicate connection detected, kick old connection",
+				xlog.Ctx(ctx),
 				xlog.Uid(p.Identity.UserID),
 				xlog.Cid(p.Identity.ClientID),
 				xlog.U64("old_peer_id", id),
@@ -616,7 +620,7 @@ func (b *broker) onUserConnect(ctx context.Context, p *packet.Connect, net strin
 			if peer, ok := b.cluster.GetPeer(id); ok {
 				cids := map[string]string{p.Identity.ClientID: net}
 				if err := peer.kickConn(context.Background(), cids); err != nil {
-					b.logger.Error("kick old connection from peer failed", xlog.Peer(id), xlog.Err(err))
+					b.logger.Error("kick old connection from peer failed", xlog.Ctx(ctx), xlog.Peer(id), xlog.Err(err))
 				}
 			}
 		}
@@ -624,7 +628,7 @@ func (b *broker) onUserConnect(ctx context.Context, p *packet.Connect, net strin
 	})
 	chs, err := b.handler.GetUserChannels(p.Identity.UserID)
 	if err != nil {
-		b.logger.Error("get channels failed", xlog.Err(err))
+		b.logger.Error("get channels failed", xlog.Ctx(ctx), xlog.Err(err))
 	}
 	op := &userOpenedOp{
 		uid:      p.Identity.UserID,
@@ -634,7 +638,7 @@ func (b *broker) onUserConnect(ctx context.Context, p *packet.Connect, net strin
 		channels: chs,
 	}
 	if err := b.cluster.SubmitOperation(context.Background(), op); err != nil {
-		b.logger.Error("Failed to submit user connect op", xlog.Err(err))
+		b.logger.Error("Failed to submit user connect op", xlog.Ctx(ctx), xlog.Err(err))
 		return packet.ConnectAuthfail
 	}
 	return packet.ConnectAccepted
@@ -773,7 +777,7 @@ func (b *broker) sendToAll(ctx context.Context, m *packet.Message) (total, succe
 			total += t
 			success += s
 			if err != nil {
-				b.logger.Error("send message to all failed", xlog.Err(err))
+				b.logger.Error("send message to all failed", xlog.Ctx(ctx), xlog.Err(err))
 			}
 		}
 	}
@@ -795,7 +799,7 @@ func (b *broker) sendToClients(ctx context.Context, m *packet.Message, cids map[
 		total++
 		if l, ok := b.listeners[net]; ok && l.ISStarted() {
 			if err := l.SendMessage(ctx, cid, m); err != nil {
-				b.logger.Error("send message to cid failed", xlog.Cid(cid), xlog.Err(err))
+				b.logger.Error("send message to cid failed", xlog.Ctx(ctx), xlog.Cid(cid), xlog.Err(err))
 			} else {
 				success++
 			}

@@ -13,7 +13,6 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"sutext.github.io/cable/api/pb"
 	"sutext.github.io/cable/packet"
-	"sutext.github.io/cable/xlog"
 )
 
 var (
@@ -36,19 +35,15 @@ type Client interface {
 	StopListener(ctx context.Context, network string) error
 }
 type client struct {
-	mu     sync.Mutex
-	rpc    pb.CableServiceClient
-	conn   *grpc.ClientConn
-	addr   string
-	ready  atomic.Bool
-	logger *xlog.Logger
+	mu    sync.Mutex
+	rpc   pb.CableServiceClient
+	conn  *grpc.ClientConn
+	addr  string
+	ready atomic.Bool
 }
 
 func NewClient(addr string) Client {
-	return &client{
-		addr:   addr,
-		logger: xlog.With("API"),
-	}
+	return &client{addr: addr}
 }
 
 func (c *client) Connect() {

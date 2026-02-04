@@ -24,31 +24,25 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	var logger *xlog.Logger
-	if conf.LogFormat == "json" {
-		logger = xlog.NewJSON(conf.Level())
-	} else {
-		logger = xlog.NewText(conf.Level())
-	}
-	xlog.SetDefault(logger)
+	logger := conf.GetLogger()
 	if conf.Pprof {
 		go func() {
 			if err := http.ListenAndServe(":6060", nil); err != nil {
-				xlog.Error("pprof server start :", xlog.Err(err))
+				logger.Error("pprof server start :", xlog.Err(err))
 			}
 		}()
 	}
 	boot := newBooter(conf)
 	boot.Start()
-	xlog.Info("cable server started")
+	logger.Info("cable server started")
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	<-sigs
-	xlog.Info("cable server shutting down")
+	logger.Info("cable server shutting down")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 	defer cancel()
 	if err := boot.Shutdown(ctx); err != nil {
-		xlog.Error("cable server shutdown :", xlog.Err(err))
+		logger.Error("cable server shutdown :", xlog.Err(err))
 	}
-	xlog.Info("cable server shutdown gracefully")
+	logger.Info("cable server shutdown gracefully")
 }

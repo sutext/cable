@@ -35,7 +35,7 @@ type Listener struct {
 func NewListener(network string, port uint16, autoStart bool, opts ...server.Option) *Listener {
 	return &Listener{
 		port:      port,
-		logger:    xlog.With("LISTENER", network),
+		logger:    xlog.Default.With(xlog.Str("LISTENER", network)),
 		network:   network,
 		options:   append(opts, server.WithNetwork(network)),
 		autoStart: autoStart,

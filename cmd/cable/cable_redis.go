@@ -64,23 +64,25 @@ type redisClient struct {
 	authPrefix string
 }
 
-func newRedis(config *config, handler redisHandler) *redisClient {
-	if !config.Redis.Enabled {
-		return nil
+func (b *booter) startRedis() {
+	config := b.config.Redis
+	if !config.Enabled {
+		return
 	}
-	if len(config.Redis.Addresses) == 1 {
+	if len(config.Addresses) == 1 {
 		cli := redis.NewClient(&redis.Options{
-			Addr:     config.Redis.Addresses[0],
-			Password: config.Redis.Password,
-			DB:       config.Redis.DB,
+			Addr:     config.Addresses[0],
+			Password: config.Password,
+			DB:       config.DB,
 		})
-		return &redisClient{impl: cli, handler: handler, joinPrefix: config.Redis.JoinPrefix, authPrefix: config.Redis.AuthPrefix}
+		b.redis = &redisClient{impl: cli, handler: b.stats, joinPrefix: config.JoinPrefix, authPrefix: config.AuthPrefix}
+		return
 	}
 	cli := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs:    config.Redis.Addresses,
-		Password: config.Redis.Password,
+		Addrs:    config.Addresses,
+		Password: config.Password,
 	})
-	return &redisClient{impl: cli, handler: handler, joinPrefix: config.Redis.JoinPrefix, authPrefix: config.Redis.AuthPrefix}
+	b.redis = &redisClient{impl: cli, handler: b.stats, joinPrefix: config.JoinPrefix, authPrefix: config.AuthPrefix}
 }
 func (c *redisClient) Close() error {
 	return c.impl.Close()
