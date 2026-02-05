@@ -138,9 +138,9 @@ func (s *statistics) initTrace(conf traceConfig) (*tracesdk.TracerProvider, erro
 		return nil, err
 	}
 	r, err := resource.New(ctx, resource.WithAttributes(
-		semconv.ServiceVersion(s.config.ServiceVersion),
-		semconv.ServiceName(s.config.ServiceName),
-		semconv.ServiceNamespace(s.config.ServiceName),
+		semconv.ServiceVersion(ServiceVersion),
+		semconv.ServiceName(ServiceName),
+		semconv.ServiceNamespace(ServiceName),
 		semconv.ServiceInstanceID(fmt.Sprintf("%d", s.nodeId)),
 	))
 	if err != nil {
@@ -177,9 +177,9 @@ func (s *statistics) initMeter(conf metricsConfig) (*metricsdk.MeterProvider, er
 		metricsdk.WithTimeout(5*time.Second),
 	)
 	r, err := resource.New(ctx, resource.WithAttributes(
-		semconv.ServiceVersion(s.config.ServiceVersion),
-		semconv.ServiceName(s.config.ServiceName),
-		semconv.ServiceNamespace(s.config.ServiceName),
+		semconv.ServiceVersion(ServiceVersion),
+		semconv.ServiceName(ServiceName),
+		semconv.ServiceNamespace(ServiceName),
 		semconv.ServiceInstanceID(fmt.Sprintf("%d", s.nodeId)),
 	))
 	if err != nil {

@@ -20,6 +20,11 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
+var (
+	ServiceName    = "cable"
+	ServiceVersion = "0.1.0"
+)
+
 type tlsConfig struct {
 	CertFile string `yaml:"certFile"`
 	KeyFile  string `yaml:"keyFile"`
@@ -80,23 +85,21 @@ type authConfig struct {
 }
 
 type config struct {
-	Auth           authConfig                   `yaml:"auth"`
-	Pprof          bool                         `yaml:"pprof"`
-	NodeId         uint64                       `yaml:"nodeId"`
-	GrpcPort       uint16                       `yaml:"grpcPort"`
-	HTTPPort       uint16                       `yaml:"httpPort"`
-	PeerPort       uint16                       `yaml:"peerPort"`
-	ClusterSize    int32                        `yaml:"clusterSize"`
-	ServiceName    string                       `yaml:"serviceName"`
-	ServiceVersion string                       `yaml:"serviceVersion"`
-	Trace          traceConfig                  `yaml:"trace"`
-	Logger         loggerConfig                 `yaml:"logger"`
-	Metrics        metricsConfig                `yaml:"metrics"`
-	Kafka          kafkaConfig                  `yaml:"kafka"`
-	Redis          redisConfig                  `yaml:"redis"`
-	MessageRoute   map[packet.MessageKind]route `yaml:"messageRoute"`
-	Listeners      []listener                   `yaml:"listeners"`
-	_logger        *xlog.Logger
+	Auth         authConfig                   `yaml:"auth"`
+	Pprof        bool                         `yaml:"pprof"`
+	NodeId       uint64                       `yaml:"nodeId"`
+	GrpcPort     uint16                       `yaml:"grpcPort"`
+	HTTPPort     uint16                       `yaml:"httpPort"`
+	PeerPort     uint16                       `yaml:"peerPort"`
+	ClusterSize  int32                        `yaml:"clusterSize"`
+	Trace        traceConfig                  `yaml:"trace"`
+	Logger       loggerConfig                 `yaml:"logger"`
+	Metrics      metricsConfig                `yaml:"metrics"`
+	Kafka        kafkaConfig                  `yaml:"kafka"`
+	Redis        redisConfig                  `yaml:"redis"`
+	MessageRoute map[packet.MessageKind]route `yaml:"messageRoute"`
+	Listeners    []listener                   `yaml:"listeners"`
+	_logger      *xlog.Logger
 }
 
 func (c *config) String() string {
@@ -136,12 +139,6 @@ func (c *config) validate() error {
 	}
 	if c.ClusterSize < 0 {
 		return fmt.Errorf("invalid cluster size: %d", c.ClusterSize)
-	}
-	if c.ServiceName == "" {
-		return fmt.Errorf("service name is empty")
-	}
-	if c.ServiceVersion == "" {
-		return fmt.Errorf("service version is empty")
 	}
 	if c.Trace.Enabled && c.Trace.OTLPEndpoint == "" {
 		return fmt.Errorf("trace enabled but service name is empty")
@@ -258,11 +255,11 @@ func (c *config) otlpLogger() (*zap.Logger, error) {
 		logsdk.WithProcessor(logsdk.NewBatchProcessor(exporter)),
 		logsdk.WithResource(resource.NewWithAttributes(
 			semconv.SchemaURL,
-			semconv.ServiceName(c.ServiceName),
+			semconv.ServiceName(ServiceName),
 		)),
 	)
 	global.SetLoggerProvider(loggerProvider)
-	core := otelzap.NewCore(c.ServiceName)
+	core := otelzap.NewCore(ServiceName)
 	logger := zap.New(&lvlCore{Core: core, level: xlog.ParseLevel(c.Logger.Level).Level()})
 	return logger, nil
 }

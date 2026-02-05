@@ -27,12 +27,6 @@ data:
     # Peer Port for Cluster Communication
     peerPort: 4567
 
-    # Service Name
-    serviceName: cable
-
-    # Service Version
-    serviceVersion: 1.0.0
-
     # Trace Configuration
     trace:
       enabled: true
