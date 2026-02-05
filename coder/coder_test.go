@@ -11,8 +11,8 @@ func TestBasicTypes(t *testing.T) {
 		encoder := NewEncoder()
 		original := uint8(42)
 		encoder.WriteUInt8(original)
-		
-		decoder := NewDecoder(encoder.Bytes())
+
+		decoder := NewDecoder(encoder.Pick())
 		decoded, err := decoder.ReadUInt8()
 		if err != nil {
 			t.Fatalf("ReadUInt8 failed: %v", err)
@@ -27,8 +27,8 @@ func TestBasicTypes(t *testing.T) {
 		encoder := NewEncoder()
 		original := uint16(12345)
 		encoder.WriteUInt16(original)
-		
-		decoder := NewDecoder(encoder.Bytes())
+
+		decoder := NewDecoder(encoder.Pick())
 		decoded, err := decoder.ReadUInt16()
 		if err != nil {
 			t.Fatalf("ReadUInt16 failed: %v", err)
@@ -43,8 +43,8 @@ func TestBasicTypes(t *testing.T) {
 		encoder := NewEncoder()
 		original := uint32(123456789)
 		encoder.WriteUInt32(original)
-		
-		decoder := NewDecoder(encoder.Bytes())
+
+		decoder := NewDecoder(encoder.Pick())
 		decoded, err := decoder.ReadUInt32()
 		if err != nil {
 			t.Fatalf("ReadUInt32 failed: %v", err)
@@ -59,8 +59,8 @@ func TestBasicTypes(t *testing.T) {
 		encoder := NewEncoder()
 		original := uint64(123456789012345)
 		encoder.WriteUInt64(original)
-		
-		decoder := NewDecoder(encoder.Bytes())
+
+		decoder := NewDecoder(encoder.Pick())
 		decoded, err := decoder.ReadUInt64()
 		if err != nil {
 			t.Fatalf("ReadUInt64 failed: %v", err)
@@ -75,8 +75,8 @@ func TestBasicTypes(t *testing.T) {
 		encoder := NewEncoder()
 		original := int8(-42)
 		encoder.WriteInt8(original)
-		
-		decoder := NewDecoder(encoder.Bytes())
+
+		decoder := NewDecoder(encoder.Pick())
 		decoded, err := decoder.ReadInt8()
 		if err != nil {
 			t.Fatalf("ReadInt8 failed: %v", err)
@@ -91,8 +91,8 @@ func TestBasicTypes(t *testing.T) {
 		encoder := NewEncoder()
 		original := int16(-12345)
 		encoder.WriteInt16(original)
-		
-		decoder := NewDecoder(encoder.Bytes())
+
+		decoder := NewDecoder(encoder.Pick())
 		decoded, err := decoder.ReadInt16()
 		if err != nil {
 			t.Fatalf("ReadInt16 failed: %v", err)
@@ -107,8 +107,8 @@ func TestBasicTypes(t *testing.T) {
 		encoder := NewEncoder()
 		original := int32(-123456789)
 		encoder.WriteInt32(original)
-		
-		decoder := NewDecoder(encoder.Bytes())
+
+		decoder := NewDecoder(encoder.Pick())
 		decoded, err := decoder.ReadInt32()
 		if err != nil {
 			t.Fatalf("ReadInt32 failed: %v", err)
@@ -123,8 +123,8 @@ func TestBasicTypes(t *testing.T) {
 		encoder := NewEncoder()
 		original := int64(-123456789012345)
 		encoder.WriteInt64(original)
-		
-		decoder := NewDecoder(encoder.Bytes())
+
+		decoder := NewDecoder(encoder.Pick())
 		decoded, err := decoder.ReadInt64()
 		if err != nil {
 			t.Fatalf("ReadInt64 failed: %v", err)
@@ -139,8 +139,8 @@ func TestBasicTypes(t *testing.T) {
 		// Test true
 		encoder := NewEncoder()
 		encoder.WriteBool(true)
-		
-		decoder := NewDecoder(encoder.Bytes())
+
+		decoder := NewDecoder(encoder.Pick())
 		decoded, err := decoder.ReadBool()
 		if err != nil {
 			t.Fatalf("ReadBool failed: %v", err)
@@ -152,8 +152,8 @@ func TestBasicTypes(t *testing.T) {
 		// Test false
 		encoder = NewEncoder()
 		encoder.WriteBool(false)
-		
-		decoder = NewDecoder(encoder.Bytes())
+
+		decoder = NewDecoder(encoder.Pick())
 		decoded, err = decoder.ReadBool()
 		if err != nil {
 			t.Fatalf("ReadBool failed: %v", err)
@@ -169,8 +169,8 @@ func TestBasicTypes(t *testing.T) {
 		for _, original := range testCases {
 			encoder := NewEncoder()
 			encoder.WriteVarint(original)
-			
-			decoder := NewDecoder(encoder.Bytes())
+
+			decoder := NewDecoder(encoder.Pick())
 			decoded, err := decoder.ReadVarint()
 			if err != nil {
 				t.Fatalf("ReadVarint failed for %v: %v", original, err)
@@ -190,8 +190,8 @@ func TestComplexTypes(t *testing.T) {
 		for _, original := range testCases {
 			encoder := NewEncoder()
 			encoder.WriteString(original)
-			
-			decoder := NewDecoder(encoder.Bytes())
+
+			decoder := NewDecoder(encoder.Pick())
 			decoded, err := decoder.ReadString()
 			if err != nil {
 				t.Fatalf("ReadString failed for %q: %v", original, err)
@@ -208,8 +208,8 @@ func TestComplexTypes(t *testing.T) {
 		for _, original := range testCases {
 			encoder := NewEncoder()
 			encoder.WriteData(original)
-			
-			decoder := NewDecoder(encoder.Bytes())
+
+			decoder := NewDecoder(encoder.Pick())
 			decoded, err := decoder.ReadData()
 			if err != nil {
 				t.Fatalf("ReadData failed for %v: %v", original, err)
@@ -239,8 +239,8 @@ func TestComplexTypes(t *testing.T) {
 		for _, original := range testCases {
 			encoder := NewEncoder()
 			encoder.WriteStrMap(original)
-			
-			decoder := NewDecoder(encoder.Bytes())
+
+			decoder := NewDecoder(encoder.Pick())
 			decoded, err := decoder.ReadStrMap()
 			if err != nil {
 				t.Fatalf("ReadStrMap failed for %v: %v", original, err)
@@ -269,8 +269,8 @@ func TestComplexTypes(t *testing.T) {
 		for _, original := range testCases {
 			encoder := NewEncoder()
 			encoder.WriteStrings(original)
-			
-			decoder := NewDecoder(encoder.Bytes())
+
+			decoder := NewDecoder(encoder.Pick())
 			decoded, err := decoder.ReadStrings()
 			if err != nil {
 				t.Fatalf("ReadStrings failed for %v: %v", original, err)
@@ -300,8 +300,8 @@ func TestComplexTypes(t *testing.T) {
 		for _, original := range testCases {
 			encoder := NewEncoder()
 			encoder.WriteUInt8Map(original)
-			
-			decoder := NewDecoder(encoder.Bytes())
+
+			decoder := NewDecoder(encoder.Pick())
 			decoded, err := decoder.ReadUInt8Map()
 			if err != nil {
 				t.Fatalf("ReadUInt8Map failed for %v: %v", original, err)
@@ -326,8 +326,8 @@ func TestBytes(t *testing.T) {
 	for _, original := range testCases {
 		encoder := NewEncoder()
 		encoder.WriteBytes(original)
-		
-		decoder := NewDecoder(encoder.Bytes())
+
+		decoder := NewDecoder(encoder.Pick())
 		decoded, err := decoder.ReadBytes(uint64(len(original)))
 		if err != nil {
 			t.Fatalf("ReadBytes failed for %v: %v", original, err)
@@ -352,8 +352,8 @@ func TestReadAll(t *testing.T) {
 	for _, original := range testCases {
 		encoder := NewEncoder()
 		encoder.WriteBytes(original)
-		
-		decoder := NewDecoder(encoder.Bytes())
+
+		decoder := NewDecoder(encoder.Pick())
 		decoded, err := decoder.ReadAll()
 		if err != nil {
 			t.Fatalf("ReadAll failed for %v: %v", original, err)
@@ -470,7 +470,7 @@ func TestCombinedTypes(t *testing.T) {
 	encoder.WriteStrings([]string{"a", "b", "c"})
 
 	// Create decoder and read back in the same order
-	decoder := NewDecoder(encoder.Bytes())
+	decoder := NewDecoder(encoder.Pick())
 
 	// Read and verify each type
 	u8, err := decoder.ReadUInt8()

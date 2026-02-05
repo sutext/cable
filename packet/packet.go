@@ -116,9 +116,10 @@ type Properties interface {
 // Packet defines the interface for all network packets.
 // All packets must implement this interface to be sent over the network.
 type Packet interface {
-	fmt.Stringer       // Provides string representation for debugging
-	coder.Codable      // Supports binary encoding/decoding
-	Properties         // Supports property management
+	fmt.Stringer  // Provides string representation for debugging
+	coder.Codable // Supports binary encoding/decoding
+	Properties    // Supports property management
+	// Size() int         //calculates the size of the packet in bytes
 	Type() PacketType  // Returns the packet type
 	Equal(Packet) bool // Compares packets for equality
 }
@@ -220,13 +221,11 @@ func (p *pong) String() string {
 // Returns the encoded bytes and any error encountered.
 func Marshal(p Packet) ([]byte, error) {
 	ec := coder.NewEncoder()
-	defer ec.Free()
 	err := p.WriteTo(ec)
 	if err != nil {
 		return nil, err
 	}
-	data := ec.Bytes()
-	length := len(data)
+	length := ec.Len()
 	if length > MAX_LEN {
 		return nil, ErrPacketSizeTooLarge
 	}
@@ -250,11 +249,7 @@ func Marshal(p Packet) ([]byte, error) {
 		header[0] = byte(p.Type()<<4) | byte(length>>8)
 		header[1] = byte(length)
 	}
-	hl := len(header)
-	bytes := make([]byte, hl+len(data))
-	copy(bytes, header)
-	copy(bytes[hl:], data)
-	return bytes, nil
+	return slices.Concat(header, ec.Pick()), nil
 }
 
 // Unmarshal decodes the given bytes into a Packet object.

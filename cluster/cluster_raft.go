@@ -193,10 +193,9 @@ func (c *cluster) SubmitOperation(ctx context.Context, op opdata) error {
 		return xerr.RaftNodeNotReady
 	}
 	ec := coder.NewEncoder()
-	defer ec.Free()
 	ec.WriteUInt8(uint8(op.opt()))
 	op.WriteTo(ec)
-	c.raft.Propose(ctx, ec.Bytes())
+	c.raft.Propose(ctx, ec.Pick())
 	return nil
 }
 

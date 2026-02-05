@@ -50,9 +50,8 @@ func (e Error) Error() string {
 // Returns the encoded bytes and any error encountered during encoding.
 func Marshal(ec Encodable) ([]byte, error) {
 	coder := NewEncoder()
-	defer coder.Free()
 	err := ec.WriteTo(coder)
-	return coder.Bytes(), err
+	return coder.Pick(), err
 }
 
 // Unmarshal decodes a binary byte slice into a Decodable object.

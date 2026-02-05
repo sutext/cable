@@ -5,16 +5,18 @@ package coder
 
 import (
 	"encoding/binary"
+	"slices"
 )
 
 // Encoder defines methods for encoding various data types into a binary buffer.
 // The encoded data can be retrieved using the Bytes() method.
 // All encoding methods use big-endian byte order for multi-byte values.
 type Encoder interface {
-	// Free releases the resources used by the encoder.
-	Free()
-	// Bytes returns the encoded binary data.
-	Bytes() []byte
+	// Len returns the number of bytes written to the buffer.
+	Len() int
+	// Pick returns the encoded binary data.
+	// Waring: After calling Pick(), the Encoder is no longer usable.
+	Pick() []byte
 	// WriteBytes writes a slice of bytes directly to the buffer.
 	WriteBytes(p []byte)
 	// WriteUInt8 writes an 8-bit unsigned integer to the buffer.
@@ -118,12 +120,16 @@ type encoder struct {
 	pool encPool
 }
 
-func (e *encoder) Free() {
+func (e *encoder) free() {
 	e.buf = e.buf[:0]
 	e.pool.put(e)
 }
-func (e *encoder) Bytes() []byte {
-	return e.buf
+func (e *encoder) Len() int {
+	return len(e.buf)
+}
+func (e *encoder) Pick() []byte {
+	defer e.free()
+	return slices.Clone(e.buf)
 }
 
 // Write bytes directly

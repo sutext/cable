@@ -89,10 +89,9 @@ func (m *discovery) Serve() error {
 		}
 		m.req(id, ipaddr)
 		ec := coder.NewEncoder()
-		defer ec.Free()
 		ec.WriteUInt64(m.id)
 		ec.WriteString(m.ipaddr)
-		resp := req.Response(packet.StatusOK, ec.Bytes())
+		resp := req.Response(packet.StatusOK, ec.Pick())
 		bytes, err := packet.Marshal(resp)
 		if err != nil {
 			m.logger.Error("marshal response error", xlog.Err(err))
@@ -145,9 +144,8 @@ func (m *discovery) Request() (r map[uint64]string, err error) {
 	ec := coder.NewEncoder()
 	ec.WriteUInt64(m.id)
 	ec.WriteString(m.ipaddr)
-	req := packet.NewRequest("discovery", ec.Bytes())
+	req := packet.NewRequest("discovery", ec.Pick())
 	reqdata, err := packet.Marshal(req)
-	ec.Free()
 	if err != nil {
 		return r, err
 	}
