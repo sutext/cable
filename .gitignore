@@ -10,7 +10,7 @@
 .DS_Store
 # Test binary, built with `go test -c`
 *.test
-
+__debug_bin*
 # Code coverage profiles and other test artifacts
 *.out
 coverage.*
