@@ -83,8 +83,8 @@ func (h *emptyHandler) OnClusterReady() {}
 // options holds the configuration for the cluster.
 type options struct {
 	logger           *xlog.Logger
+	nodeId           uint64            // Unique ID for the broker
 	handler          Handler           // Handler for cluster events
-	brokerID         uint64            // Unique ID for the broker
 	peerPort         uint16            // Port for peer-to-peer communication
 	listeners        []*Listener       // List of listeners for client connections
 	clusterSize      int32             // Initial cluster size
@@ -162,16 +162,16 @@ func WithListeners(listerners []*Listener) Option {
 	}}
 }
 
-// WithBrokerID sets the unique ID for the broker.
+// WithNodeId sets the unique ID for the broker.
 //
 // Parameters:
 // - id: Broker ID
 //
 // Returns:
 // - Option: Configuration option for the cluster
-func WithBrokerID(id uint64) Option {
+func WithNodeId(id uint64) Option {
 	return Option{func(o *options) {
-		o.brokerID = id
+		o.nodeId = id
 	}}
 }
 
@@ -214,12 +214,12 @@ func WithGrpcStatsHandler(handler stats.GrpcHandler) Option {
 	}}
 }
 
-// getBrokerID returns a unique ID for the broker.
+// GetNodeId returns a unique ID for the broker.
 // It tries to derive an ID from the hostname, otherwise generates a random ID.
 //
 // Returns:
 // - uint64: Unique broker ID
-func BrokerID() uint64 {
+func GetNodeId() uint64 {
 	if hostname, err := os.Hostname(); err == nil {
 		strs := strings.Split(hostname, "-")
 		if len(strs) > 1 {

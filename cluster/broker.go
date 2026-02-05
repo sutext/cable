@@ -126,12 +126,12 @@ type Broker interface {
 	//
 	// Parameters:
 	// - ctx: Context for the operation
-	// - brokerID: ID of the broker to list users from
+	// - nodeId: ID of the broker to list users from
 	//
 	// Returns:
 	// - map[string]map[string]string: Map of user IDs to map of client IDs to network protocols
 	// - error: Error if listing fails, nil otherwise
-	ListUsers(ctx context.Context, brokerID uint64) (map[string]map[string]string, error)
+	ListUsers(ctx context.Context, nodeId uint64) (map[string]map[string]string, error)
 	// HandleRequest registers a handler for a specific request method.
 	//
 	// Parameters:
@@ -163,7 +163,7 @@ type Broker interface {
 
 // broker implements the Broker interface and manages client connections, channels, and message routing.
 type broker struct {
-	id             uint64                                    // Unique broker ID
+	nodeId         uint64                                    // Unique broker ID
 	logger         *xlog.Logger                              // Logger for broker events
 	cluster        *cluster                                  // Underlying cluster instance
 	handler        Handler                                   // Event handler for broker events
@@ -185,12 +185,12 @@ type broker struct {
 func NewBroker(opts ...Option) Broker {
 	options := newOptions(opts...)
 	b := &broker{}
-	if options.brokerID > 0 {
-		b.id = options.brokerID
+	if options.nodeId > 0 {
+		b.nodeId = options.nodeId
 	} else {
-		b.id = BrokerID()
+		b.nodeId = GetNodeId()
 	}
-	b.logger = options.logger.With(xlog.U64("BROKER", b.id))
+	b.logger = options.logger.With(xlog.U64("BROKER", b.nodeId))
 	b.handler = options.handler
 	b.listeners = make(map[string]*Listener)
 	for _, l := range options.listeners {
@@ -211,7 +211,7 @@ func NewBroker(opts ...Option) Broker {
 	return b
 }
 func (b *broker) ID() uint64 {
-	return b.id
+	return b.nodeId
 }
 
 // Start starts the broker and all its components.
@@ -308,7 +308,7 @@ func (b *broker) Inspects(ctx context.Context) ([]*pb.Status, error) {
 // - bool: True if the user is online, false otherwise
 func (b *broker) IsOnline(ctx context.Context, uid string) (online bool) {
 	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
-		if id == b.id {
+		if id == b.nodeId {
 			if cids, ok := value.Get(uid); ok {
 				if b.isActive(cids.Load()) {
 					online = true
@@ -337,7 +337,7 @@ func (b *broker) IsOnline(ctx context.Context, uid string) (online bool) {
 // - uid: User ID to kick
 func (b *broker) KickUser(ctx context.Context, uid string) {
 	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
-		if id == b.id {
+		if id == b.nodeId {
 			if cids, ok := value.Get(uid); ok {
 				b.kickConn(cids.Load())
 			}
@@ -414,7 +414,7 @@ func (b *broker) SendToUser(ctx context.Context, uid string, m *packet.Message) 
 	wg := sync.WaitGroup{}
 	var total, success atomic.Int32
 	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
-		if id == b.id {
+		if id == b.nodeId {
 			if cids, ok := value.Get(uid); ok {
 				wg.Go(func() {
 					t, s := b.sendToClients(ctx, m, cids.Load())
@@ -461,7 +461,7 @@ func (b *broker) SendToChannel(ctx context.Context, channel string, m *packet.Me
 	wg := sync.WaitGroup{}
 	var total, success atomic.Int32
 	b.channelClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
-		if id == b.id {
+		if id == b.nodeId {
 			if cids, ok := value.Get(channel); ok {
 				wg.Go(func() {
 					t, s := b.sendToClients(ctx, m, cids.Load())
@@ -523,8 +523,8 @@ func (b *broker) LeaveChannel(ctx context.Context, uid string, channels map[stri
 	}
 	return b.cluster.SubmitOperation(ctx, op)
 }
-func (b *broker) ListUsers(ctx context.Context, brokerID uint64) (map[string]map[string]string, error) {
-	userClients, ok := b.userClients.Get(brokerID)
+func (b *broker) ListUsers(ctx context.Context, nodeId uint64) (map[string]map[string]string, error) {
+	userClients, ok := b.userClients.Get(nodeId)
 	if !ok {
 		return nil, xerr.PeerNotReady
 	}
@@ -580,7 +580,7 @@ func (b *broker) onUserClosed(id *packet.Identity) {
 	op := &userClosedOp{
 		uid:    id.UserID,
 		cid:    id.ClientID,
-		nodeID: b.id,
+		nodeID: b.nodeId,
 	}
 	if err := b.cluster.SubmitOperation(context.Background(), op); err != nil {
 		b.logger.Error("Failed to submit user disconnect op", xlog.Err(err))
@@ -604,7 +604,7 @@ func (b *broker) onUserConnect(ctx context.Context, p *packet.Connect, net strin
 		return code
 	}
 	b.userClients.Range(func(id uint64, value *safe.KeyMap[string]) bool {
-		if id == b.id {
+		if id == b.nodeId {
 			return true
 		}
 		if cnet, ok := value.GetKey(p.Identity.UserID, p.Identity.ClientID); ok {
@@ -614,7 +614,7 @@ func (b *broker) onUserConnect(ctx context.Context, p *packet.Connect, net strin
 				xlog.Cid(p.Identity.ClientID),
 				xlog.U64("old_peer_id", id),
 				xlog.Str("old_net", cnet),
-				xlog.U64("new_peer_id", b.id),
+				xlog.U64("new_peer_id", b.nodeId),
 				xlog.Str("new_net", net),
 			)
 			if peer, ok := b.cluster.GetPeer(id); ok {
@@ -634,7 +634,7 @@ func (b *broker) onUserConnect(ctx context.Context, p *packet.Connect, net strin
 		uid:      p.Identity.UserID,
 		cid:      p.Identity.ClientID,
 		net:      net,
-		nodeID:   b.id,
+		nodeID:   b.nodeId,
 		channels: chs,
 	}
 	if err := b.cluster.SubmitOperation(context.Background(), op); err != nil {
@@ -721,7 +721,7 @@ func (b *broker) inspect() *pb.Status {
 		}
 	}
 	return &pb.Status{
-		Id:            b.id,
+		Id:            b.nodeId,
 		UserCount:     userCount,
 		ClientCount:   b.ConnCount(),
 		ChannelCount:  channelCount,

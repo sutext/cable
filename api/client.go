@@ -25,9 +25,9 @@ type Client interface {
 	IsReady() bool
 	IsOnline(ctx context.Context, uid string) (ok bool, err error)
 	KickUser(ctx context.Context, uid string) (err error)
-	SendToAll(ctx context.Context, qos packet.MessageQos, kind packet.MessageKind, message []byte) (total, success int32, err error)
-	SendToUser(ctx context.Context, uid string, qos packet.MessageQos, kind packet.MessageKind, message []byte) (total, success int32, err error)
-	SendToChannel(ctx context.Context, channel string, qos packet.MessageQos, kind packet.MessageKind, message []byte) (total, success int32, err error)
+	SendToAll(ctx context.Context, kind packet.MessageKind, message []byte) (total, success int32, err error)
+	SendToUser(ctx context.Context, uid string, kind packet.MessageKind, message []byte) (total, success int32, err error)
+	SendToChannel(ctx context.Context, channel string, kind packet.MessageKind, message []byte) (total, success int32, err error)
 	JoinChannel(ctx context.Context, uid string, channels map[string]string) (err error)
 	LeaveChannel(ctx context.Context, uid string, channels map[string]string) (err error)
 	ListChannels(ctx context.Context, uid string) (channels map[string]string, err error)
@@ -138,12 +138,20 @@ func (c *client) KickUser(ctx context.Context, uid string) (err error) {
 	})
 	return err
 }
-func (c *client) SendToAll(ctx context.Context, qos packet.MessageQos, kind packet.MessageKind, message []byte) (total, success int32, err error) {
+func (c *client) KickNode(ctx context.Context, nodeId uint64) (err error) {
+	if !c.IsReady() {
+		return ErrClientNotReady
+	}
+	_, err = c.rpc.KickNode(ctx, &pb.KickNodeReq{
+		NodeId: nodeId,
+	})
+	return err
+}
+func (c *client) SendToAll(ctx context.Context, kind packet.MessageKind, message []byte) (total, success int32, err error) {
 	if !c.IsReady() {
 		return 0, 0, ErrClientNotReady
 	}
 	resp, err := c.rpc.SendToAll(ctx, &pb.ToAllReq{
-		Qos:     int32(qos),
 		Kind:    int32(kind),
 		Message: message,
 	})
@@ -152,13 +160,12 @@ func (c *client) SendToAll(ctx context.Context, qos packet.MessageQos, kind pack
 	}
 	return resp.Total, resp.Success, nil
 }
-func (c *client) SendToUser(ctx context.Context, uid string, qos packet.MessageQos, kind packet.MessageKind, message []byte) (total, success int32, err error) {
+func (c *client) SendToUser(ctx context.Context, uid string, kind packet.MessageKind, message []byte) (total, success int32, err error) {
 	if !c.IsReady() {
 		return 0, 0, ErrClientNotReady
 	}
 	resp, err := c.rpc.SendToUser(ctx, &pb.ToUserReq{
 		Uid:     uid,
-		Qos:     int32(qos),
 		Kind:    int32(kind),
 		Message: message,
 	})
@@ -167,13 +174,12 @@ func (c *client) SendToUser(ctx context.Context, uid string, qos packet.MessageQ
 	}
 	return resp.Total, resp.Success, nil
 }
-func (c *client) SendToChannel(ctx context.Context, channel string, qos packet.MessageQos, kind packet.MessageKind, message []byte) (total, success int32, err error) {
+func (c *client) SendToChannel(ctx context.Context, channel string, kind packet.MessageKind, message []byte) (total, success int32, err error) {
 	if !c.IsReady() {
 		return 0, 0, ErrClientNotReady
 	}
 	resp, err := c.rpc.SendToChannel(ctx, &pb.ToChannelReq{
 		Channel: channel,
-		Qos:     int32(qos),
 		Kind:    int32(kind),
 		Message: message,
 	})

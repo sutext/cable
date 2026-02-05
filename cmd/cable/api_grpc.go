@@ -65,9 +65,12 @@ func (s *grpcServer) KickUser(ctx context.Context, req *pb.UserReq) (*pb.EmptyRe
 	s.broker.KickUser(ctx, req.Uid)
 	return &pb.EmptyResp{}, nil
 }
+func (s *grpcServer) KickNode(ctx context.Context, req *pb.KickNodeReq) (*pb.EmptyResp, error) {
+	s.broker.Cluster().KickBroker(ctx, req.NodeId)
+	return &pb.EmptyResp{}, nil
+}
 func (s *grpcServer) SendToAll(ctx context.Context, req *pb.ToAllReq) (*pb.MsgResp, error) {
 	msg := &packet.Message{
-		Qos:     packet.MessageQos(req.Qos),
 		Kind:    packet.MessageKind(req.Kind),
 		Payload: req.Message,
 	}
@@ -80,9 +83,9 @@ func (s *grpcServer) SendToAll(ctx context.Context, req *pb.ToAllReq) (*pb.MsgRe
 		Success: success,
 	}, nil
 }
+
 func (s *grpcServer) SendToUser(ctx context.Context, req *pb.ToUserReq) (*pb.MsgResp, error) {
 	msg := &packet.Message{
-		Qos:     packet.MessageQos(req.Qos),
 		Kind:    packet.MessageKind(req.Kind),
 		Payload: req.Message,
 	}
@@ -97,7 +100,6 @@ func (s *grpcServer) SendToUser(ctx context.Context, req *pb.ToUserReq) (*pb.Msg
 }
 func (s *grpcServer) SendToChannel(ctx context.Context, req *pb.ToChannelReq) (*pb.MsgResp, error) {
 	msg := &packet.Message{
-		Qos:     packet.MessageQos(req.Qos),
 		Kind:    packet.MessageKind(req.Kind),
 		Payload: req.Message,
 	}

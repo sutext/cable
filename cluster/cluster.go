@@ -80,7 +80,7 @@ func newCluster(broker *broker, opts *options) *cluster {
 		logger:    broker.logger,
 		stoped:    make(chan struct{}),
 		peerStats: opts.grpcStatsHandler.Client,
-		discovery: discovery.New(broker.id, opts.peerPort, broker.logger),
+		discovery: discovery.New(broker.nodeId, opts.peerPort, broker.logger),
 	}
 	c.discovery.OnRequest(func(id uint64, addr string) {
 		c.AddBroker(context.Background(), id, addr)
@@ -145,7 +145,7 @@ func (c *cluster) RaftLogSize() uint64 {
 // Returns:
 // - error: Error if adding the broker fails, nil otherwise
 func (c *cluster) AddBroker(ctx context.Context, id uint64, addr string) error {
-	if id == c.broker.id {
+	if id == c.broker.nodeId {
 		return nil
 	}
 	if p, ok := c.peers.Get(id); ok {
@@ -173,7 +173,7 @@ func (c *cluster) AddBroker(ctx context.Context, id uint64, addr string) error {
 // Returns:
 // - error: Error if removing the broker fails, nil otherwise
 func (c *cluster) KickBroker(ctx context.Context, id uint64) error {
-	if id == c.broker.id {
+	if id == c.broker.nodeId {
 		c.ready.Store(false)
 	}
 	return c.removeNode(ctx, id)
@@ -224,7 +224,7 @@ func (c *cluster) Process(ctx context.Context, m raftpb.Message) error {
 // Returns:
 // - bool: True if the local broker is the leader, false otherwise
 func (c *cluster) IsLeader() bool {
-	return c.leader.Load() == c.broker.id
+	return c.leader.Load() == c.broker.nodeId
 }
 
 // Leader returns the ID of the current cluster leader.

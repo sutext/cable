@@ -145,7 +145,7 @@ func (m *mockBroker) LeaveChannel(ctx context.Context, userID string, channels m
 	return nil
 }
 
-func (m *mockBroker) ListUsers(ctx context.Context, brokerID uint64) (map[string]map[string]string, error) {
+func (m *mockBroker) ListUsers(ctx context.Context, nodeId uint64) (map[string]map[string]string, error) {
 	return nil, nil
 }
 

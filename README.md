@@ -88,7 +88,7 @@ go run cable.go -config cable.config.yaml
 
 ### Cluster Mode
 
-1. Configure multiple node configuration files, modifying `brokerID` and ports
+1. Configure multiple node configuration files, modifying `nodeId` and ports
 2. Start each node sequentially
 3. Nodes will automatically discover and form a cluster
 
@@ -98,7 +98,7 @@ go run cable.go -config cable.config.yaml
 
 ```yaml
 # Basic configuration
-brokerID: 1
+nodeId: 1
 logLevel: "info"
 pprof: false
 
@@ -135,7 +135,7 @@ kafka:
 
 | Configuration Item | Type | Description |
 |-------------------|------|-------------|
-| brokerID | uint64 | Unique node identifier |
+| nodeId | uint64 | Unique node identifier |
 | logLevel | string | Log level (debug, info, warn, error) |
 | initSize | int32 | Initial cluster size |
 | listeners | []Listener | Network listener configuration |
@@ -166,7 +166,7 @@ kafka:
 ```go
 // Create a broker instance
 broker := cluster.NewBroker(
-    cluster.WithBrokerID(1),
+    cluster.WithNodeId(1),
     cluster.WithHandler(handler),
     cluster.WithInitSize(3),
     cluster.WithListeners(listeners),

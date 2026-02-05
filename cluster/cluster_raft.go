@@ -251,7 +251,7 @@ func (c *cluster) startRaft(join bool) {
 	}
 	c.storage = raft.NewMemoryStorage()
 	conf := &raft.Config{
-		ID:                        c.broker.id,
+		ID:                        c.broker.nodeId,
 		ElectionTick:              10,
 		HeartbeatTick:             1,
 		Storage:                   c.storage,
@@ -263,7 +263,7 @@ func (c *cluster) startRaft(join bool) {
 		c.raft = raft.RestartNode(conf)
 	} else {
 		initPeers := make([]raft.Peer, c.size)
-		initPeers[0] = raft.Peer{ID: c.broker.id}
+		initPeers[0] = raft.Peer{ID: c.broker.nodeId}
 		c.peers.Range(func(key uint64, value *peerClient) bool {
 			initPeers = append(initPeers, raft.Peer{ID: key})
 			return true
@@ -440,7 +440,7 @@ func (c *cluster) applyRemoveNode(id uint64) {
 		c.logger.Info("peer deleted", xlog.Peer(id))
 	}
 	c.size = c.peers.Len() + 1
-	if c.broker.id == id {
+	if c.broker.nodeId == id {
 		c.leader.Store(0)
 		c.ready.Store(false)
 		c.broker.ExpelAllConns()

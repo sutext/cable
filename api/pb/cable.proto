@@ -10,25 +10,22 @@ message EmptyResp{
 
 // ToAllReq is a request message to send a message to all users.
 message ToAllReq{
-    int32 qos = 1;
-    int32 kind = 2;
-    bytes message = 3;
+    int32 kind = 1;
+    bytes message = 2;
 
 }
 
 // ToUserReq is a request message to send a message to a specific user.
 message ToUserReq{
     string uid = 1;
-    int32  qos = 2;
-    int32  kind = 3;
-    bytes  message = 4;
+    int32  kind = 2;
+    bytes  message = 3;
 }
 // ToChannelReq is a request message to send a message to a specific channel.
 message ToChannelReq{
     string channel = 1;
-    int32 qos = 2;
-    int32 kind = 3;
-    bytes message = 4;
+    int32 kind = 2;
+    bytes message = 3;
 }
 // MsgResp is a response message to indicate the result of a message sending operation.
 message MsgResp{
@@ -46,7 +43,7 @@ message UserReq{
 }
 // KickNodeReq is a request message to kick a specific node from the cluster.
 message KickNodeReq{
-    uint64 brokerID = 1;
+    uint64 node_id = 1;
 }
 
 // OnlineResp is a response message to indicate whether a user is online.

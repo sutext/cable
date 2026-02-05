@@ -78,18 +78,14 @@ type client struct {
 	pingLock       sync.Mutex                       // Lock for ping operations
 	sendQueue      *queue.Queue                     // Queue for outgoing packets
 	keepalive      *keepalive.KeepAlive             // Keepalive mechanism
-	messageID      atomic.Uint64                    // Message ID generator
 	requestID      atomic.Uint64                    // Request ID generator
 	statusLock     sync.RWMutex                     // Lock for status changes
 	pingTimeout    time.Duration                    // Timeout for ping operations
 	pingInterval   time.Duration                    // Interval for sending pings
 	requestLock    sync.Mutex                       // Lock for request tasks
-	messageLock    sync.Mutex                       // Lock for message tasks
 	requestTasks   map[uint16]chan *packet.Response // Pending request tasks
-	messageTasks   map[uint16]chan *packet.Messack  // Pending message tasks
 	writeTimeout   time.Duration                    // Timeout for write operations
 	requestTimeout time.Duration                    // Timeout for requests
-	messageTimeout time.Duration                    // Timeout for messages
 }
 
 // New creates a new Client instance with the specified address and options.
@@ -134,9 +130,7 @@ func New(endpoint string, options ...Option) Client {
 		pingInterval:   opts.pingInterval,
 		writeTimeout:   opts.writeTimeout,
 		requestTasks:   make(map[uint16]chan *packet.Response),
-		messageTasks:   make(map[uint16]chan *packet.Messack),
 		requestTimeout: opts.requestTimeout,
-		messageTimeout: opts.messageTimeout,
 	}
 	c.keepalive = keepalive.New(c.pingInterval, c)
 	return c
@@ -293,61 +287,7 @@ func (c *client) SendMessage(ctx context.Context, p *packet.Message) error {
 	if !c.IsReady() {
 		return ErrConnectionNotReady
 	}
-	if p.Qos == packet.MessageQos0 {
-		return c.sendPacket(ctx, false, p)
-	}
-	if p.ID == 0 {
-		p.ID = uint16(c.messageID.Add(1) / math.MaxUint16)
-	}
-	return c.retryInflightMessage(ctx, p, 0)
-}
-
-// retryInflightMessage retries sending a message with QoS > 0 until acknowledged or timed out.
-func (c *client) retryInflightMessage(ctx context.Context, p *packet.Message, attempts int) error {
-	if attempts > 5 {
-		return ErrRequestTimeout
-	}
-	if attempts > 0 {
-		p.Dup = true
-		c.logger.Warn("retry inflight message", xlog.U16("id", p.ID), xlog.Int("attempts", attempts))
-	}
-	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
-	defer cancel()
-	_, err := c.sendInflightMessage(ctx, p)
-	if err != nil {
-		if t, ok := err.(interface{ Timeout() bool }); ok && t.Timeout() {
-			p.Dup = true
-			return c.retryInflightMessage(context.Background(), p, attempts+1)
-		}
-		return err
-	}
-	return nil
-}
-
-// sendInflightMessage sends a message and waits for acknowledgment.
-func (c *client) sendInflightMessage(ctx context.Context, p *packet.Message) (*packet.Messack, error) {
-	if !c.IsReady() {
-		return nil, ErrConnectionNotReady
-	}
-	c.messageLock.Lock()
-	ackCh := make(chan *packet.Messack)
-	c.messageTasks[p.ID] = ackCh
-	c.messageLock.Unlock()
-	defer func() {
-		c.messageLock.Lock()
-		delete(c.messageTasks, p.ID)
-		close(ackCh)
-		c.messageLock.Unlock()
-	}()
-	if err := c.sendPacket(ctx, false, p); err != nil {
-		return nil, err
-	}
-	select {
-	case res := <-ackCh:
-		return res, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
+	return c.sendPacket(ctx, false, p)
 }
 
 // SendRequest sends a request to the server and waits for the response.
@@ -452,24 +392,8 @@ func (c *client) handlePacket(p packet.Packet) {
 		err := c.handler.OnMessage(msg)
 		if err != nil {
 			c.logger.Error("message handler error", xlog.Err(err))
-			return
 		}
-		if msg.Qos == packet.MessageQos1 {
-			if err := c.sendPacket(context.Background(), true, msg.Ack()); err != nil {
-				c.logger.Error("send messack packet error", xlog.Err(err))
-			}
-		}
-	case packet.MESSACK:
-		p := p.(*packet.Messack)
-		c.messageLock.Lock()
-		ch, ok := c.messageTasks[p.ID()]
-		if ok {
-			ch <- p
-		}
-		c.messageLock.Unlock()
-		if !ok {
-			c.logger.Error("response task not found", xlog.U16("id", p.ID()))
-		}
+
 	case packet.REQUEST:
 		p := p.(*packet.Request)
 		var res *packet.Response

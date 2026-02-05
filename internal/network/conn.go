@@ -62,11 +62,8 @@ type conn struct {
 	pingChan     chan struct{}
 	delegate     delegate
 	sendQueue    *queue.Queue
-	messageID    atomic.Uint64
 	requestID    atomic.Uint64
 	requestLock  sync.Mutex
-	messageLock  sync.Mutex
-	messageTasks map[uint16]chan *packet.Messack
 	requestTasks map[uint16]chan *packet.Response
 }
 
@@ -76,7 +73,6 @@ func newConn(raw rawconn, delegate delegate) Conn {
 		logger:       delegate.Logger(),
 		delegate:     delegate,
 		sendQueue:    queue.New(int32(delegate.QueueCapacity())),
-		messageTasks: make(map[uint16]chan *packet.Messack),
 		requestTasks: make(map[uint16]chan *packet.Response),
 	}
 	return c
@@ -122,54 +118,9 @@ func (c *conn) SendPing(ctx context.Context) error {
 	}
 }
 func (c *conn) SendMessage(ctx context.Context, p *packet.Message) error {
-	if p.Qos == packet.MessageQos0 {
-		return c.SendPacket(ctx, p)
-	}
-	if p.ID == 0 {
-		p.ID = uint16(c.messageID.Add(1) / math.MaxUint16)
-	}
-	return c.retryInflightMessage(ctx, p, 0)
+	return c.SendPacket(ctx, p)
 }
-func (c *conn) retryInflightMessage(ctx context.Context, p *packet.Message, attempts int) error {
-	if attempts > 5 {
-		return xerr.MessageTimeout
-	}
-	ctx, cancel := context.WithTimeout(ctx, time.Second*5)
-	defer cancel()
-	_, err := c.sendInflightMessage(ctx, p)
-	if err != nil {
-		if t, ok := err.(interface{ Timeout() bool }); ok && t.Timeout() {
-			p.Dup = true
-			return c.retryInflightMessage(context.Background(), p, attempts+1)
-		}
-		return err
-	}
-	return nil
-}
-func (c *conn) sendInflightMessage(ctx context.Context, p *packet.Message) (*packet.Messack, error) {
-	if c.IsClosed() {
-		return nil, xerr.ConnectionIsClosed
-	}
-	c.messageLock.Lock()
-	ackCh := make(chan *packet.Messack)
-	c.messageTasks[p.ID] = ackCh
-	c.messageLock.Unlock()
-	defer func() {
-		c.messageLock.Lock()
-		delete(c.messageTasks, p.ID)
-		close(ackCh)
-		c.messageLock.Unlock()
-	}()
-	if err := c.SendPacket(ctx, p); err != nil {
-		return nil, err
-	}
-	select {
-	case ack := <-ackCh:
-		return ack, nil
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-}
+
 func (c *conn) SendRequest(ctx context.Context, p *packet.Request) (*packet.Response, error) {
 	if c.IsClosed() {
 		return nil, xerr.ConnectionIsClosed
@@ -204,8 +155,6 @@ func (c *conn) RecvPacket(p packet.Packet) {
 	switch p.Type() {
 	case packet.MESSAGE:
 		c.delegate.OnMessage(context.Background(), c, p.(*packet.Message))
-	case packet.MESSACK:
-		c.recvMessack(p.(*packet.Messack))
 	case packet.REQUEST:
 		c.delegate.OnRequest(context.Background(), c, p.(*packet.Request))
 	case packet.RESPONSE:
@@ -226,17 +175,6 @@ func (c *conn) recvPong() {
 		c.pingChan <- struct{}{}
 	}
 	c.pingLock.Unlock()
-}
-func (c *conn) recvMessack(p *packet.Messack) {
-	c.messageLock.Lock()
-	ch, ok := c.messageTasks[p.ID()]
-	if ok {
-		ch <- p
-	}
-	c.messageLock.Unlock()
-	if !ok {
-		c.logger.Error("message task not found", xlog.U16("id", p.ID()))
-	}
 }
 func (c *conn) recvResponse(p *packet.Response) {
 	c.requestLock.Lock()

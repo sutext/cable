@@ -3,8 +3,8 @@
 # Pprof Debugging
 pprof: false
 
-# Broker ID for cluster, default is 0 for auto mode
-brokerid: 0
+# Node ID for cluster, default is 0 for auto mode
+nodeId: 0
 
 # Initial size of cluster
 clusterSize: 1

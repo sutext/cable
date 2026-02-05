@@ -254,7 +254,7 @@ const docTemplate = `{
                     {
                         "type": "string",
                         "description": "Broker ID",
-                        "name": "brokerID",
+                        "name": "nodeId",
                         "in": "query",
                         "required": true
                     }
@@ -270,7 +270,7 @@ const docTemplate = `{
                         }
                     },
                     "400": {
-                        "description": "Invalid brokerID",
+                        "description": "Invalid nodeId",
                         "schema": {
                             "type": "string"
                         }

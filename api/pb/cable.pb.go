@@ -61,9 +61,8 @@ func (*EmptyResp) Descriptor() ([]byte, []int) {
 // ToAllReq is a request message to send a message to all users.
 type ToAllReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Qos           int32                  `protobuf:"varint,1,opt,name=qos,proto3" json:"qos,omitempty"`
-	Kind          int32                  `protobuf:"varint,2,opt,name=kind,proto3" json:"kind,omitempty"`
-	Message       []byte                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	Kind          int32                  `protobuf:"varint,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	Message       []byte                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -98,13 +97,6 @@ func (*ToAllReq) Descriptor() ([]byte, []int) {
 	return file_api_pb_cable_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *ToAllReq) GetQos() int32 {
-	if x != nil {
-		return x.Qos
-	}
-	return 0
-}
-
 func (x *ToAllReq) GetKind() int32 {
 	if x != nil {
 		return x.Kind
@@ -123,9 +115,8 @@ func (x *ToAllReq) GetMessage() []byte {
 type ToUserReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Uid           string                 `protobuf:"bytes,1,opt,name=uid,proto3" json:"uid,omitempty"`
-	Qos           int32                  `protobuf:"varint,2,opt,name=qos,proto3" json:"qos,omitempty"`
-	Kind          int32                  `protobuf:"varint,3,opt,name=kind,proto3" json:"kind,omitempty"`
-	Message       []byte                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
+	Kind          int32                  `protobuf:"varint,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	Message       []byte                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -167,13 +158,6 @@ func (x *ToUserReq) GetUid() string {
 	return ""
 }
 
-func (x *ToUserReq) GetQos() int32 {
-	if x != nil {
-		return x.Qos
-	}
-	return 0
-}
-
 func (x *ToUserReq) GetKind() int32 {
 	if x != nil {
 		return x.Kind
@@ -192,9 +176,8 @@ func (x *ToUserReq) GetMessage() []byte {
 type ToChannelReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Channel       string                 `protobuf:"bytes,1,opt,name=channel,proto3" json:"channel,omitempty"`
-	Qos           int32                  `protobuf:"varint,2,opt,name=qos,proto3" json:"qos,omitempty"`
-	Kind          int32                  `protobuf:"varint,3,opt,name=kind,proto3" json:"kind,omitempty"`
-	Message       []byte                 `protobuf:"bytes,4,opt,name=message,proto3" json:"message,omitempty"`
+	Kind          int32                  `protobuf:"varint,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	Message       []byte                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -234,13 +217,6 @@ func (x *ToChannelReq) GetChannel() string {
 		return x.Channel
 	}
 	return ""
-}
-
-func (x *ToChannelReq) GetQos() int32 {
-	if x != nil {
-		return x.Qos
-	}
-	return 0
 }
 
 func (x *ToChannelReq) GetKind() int32 {
@@ -411,7 +387,7 @@ func (x *UserReq) GetUid() string {
 // KickNodeReq is a request message to kick a specific node from the cluster.
 type KickNodeReq struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	BrokerID      uint64                 `protobuf:"varint,1,opt,name=brokerID,proto3" json:"brokerID,omitempty"`
+	NodeId        uint64                 `protobuf:"varint,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -446,9 +422,9 @@ func (*KickNodeReq) Descriptor() ([]byte, []int) {
 	return file_api_pb_cable_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *KickNodeReq) GetBrokerID() uint64 {
+func (x *KickNodeReq) GetNodeId() uint64 {
 	if x != nil {
-		return x.BrokerID
+		return x.NodeId
 	}
 	return 0
 }
@@ -592,21 +568,18 @@ var File_api_pb_cable_proto protoreflect.FileDescriptor
 const file_api_pb_cable_proto_rawDesc = "" +
 	"\n" +
 	"\x12api/pb/cable.proto\x12\x02pb\"\v\n" +
-	"\tEmptyResp\"J\n" +
-	"\bToAllReq\x12\x10\n" +
-	"\x03qos\x18\x01 \x01(\x05R\x03qos\x12\x12\n" +
-	"\x04kind\x18\x02 \x01(\x05R\x04kind\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\fR\amessage\"]\n" +
+	"\tEmptyResp\"8\n" +
+	"\bToAllReq\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\x05R\x04kind\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\fR\amessage\"K\n" +
 	"\tToUserReq\x12\x10\n" +
-	"\x03uid\x18\x01 \x01(\tR\x03uid\x12\x10\n" +
-	"\x03qos\x18\x02 \x01(\x05R\x03qos\x12\x12\n" +
-	"\x04kind\x18\x03 \x01(\x05R\x04kind\x12\x18\n" +
-	"\amessage\x18\x04 \x01(\fR\amessage\"h\n" +
+	"\x03uid\x18\x01 \x01(\tR\x03uid\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\x05R\x04kind\x12\x18\n" +
+	"\amessage\x18\x03 \x01(\fR\amessage\"V\n" +
 	"\fToChannelReq\x12\x18\n" +
-	"\achannel\x18\x01 \x01(\tR\achannel\x12\x10\n" +
-	"\x03qos\x18\x02 \x01(\x05R\x03qos\x12\x12\n" +
-	"\x04kind\x18\x03 \x01(\x05R\x04kind\x12\x18\n" +
-	"\amessage\x18\x04 \x01(\fR\amessage\"9\n" +
+	"\achannel\x18\x01 \x01(\tR\achannel\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\x05R\x04kind\x12\x18\n" +
+	"\amessage\x18\x03 \x01(\fR\amessage\"9\n" +
 	"\aMsgResp\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x18\n" +
 	"\asuccess\x18\x02 \x01(\x05R\asuccess\"\x8f\x01\n" +
@@ -617,9 +590,9 @@ const file_api_pb_cable_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x1b\n" +
 	"\aUserReq\x12\x10\n" +
-	"\x03uid\x18\x01 \x01(\tR\x03uid\")\n" +
-	"\vKickNodeReq\x12\x1a\n" +
-	"\bbrokerID\x18\x01 \x01(\x04R\bbrokerID\"\x1c\n" +
+	"\x03uid\x18\x01 \x01(\tR\x03uid\"&\n" +
+	"\vKickNodeReq\x12\x17\n" +
+	"\anode_id\x18\x01 \x01(\x04R\x06nodeId\"\x1c\n" +
 	"\n" +
 	"OnlineResp\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\"\x87\x01\n" +

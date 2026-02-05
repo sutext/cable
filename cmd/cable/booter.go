@@ -77,7 +77,7 @@ func newBooter(config *config) *booter {
 	b.stats = newStats(config)
 	b.broker = cluster.NewBroker(
 		cluster.WithLogger(b.logger),
-		cluster.WithBrokerID(b.config.BrokerID),
+		cluster.WithNodeId(b.config.NodeId),
 		cluster.WithHandler(b),
 		cluster.WithClusterSize(config.ClusterSize),
 		cluster.WithListeners(liss),
@@ -383,8 +383,6 @@ func (b *booter) SendToKafka(ctx context.Context, topic, toUserID, toChannel str
 	}()
 	headers := &KafkaHeader{
 		raw: []sarama.RecordHeader{
-			{Key: []byte("messageQos"), Value: []byte{byte(m.Qos)}},
-			{Key: []byte("messageDup"), Value: []byte{bool2byte(m.Dup)}},
 			{Key: []byte("messageKind"), Value: []byte{byte(m.Kind)}},
 		},
 	}

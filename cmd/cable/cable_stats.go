@@ -80,7 +80,7 @@ func (g queueGauge) Record(ctx context.Context, value int64, labels ...attribute
 }
 
 type statistics struct {
-	brokerID        uint64
+	nodeId          uint64
 	logger          *xlog.Logger
 	config          *config
 	tracer          trace.Tracer
@@ -97,9 +97,9 @@ type statistics struct {
 
 func newStats(config *config) *statistics {
 	s := &statistics{
-		brokerID: config.BrokerID,
-		config:   config,
-		logger:   config.GetLogger(),
+		nodeId: config.NodeId,
+		config: config,
+		logger: config.GetLogger(),
 	}
 	if config.Trace.Enabled {
 		provider, err := s.initTrace(config.Trace)
@@ -141,7 +141,7 @@ func (s *statistics) initTrace(conf traceConfig) (*tracesdk.TracerProvider, erro
 		semconv.ServiceVersion(s.config.ServiceVersion),
 		semconv.ServiceName(s.config.ServiceName),
 		semconv.ServiceNamespace(s.config.ServiceName),
-		semconv.ServiceInstanceID(fmt.Sprintf("%d", s.brokerID)),
+		semconv.ServiceInstanceID(fmt.Sprintf("%d", s.nodeId)),
 	))
 	if err != nil {
 		return nil, err
@@ -180,7 +180,7 @@ func (s *statistics) initMeter(conf metricsConfig) (*metricsdk.MeterProvider, er
 		semconv.ServiceVersion(s.config.ServiceVersion),
 		semconv.ServiceName(s.config.ServiceName),
 		semconv.ServiceNamespace(s.config.ServiceName),
-		semconv.ServiceInstanceID(fmt.Sprintf("%d", s.brokerID)),
+		semconv.ServiceInstanceID(fmt.Sprintf("%d", s.nodeId)),
 	))
 	if err != nil {
 		return nil, err

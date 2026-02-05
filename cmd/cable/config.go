@@ -82,7 +82,7 @@ type authConfig struct {
 type config struct {
 	Auth           authConfig                   `yaml:"auth"`
 	Pprof          bool                         `yaml:"pprof"`
-	BrokerID       uint64                       `yaml:"brokerid"`
+	NodeId         uint64                       `yaml:"nodeId"`
 	GrpcPort       uint16                       `yaml:"grpcPort"`
 	HTTPPort       uint16                       `yaml:"httpPort"`
 	PeerPort       uint16                       `yaml:"peerPort"`
@@ -119,8 +119,8 @@ func readConfig(path string) (*config, error) {
 	if err := cfg.validate(); err != nil {
 		return nil, err
 	}
-	if cfg.BrokerID == 0 {
-		cfg.BrokerID = cluster.BrokerID()
+	if cfg.NodeId == 0 {
+		cfg.NodeId = cluster.GetNodeId()
 	}
 	return cfg, nil
 }

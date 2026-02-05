@@ -45,7 +45,6 @@ func TestGRPCMethods(t *testing.T) {
 	// Test SendToAll method
 	t.Run("TestSendToAll", func(t *testing.T) {
 		req := &pb.ToAllReq{
-			Qos:     1,
 			Kind:    1,
 			Message: []byte("test message"),
 		}
@@ -62,7 +61,6 @@ func TestGRPCMethods(t *testing.T) {
 	t.Run("TestSendToUser", func(t *testing.T) {
 		req := &pb.ToUserReq{
 			Uid:     "testuser",
-			Qos:     1,
 			Kind:    2,
 			Message: []byte("test message"),
 		}
@@ -111,7 +109,6 @@ func (s mockGRPCServer) KickUser(ctx context.Context, req *pb.UserReq) (*pb.Empt
 
 func (s mockGRPCServer) SendToAll(ctx context.Context, req *pb.ToAllReq) (*pb.MsgResp, error) {
 	msg := &packet.Message{
-		Qos:     packet.MessageQos(req.Qos),
 		Kind:    packet.MessageKind(req.Kind),
 		Payload: req.Message,
 	}
@@ -127,7 +124,6 @@ func (s mockGRPCServer) SendToAll(ctx context.Context, req *pb.ToAllReq) (*pb.Ms
 
 func (s mockGRPCServer) SendToUser(ctx context.Context, req *pb.ToUserReq) (*pb.MsgResp, error) {
 	msg := &packet.Message{
-		Qos:     packet.MessageQos(req.Qos),
 		Kind:    packet.MessageKind(req.Kind),
 		Payload: req.Message,
 	}
@@ -143,7 +139,6 @@ func (s mockGRPCServer) SendToUser(ctx context.Context, req *pb.ToUserReq) (*pb.
 
 func (s mockGRPCServer) SendToChannel(ctx context.Context, req *pb.ToChannelReq) (*pb.MsgResp, error) {
 	msg := &packet.Message{
-		Qos:     packet.MessageQos(req.Qos),
 		Kind:    packet.MessageKind(req.Kind),
 		Payload: req.Message,
 	}
@@ -227,7 +222,7 @@ func (m *mockGRPCBroker) LeaveChannel(ctx context.Context, userID string, channe
 	return nil
 }
 
-func (m *mockGRPCBroker) ListUsers(ctx context.Context, brokerID uint64) (map[string]map[string]string, error) {
+func (m *mockGRPCBroker) ListUsers(ctx context.Context, nodeId uint64) (map[string]map[string]string, error) {
 	result := make(map[string]map[string]string)
 	for _, user := range m.users {
 		result[user] = make(map[string]string)

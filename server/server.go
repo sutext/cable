@@ -427,11 +427,6 @@ func (s *server) OnMessage(ctx context.Context, c network.Conn, p *packet.Messag
 		s.logger.Error("failed to handle message", xlog.Ctx(ctx), xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
 		return
 	}
-	if p.Qos == packet.MessageQos1 {
-		if err = c.SendPacket(ctx, p.Ack()); err != nil {
-			s.logger.Error("failed to send messack", xlog.Ctx(ctx), xlog.Err(err), xlog.Uid(c.ID().UserID), xlog.Cid(c.ID().ClientID))
-		}
-	}
 }
 
 // onRequest handles incoming request packets from clients.

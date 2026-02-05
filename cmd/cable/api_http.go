@@ -209,18 +209,18 @@ func (s *httpServer) handleKickNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	kickReq := &struct {
-		ID uint64 `json:"id"`
+		NodeId uint64 `json:"id"`
 	}{}
 	err := json.NewDecoder(r.Body).Decode(kickReq)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	if kickReq.ID == 0 {
+	if kickReq.NodeId == 0 {
 		http.Error(w, "id is required", http.StatusBadRequest)
 		return
 	}
-	err = s.broker.Cluster().KickBroker(r.Context(), kickReq.ID)
+	err = s.broker.Cluster().KickBroker(r.Context(), kickReq.NodeId)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -516,9 +516,9 @@ func (s *httpServer) handleListChannels(w http.ResponseWriter, r *http.Request) 
 // @Tags user
 // @Accept json
 // @Produce json
-// @Param brokerID query string true "Broker ID"
+// @Param nodeId query string true "Broker ID"
 // @Success 200 {array} string "[\"user1\", \"user2\"]"
-// @Failure 400 {string} string "Invalid brokerID"
+// @Failure 400 {string} string "Invalid nodeId"
 // @Failure 405 {string} string "method not allowed"
 // @Failure 500 {string} string "Internal server error"
 // @Router /listUsers [get]
@@ -531,12 +531,12 @@ func (s *httpServer) handleListUsers(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	brokerID, err := strconv.ParseUint(r.URL.Query().Get("brokerID"), 10, 64)
+	nodeId, err := strconv.ParseUint(r.URL.Query().Get("nodeId"), 10, 64)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	users, err := s.broker.ListUsers(r.Context(), brokerID)
+	users, err := s.broker.ListUsers(r.Context(), nodeId)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -554,10 +554,6 @@ func (s *httpServer) handleListUsers(w http.ResponseWriter, r *http.Request) {
 // @Description Internal function to parse message from HTTP request
 // @Tags internal
 func (s *httpServer) parseMessage(r *http.Request) (*packet.Message, error) {
-	qos, err := packet.ParseQos(r.Header.Get("message-qos"))
-	if err != nil {
-		return nil, err
-	}
 	kind, err := packet.ParseKind(r.Header.Get("message-kind"))
 	if err != nil {
 		return nil, err
@@ -567,7 +563,6 @@ func (s *httpServer) parseMessage(r *http.Request) (*packet.Message, error) {
 		return nil, err
 	}
 	return &packet.Message{
-		Qos:     qos,
 		Kind:    kind,
 		Payload: payload,
 	}, nil

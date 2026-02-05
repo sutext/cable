@@ -73,6 +73,7 @@ func (p *Request) Response(code StatusCode, content ...[]byte) *Response {
 }
 
 // WriteTo encodes the REQUEST packet to the provided encoder.
+
 func (p *Request) WriteTo(w coder.Encoder) error {
 	w.WriteUInt16(p.ID)
 	w.WriteString(p.Method)

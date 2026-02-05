@@ -176,9 +176,9 @@ paths:
       - application/json
       description: List all users connected to a specific broker
       parameters:
-      - description: Broker ID
+      - description: Node ID
         in: query
-        name: brokerID
+        name: nodeId
         required: true
         type: string
       produces:
@@ -191,7 +191,7 @@ paths:
               type: string
             type: array
         "400":
-          description: Invalid brokerID
+          description: Invalid nodeId
           schema:
             type: string
         "405":

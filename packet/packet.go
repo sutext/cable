@@ -55,15 +55,14 @@ type PacketType uint8
 
 // Packet type constants.
 const (
-	CONNECT  PacketType = 0  // Client connection request
-	CONNACK  PacketType = 1  // Connection acknowledgment
-	MESSAGE  PacketType = 2  // Data message
-	MESSACK  PacketType = 3  // Message acknowledgment
-	REQUEST  PacketType = 4  // Request command
-	RESPONSE PacketType = 5  // Request response
-	PING     PacketType = 6  // Heartbeat request
-	PONG     PacketType = 7  // Heartbeat response
-	CLOSE    PacketType = 15 // Connection close notification
+	CONNECT  PacketType = 0 // Client connection request
+	CONNACK  PacketType = 1 // Connection acknowledgment
+	MESSAGE  PacketType = 2 // Data message
+	REQUEST  PacketType = 3 // Request command
+	RESPONSE PacketType = 4 // Request response
+	PING     PacketType = 5 // Heartbeat request
+	PONG     PacketType = 6 // Heartbeat response
+	CLOSE    PacketType = 7 // Connection close notification
 )
 
 func (t PacketType) String() string {
@@ -74,8 +73,6 @@ func (t PacketType) String() string {
 		return "CONNACK"
 	case MESSAGE:
 		return "MESSAGE"
-	case MESSACK:
-		return "MESSACK"
 	case REQUEST:
 		return "REQUEST"
 	case RESPONSE:
@@ -352,12 +349,6 @@ func unpack(header, data []byte) (Packet, error) {
 			return nil, err
 		}
 		return msg, nil
-	case MESSACK:
-		ack := &Messack{}
-		if err := coder.Unmarshal(data, ack); err != nil {
-			return nil, err
-		}
-		return ack, nil
 	case REQUEST:
 		req := &Request{}
 		if err := coder.Unmarshal(data, req); err != nil {
