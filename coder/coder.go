@@ -12,8 +12,6 @@ import (
 // The encoded data can be retrieved using the Bytes() method.
 // All encoding methods use big-endian byte order for multi-byte values.
 type Encoder interface {
-	// Len returns the number of bytes written to the buffer.
-	Len() int
 	// Pick returns the encoded binary data.
 	// Waring: After calling Pick(), the Encoder is no longer usable.
 	Pick() []byte
@@ -123,9 +121,6 @@ type encoder struct {
 func (e *encoder) free() {
 	e.buf = e.buf[:0]
 	e.pool.put(e)
-}
-func (e *encoder) Len() int {
-	return len(e.buf)
 }
 func (e *encoder) Pick() []byte {
 	defer e.free()

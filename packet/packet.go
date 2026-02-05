@@ -10,17 +10,18 @@ import (
 	"fmt"
 	"io"
 	"maps"
-	"slices"
 
 	"sutext.github.io/cable/coder"
 )
 
 // Packet size constants.
 const (
-	MIN_LEN int = 0             // Minimum packet length
-	MID_LEN int = 0x3ff         // Medium packet length threshold (10 bits)
-	MAX_LEN int = 0x3_ffff_ffff // Maximum packet length (28 bits)
-	MAX_UDP int = MID_LEN + 1   // Maximum UDP packet size including header
+	MIN_LEN   int = 0             // Minimum packet length
+	MID_LEN_1 int = 0x3ff         // Medium packet length threshold (10 bits)
+	MID_LEN_2 int = 0x3_ffff      // Medium packet length threshold (18 bits)
+	MID_LEN_3 int = 0x3_ffff_ff   // Medium packet length threshold (26 bits)
+	MAX_LEN   int = 0x3_ffff_ffff // Maximum packet length (34 bits)
+	MAX_UDP   int = MID_LEN_1 + 1 // Maximum UDP packet size including header
 )
 
 // Error defines error codes for packet processing.
@@ -218,35 +219,38 @@ func (p *pong) String() string {
 // Returns the encoded bytes and any error encountered.
 func Marshal(p Packet) ([]byte, error) {
 	ec := coder.NewEncoder()
+	ec.WriteBytes(make([]byte, 5))
 	err := p.WriteTo(ec)
 	if err != nil {
 		return nil, err
 	}
-	length := ec.Len()
-	if length > MAX_LEN {
+	data := ec.Pick()
+	length := len(data) - 5
+	if length <= MID_LEN_1 {
+		data[3] = byte(p.Type()<<4) | byte(length>>8)
+		data[4] = byte(length)
+		return data[3:], nil
+	} else if length <= MID_LEN_2 {
+		data[2] = byte(p.Type()<<4) | 1<<2 | byte(length>>16)
+		data[3] = byte(length >> 8)
+		data[4] = byte(length)
+		return data[2:], nil
+	} else if length <= MID_LEN_3 {
+		data[1] = byte(p.Type()<<4) | 2<<2 | byte(length>>24)
+		data[2] = byte(length >> 16)
+		data[3] = byte(length >> 8)
+		data[4] = byte(length)
+		return data[1:], nil
+	} else if length <= MAX_LEN {
+		data[0] = byte(p.Type()<<4) | 3<<2 | byte(length>>32)
+		data[1] = byte(length >> 24)
+		data[2] = byte(length >> 16)
+		data[3] = byte(length >> 8)
+		data[4] = byte(length)
+		return data, nil
+	} else {
 		return nil, ErrPacketSizeTooLarge
 	}
-	var header []byte
-	if length > MID_LEN {
-		bs := make([]byte, 0, 5)
-		for length > 0 {
-			bs = append(bs, byte(length&0xff))
-			length >>= 8
-		}
-		slices.Reverse(bs)
-		if bs[0] > 3 {
-			header = make([]byte, len(bs)+1)
-			copy(header[1:], bs)
-		} else {
-			header = bs
-		}
-		header[0] = byte(p.Type()<<4) | byte(len(header)-2)<<2 | header[0]
-	} else {
-		header = make([]byte, 2)
-		header[0] = byte(p.Type()<<4) | byte(length>>8)
-		header[1] = byte(length)
-	}
-	return slices.Concat(header, ec.Pick()), nil
 }
 
 // Unmarshal decodes the given bytes into a Packet object.
