@@ -1,5 +1,41 @@
 
 fullnameOverride: "mimir"
+mimir:
+  structuredConfig:
+    common:
+      storage:
+        backend: s3
+        s3:
+          endpoint: cos.ap-chengdu.myqcloud.com
+          region: ap-chengdu
+          bucket_name: test-mimir-1314353702
+          access_key_id: AKIDGj04vb3JL9oIYX4CAvWv9Aya0CZlncDb
+          secret_access_key: PccP2UjlZCeXCfMwKYbR5Yw7xcGoHahb
+    blocks_storage:
+      backend: s3
+      s3:
+        endpoint: cos.ap-chengdu.myqcloud.com
+        region: ap-chengdu
+        bucket_name: test-mimir-tsdb-1314353702
+        access_key_id: AKIDGj04vb3JL9oIYX4CAvWv9Aya0CZlncDb
+        secret_access_key: PccP2UjlZCeXCfMwKYbR5Yw7xcGoHahb
+    alertmanager_storage:
+      backend: s3
+      s3:
+        endpoint: cos.ap-chengdu.myqcloud.com
+        region: ap-chengdu
+        bucket_name: test-mimir-ruler-1314353702
+        access_key_id: AKIDGj04vb3JL9oIYX4CAvWv9Aya0CZlncDb
+        secret_access_key: PccP2UjlZCeXCfMwKYbR5Yw7xcGoHahb
+    ruler_storage:
+      backend: s3
+      s3:
+        endpoint: cos.ap-chengdu.myqcloud.com
+        region: ap-chengdu
+        bucket_name: test-mimir-ruler-1314353702
+        access_key_id: AKIDGj04vb3JL9oIYX4CAvWv9Aya0CZlncDb
+        secret_access_key: PccP2UjlZCeXCfMwKYbR5Yw7xcGoHahb
+
 runtimeConfig:
   ingester_limits: # limits that each ingester replica enforces
     max_ingestion_rate: 200000
@@ -26,37 +62,18 @@ runtimeConfig:
       max_fetched_series_per_query: 100000
       
 minio:
+  enabled: false
+
+kafka:
+  # -- Enable Kafka for ingest-storage architecture
   enabled: true
-  mode: standalone
-  rootUser: admin
-  buckets:
-    - name: mimir-tsdb
-      policy: none
-      purge: false
-    - name: mimir-ruler
-      policy: none
-      purge: false
   persistence:
-    size: 20Gi
-  resources:
-    requests:
-      memory: 256Mi
-      cpu: 1000m
-    limits:
-      memory: 2Gi
-      cpu: 1000m
-  rootPassword: supersecret
-
-
-# 存储配置 - 使用已有的 MinIO
-storage:
-  backend: s3
-  s3:
-    endpoint: mimir-minio:9000
-    bucket_name: mimir-data
-    access_key_id: admin
-    secret_access_key: supersecret
-    insecure: true
+    # If false, use emptyDir
+    enabled: true
+    size: 10Gi
+    storageClassName: ""
+    # Additional settings for emptyDir if persistence is disabled
+    emptyDir: {}
 
 # 数据保留策略
 tenantLimits:
@@ -81,6 +98,9 @@ compactor:
     limits:
       memory: 2Gi
       cpu: 1000m
+  persistentVolume:
+    enabled: true
+    size: 10Gi
 
 distributor:
   replicas: 3
@@ -108,9 +128,8 @@ ingester:
     limits:
       memory: 2Gi
       cpu: 1000m
-  persistence:
+  persistentVolume:
     enabled: true
-    storageClass: local-path
     size: 10Gi
 
 querier:
@@ -123,7 +142,7 @@ querier:
       memory: 2Gi
       cpu: 1000m
 
-queryFrontend:
+query_frontend:
   enabled: true
   replicas: 1
   resources:
@@ -140,7 +159,7 @@ queryScheduler:
 ruler:
   enabled: false
 
-storeGateway:
+store_gateway:
   replicas: 1
   resources:
     requests:
@@ -149,10 +168,9 @@ storeGateway:
     limits:
       memory: 2Gi
       cpu: 1000m
-  persistence:
+  persistentVolume:
     enabled: true
-    storageClass: local-path
-    size: 5Gi
+    size: 10Gi
 
 # 禁用不必要的组件
 memcached:
@@ -192,7 +210,3 @@ resources:
   limits:
     memory: 2Gi
     cpu: 1000m
-
-# 持久卷配置
-persistence:
-  storageClass: local-path

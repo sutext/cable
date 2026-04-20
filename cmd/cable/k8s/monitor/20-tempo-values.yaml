@@ -5,11 +5,11 @@ tempo:
       trace:
         backend: s3
         s3:
-          bucket: tempo-data
-          endpoint: mimir-minio:9000
-          access_key: admin
-          secret_key: supersecret
-          insecure: true
+          bucket: test-tempo-1314353702
+          endpoint: cos.ap-chengdu.myqcloud.com
+          access_key: AKIDGj04vb3JL9oIYX4CAvWv9Aya0CZlncDb
+          secret_key: PccP2UjlZCeXCfMwKYbR5Yw7xcGoHahb
+
     server:
       http_listen_port: 3200
     distributor:

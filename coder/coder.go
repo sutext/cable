@@ -184,8 +184,7 @@ func (e *encoder) WriteData(data []byte) {
 
 // Write String with Varint Length Prefix
 func (e *encoder) WriteString(s string) {
-	bytes := []byte(s)
-	e.WriteData(bytes)
+	e.WriteData([]byte(s))
 }
 func (e *encoder) WriteStrMap(m map[string]string) {
 	e.WriteVarint(uint64(len(m)))
