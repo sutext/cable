@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"sutext.github.io/cable/discovery"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/stats"
 	"sutext.github.io/cable/xlog"
@@ -83,13 +84,14 @@ func (h *emptyHandler) OnClusterReady() {}
 // options holds the configuration for the cluster.
 type options struct {
 	logger           *xlog.Logger
-	nodeId           uint64            // Unique ID for the broker
-	handler          Handler           // Handler for cluster events
-	peerPort         uint16            // Port for peer-to-peer communication
-	listeners        []*Listener       // List of listeners for client connections
-	clusterSize      int32             // Initial cluster size
-	statsHandler     stats.Handler     // Stats handler for the cluster
-	grpcStatsHandler stats.GrpcHandler // gRPC stats handler for the cluster
+	nodeId           uint64              // Unique ID for the broker
+	handler          Handler             // Handler for cluster events
+	peerPort         uint16              // Port for peer-to-peer communication
+	discovery        discovery.Discovery // Service discovery for peer brokers
+	listeners        []*Listener         // List of listeners for client connections
+	clusterSize      int32               // Initial cluster size
+	statsHandler     stats.Handler       // Stats handler for the cluster
+	grpcStatsHandler stats.GrpcHandler   // gRPC stats handler for the cluster
 }
 
 // newOptions creates a new options instance with default values and applies the given options.
@@ -146,6 +148,19 @@ func WithHandler(h Handler) Option {
 func WithPeerPort(port uint16) Option {
 	return Option{func(o *options) {
 		o.peerPort = port
+	}}
+}
+
+// WithDiscovery sets the discovery service for peer brokers.
+//
+// Parameters:
+// - d: Discovery service instance
+//
+// Returns:
+// - Option: Configuration option for the cluster
+func WithDiscovery(d discovery.Discovery) Option {
+	return Option{func(o *options) {
+		o.discovery = d
 	}}
 }
 

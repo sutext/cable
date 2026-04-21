@@ -245,7 +245,7 @@ func (c *cluster) removeNode(ctx context.Context, id uint64) error {
 //
 // Parameters:
 // - join: True if joining an existing cluster, false if starting a new cluster
-func (c *cluster) startRaft(join bool) {
+func (c *cluster) startRaft() {
 	if c.raft != nil {
 		return
 	}
@@ -259,17 +259,13 @@ func (c *cluster) startRaft(join bool) {
 		MaxInflightMsgs:           256,
 		MaxUncommittedEntriesSize: 1 << 30,
 	}
-	if join {
-		c.raft = raft.RestartNode(conf)
-	} else {
-		initPeers := make([]raft.Peer, c.size)
-		initPeers[0] = raft.Peer{ID: c.broker.nodeId}
-		c.peers.Range(func(key uint64, value *peerClient) bool {
-			initPeers = append(initPeers, raft.Peer{ID: key})
-			return true
-		})
-		c.raft = raft.StartNode(conf, initPeers)
-	}
+	initPeers := make([]raft.Peer, c.size)
+	initPeers[0] = raft.Peer{ID: c.broker.nodeId}
+	c.peers.Range(func(key uint64, value *peerClient) bool {
+		initPeers = append(initPeers, raft.Peer{ID: key})
+		return true
+	})
+	c.raft = raft.StartNode(conf, initPeers)
 	go c.raftLoop()
 }
 

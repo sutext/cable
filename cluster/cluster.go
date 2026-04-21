@@ -5,12 +5,11 @@ package cluster
 import (
 	"context"
 	"sync/atomic"
-	"time"
 
 	"go.etcd.io/raft/v3"
 	"go.etcd.io/raft/v3/raftpb"
 	"google.golang.org/grpc/stats"
-	"sutext.github.io/cable/internal/discovery"
+	"sutext.github.io/cable/discovery"
 	"sutext.github.io/cable/internal/safe"
 	"sutext.github.io/cable/xerr"
 	"sutext.github.io/cable/xlog"
@@ -80,11 +79,9 @@ func newCluster(broker *broker, opts *options) *cluster {
 		logger:    broker.logger,
 		stoped:    make(chan struct{}),
 		peerStats: opts.grpcStatsHandler.Client,
-		discovery: discovery.New(broker.nodeId, opts.peerPort, broker.logger),
+		discovery: opts.discovery,
 	}
-	c.discovery.OnRequest(func(id uint64, addr string) {
-		c.AddBroker(context.Background(), id, addr)
-	})
+	c.discovery.SetHandler(c)
 	return c
 }
 
@@ -99,15 +96,16 @@ func (c *cluster) Stop() {
 		close(c.stoped)
 	}
 }
+func (c *cluster) OnNodeJoin(nodeId uint64, nodeAddr string) {
+	c.AddBroker(context.Background(), nodeId, nodeAddr)
+	if c.peers.Len() == c.size-1 {
+		c.startRaft()
+	}
+}
 
 // Start starts the cluster and begins the discovery process.
 func (c *cluster) Start() {
-	go func() {
-		if err := c.discovery.Serve(); err != nil {
-			c.logger.Info("discovery serve stoped", xlog.Err(err))
-		}
-	}()
-	time.AfterFunc(time.Millisecond*100, c.autoDiscovery)
+	c.discovery.Start()
 }
 func (c *cluster) Size() int32 {
 	return c.size
@@ -270,29 +268,4 @@ func (c *cluster) ReportUnreachable(id uint64) {
 // - status: Status of the snapshot operation
 func (c *cluster) ReportSnapshot(id uint64, status raft.SnapshotStatus) {
 	c.raft.ReportSnapshot(id, status)
-}
-
-// autoDiscovery performs automatic discovery of peer brokers.
-// It requests peer information and starts the Raft cluster when the expected number of peers is found.
-func (c *cluster) autoDiscovery() {
-	m, err := c.discovery.Request()
-	if err != nil {
-		c.logger.Error("failed to sync broker", xlog.Err(err))
-	}
-	if len(m) == 0 {
-		c.logger.Warn("Auto discovery got empty endpoints")
-		go c.autoDiscovery()
-		return
-	}
-	for id, addr := range m {
-		c.AddBroker(context.Background(), id, addr)
-	}
-	if c.peers.Len() < c.size-1 {
-		c.logger.Warn("Auto discovery got less than cluster size", xlog.I32("clusterSize", c.size), xlog.I32("peers", c.peers.Len()))
-		go c.autoDiscovery()
-	} else if c.peers.Len() == c.size-1 {
-		c.startRaft(false)
-	} else {
-		c.startRaft(true)
-	}
 }

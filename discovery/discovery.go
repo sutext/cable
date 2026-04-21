@@ -3,7 +3,6 @@ package discovery
 import (
 	"fmt"
 	"net"
-	"sync"
 	"time"
 
 	"sutext.github.io/cable/coder"
@@ -11,50 +10,82 @@ import (
 	"sutext.github.io/cable/xlog"
 )
 
-type Discovery interface {
-	Serve() error
-	Request() (map[uint64]string, error)
-	OnRequest(func(uint64, string))
-	Shutdown() error
+type Handler interface {
+	OnNodeJoin(nodeId uint64, nodeAddr string)
 }
 
+type Discovery interface {
+	Start()
+	Shutdown() error
+	SetHandler(handler Handler)
+}
 type discovery struct {
 	id       uint64
-	ipaddr   string
-	mu       sync.Mutex
-	addr     *net.UDPAddr
 	conn     *net.UDPConn
-	req      func(id uint64, addr string)
+	ipaddr   string
 	logger   *xlog.Logger
+	handler  Handler
+	address  *net.UDPAddr
 	listener *net.UDPConn
-	respChan chan *packet.Response
+	stopChan chan struct{}
 }
 
-func New(id uint64, port uint16, logger *xlog.Logger) Discovery {
+func NewMuticast(id uint64, port uint16, logger *xlog.Logger) Discovery {
 	ip, err := getLocalIP()
 	if err != nil {
 		panic(err)
 	}
 	m := &discovery{
-		id:     id,
-		ipaddr: fmt.Sprintf("%s:%d", ip, port),
-		logger: logger,
-		addr:   &net.UDPAddr{IP: net.IPv4(224, 0, 0, 9), Port: 9999},
+		id:       id,
+		ipaddr:   fmt.Sprintf("%s:%d", ip, port),
+		logger:   logger,
+		address:  &net.UDPAddr{IP: net.IPv4(224, 0, 0, 9), Port: 9999},
+		stopChan: make(chan struct{}),
 	}
 	return m
 }
+func (m *discovery) SetHandler(handler Handler) {
+	m.handler = handler
+}
+func (m *discovery) Shutdown() error {
+	err := m.conn.Close()
+	err = m.listener.Close()
+	close(m.stopChan)
+	return err
+}
+func (m *discovery) Start() {
+	go func() {
+		if err := m.listen(); err != nil {
+			m.logger.Info("discovery listener stoped", xlog.Err(err))
+		}
+	}()
+	go func() {
+		if err := m.watch(); err != nil {
+			m.logger.Info("discovery watch stoped", xlog.Err(err))
+		}
+	}()
+	go func() {
+		ticker := time.NewTicker(time.Second * 5)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-m.stopChan:
+				return
+			case <-ticker.C:
+				if err := m.heartbeat(); err != nil {
+					m.logger.Error("discovery heartbeat error", xlog.Err(err))
+				}
+			}
+		}
+	}()
+}
 
-func (m *discovery) Serve() error {
-	listener, err := net.ListenMulticastUDP("udp", nil, m.addr)
+func (m *discovery) listen() error {
+	listener, err := net.ListenMulticastUDP("udp", nil, m.address)
 	if err != nil {
 		return err
 	}
 	m.listener = listener
-	go func() {
-		if err := m.listen(); err != nil {
-			m.logger.Info("discovery listen stoped", xlog.Err(err))
-		}
-	}()
 	defer listener.Close()
 	buffer := make([]byte, packet.MAX_UDP)
 	for {
@@ -87,7 +118,7 @@ func (m *discovery) Serve() error {
 			m.logger.Error("decode request error", xlog.Err(err))
 			continue
 		}
-		m.req(id, ipaddr)
+		m.handler.OnNodeJoin(id, ipaddr)
 		ec := coder.NewEncoder()
 		ec.WriteUInt64(m.id)
 		ec.WriteString(m.ipaddr)
@@ -102,15 +133,7 @@ func (m *discovery) Serve() error {
 	}
 }
 
-func (m *discovery) Shutdown() error {
-	err := m.conn.Close()
-	err = m.listener.Close()
-	return err
-}
-func (m *discovery) OnRequest(f func(uint64, string)) {
-	m.req = f
-}
-func (m *discovery) listen() error {
+func (m *discovery) watch() error {
 	conn, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
 	if err != nil {
 		return err
@@ -132,34 +155,7 @@ func (m *discovery) listen() error {
 			m.logger.Error("packet type is not response")
 			continue
 		}
-		m.respChan <- p.(*packet.Response)
-	}
-}
-func (m *discovery) Request() (r map[uint64]string, err error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if m.respChan != nil {
-		return nil, fmt.Errorf("Muticast request is already in progress")
-	}
-	ec := coder.NewEncoder()
-	ec.WriteUInt64(m.id)
-	ec.WriteString(m.ipaddr)
-	req := packet.NewRequest("discovery", ec.Pick())
-	reqdata, err := packet.Marshal(req)
-	if err != nil {
-		return r, err
-	}
-	m.respChan = make(chan *packet.Response, 8)
-	time.AfterFunc(time.Second*5, func() {
-		close(m.respChan)
-		m.respChan = nil
-	})
-	_, err = m.conn.WriteToUDP(reqdata, m.addr)
-	if err != nil {
-		return r, err
-	}
-	r = make(map[uint64]string)
-	for resp := range m.respChan {
+		var resp = p.(*packet.Response)
 		dc := coder.NewDecoder(resp.Body)
 		id, err := dc.ReadUInt64()
 		if err != nil {
@@ -171,9 +167,20 @@ func (m *discovery) Request() (r map[uint64]string, err error) {
 			m.logger.Error("decode request error", xlog.Err(err))
 			continue
 		}
-		r[id] = ipaddr
+		m.handler.OnNodeJoin(id, ipaddr)
 	}
-	return r, nil
+}
+func (m *discovery) heartbeat() error {
+	ec := coder.NewEncoder()
+	ec.WriteUInt64(m.id)
+	ec.WriteString(m.ipaddr)
+	req := packet.NewRequest("discovery", ec.Pick())
+	reqdata, err := packet.Marshal(req)
+	if err != nil {
+		return err
+	}
+	_, err = m.conn.WriteToUDP(reqdata, m.address)
+	return err
 }
 
 // getLocalIP retrieves the non-loopback local IPv4 address of the machine.
