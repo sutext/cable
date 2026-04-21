@@ -80,6 +80,7 @@ func newBooter(config *config) *booter {
 		cluster.WithNodeId(b.config.NodeId),
 		cluster.WithHandler(b),
 		cluster.WithClusterSize(config.ClusterSize),
+		cluster.WithDiscovery(config.GetDiscovery()),
 		cluster.WithListeners(liss),
 		cluster.WithStatsHandler(b.stats),
 		cluster.WithGrpcStatsHandler(grpcHandler),

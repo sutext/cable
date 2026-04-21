@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap/zapcore"
 	"gopkg.in/yaml.v3"
 	"sutext.github.io/cable/cluster"
+	"sutext.github.io/cable/discovery"
 	"sutext.github.io/cable/packet"
 	"sutext.github.io/cable/xlog"
 )
@@ -84,6 +85,10 @@ type authConfig struct {
 	AuthURL string `yaml:"authURL"` // only used when method is "remote"
 }
 
+type discoveryConfig struct {
+	Type      string   `yaml:"type"`      // "multicast" or "etcd"
+	Endpoints []string `yaml:"endpoints"` // only used when type is "etcd"
+}
 type config struct {
 	Auth         authConfig                   `yaml:"auth"`
 	Pprof        bool                         `yaml:"pprof"`
@@ -97,6 +102,7 @@ type config struct {
 	Metrics      metricsConfig                `yaml:"metrics"`
 	Kafka        kafkaConfig                  `yaml:"kafka"`
 	Redis        redisConfig                  `yaml:"redis"`
+	Discovery    discoveryConfig              `yaml:"discovery"`
 	MessageRoute map[packet.MessageKind]route `yaml:"messageRoute"`
 	Listeners    []listener                   `yaml:"listeners"`
 	_logger      *xlog.Logger
@@ -176,6 +182,9 @@ func (c *config) validate() error {
 			return fmt.Errorf("redis enabled but user prefix is empty")
 		}
 	}
+	if c.Discovery.Type != "multicast" && c.Discovery.Type != "etcd" {
+		return fmt.Errorf("invalid discovery type: %s", c.Discovery.Type)
+	}
 	if c.Auth.Method != "pass" && c.Auth.Method != "jwt" && c.Auth.Method != "static" && c.Auth.Method != "redis" && c.Auth.Method != "remote" {
 		return fmt.Errorf("invalid auth method: %s", c.Auth.Method)
 	}
@@ -214,6 +223,15 @@ func (c *config) validate() error {
 				return fmt.Errorf("listener tls key file is empty")
 			}
 		}
+	}
+	return nil
+}
+func (c *config) GetDiscovery() discovery.Discovery {
+	switch c.Discovery.Type {
+	case "multicast":
+		return discovery.NewMuticast(c.NodeId, c.PeerPort, c.GetLogger())
+	case "etcd":
+		return newEtcdDiscovery(c.NodeId, c.PeerPort, c.GetLogger(), c.Discovery.Endpoints)
 	}
 	return nil
 }

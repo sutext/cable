@@ -53,6 +53,10 @@ redis:
   joinPrefix: "cable-user-join:"
   authPrefix: "cable-user-auth:"
 
+discovery:
+  type: "etcd" # options: multicast, etcd
+  endpoints: 
+    - "localhost:2379" # only used when type is "etcd"
 # Auth Configuration
 auth:
   method: "pass"
