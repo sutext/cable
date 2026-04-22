@@ -429,13 +429,13 @@ func (c *cluster) applyRaftOp(data []byte) {
 // Parameters:
 // - id: Node ID to remove
 func (c *cluster) applyRemoveNode(id uint64) {
+	c.size = c.peers.Len() - 1
 	c.broker.userClients.Delete(id)
 	c.broker.clientChannels.Delete(id)
 	c.broker.channelClients.Delete(id)
 	if c.peers.Delete(id) {
 		c.logger.Info("peer deleted", xlog.Peer(id))
 	}
-	c.size = c.peers.Len() + 1
 	if c.broker.nodeId == id {
 		c.leader.Store(0)
 		c.ready.Store(false)

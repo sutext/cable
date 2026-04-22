@@ -42,84 +42,76 @@ func newEtcdDiscovery(id uint64, port uint16, logger *xlog.Logger, endpoints []s
 	}
 }
 
-func (d *etcdDiscovery) Start() {
+func (e *etcdDiscovery) Start() {
 	// Connect to etcd
 	cfg := clientv3.Config{
-		Endpoints:   d.endpoints,
+		Endpoints:   e.endpoints,
 		DialTimeout: 5 * time.Second,
 	}
 	client, err := clientv3.New(cfg)
 	if err != nil {
-		d.logger.Error("failed to create etcd client", xlog.Err(err))
+		e.logger.Error("failed to create etcd client", xlog.Err(err))
 		return
 	}
-	d.client = client
-
+	e.client = client
 	// Create a lease with 30-second TTL
 	lease, err := client.Grant(context.Background(), 30)
 	if err != nil {
-		d.logger.Error("failed to create lease", xlog.Err(err))
+		e.logger.Error("failed to create lease", xlog.Err(err))
 		return
 	}
-	d.leaseID = lease.ID
-
+	e.leaseID = lease.ID
 	// Register this node in etcd
-	nodeKey := fmt.Sprintf("/cable/nodes/%d", d.id)
-	_, err = client.Put(context.Background(), nodeKey, d.ipaddr, clientv3.WithLease(d.leaseID))
+	nodeKey := fmt.Sprintf("/cable/nodes/%d", e.id)
+	_, err = client.Put(context.Background(), nodeKey, e.ipaddr, clientv3.WithLease(e.leaseID))
 	if err != nil {
-		d.logger.Error("failed to register node", xlog.Err(err))
+		e.logger.Error("failed to register node", xlog.Err(err))
 		return
 	}
-	d.logger.Info("etcd node registered", xlog.Str("key", nodeKey), xlog.Str("value", d.ipaddr))
-
-	// Start lease keep-alive
-	go d.keepaliveLeaseLoop()
-
-	// Watch for other nodes
-	go d.watchNodesLoop()
-
-	// Discover existing nodes
-	d.discoverExistingNodes()
+	e.logger.Info("etcd node registered", xlog.Str("key", nodeKey), xlog.Str("value", e.ipaddr))
+	go e.keepaliveLeaseLoop()
+	go e.watchNodesLoop()
+	e.discoverExistingNodes()
 }
 
-func (d *etcdDiscovery) keepaliveLeaseLoop() {
-	if d.client == nil {
+func (e *etcdDiscovery) keepaliveLeaseLoop() {
+	if e.client == nil {
 		return
 	}
-	keepAliveChan, err := d.client.KeepAlive(d.ctx, d.leaseID)
+	keepAliveChan, err := e.client.KeepAlive(e.ctx, e.leaseID)
 	if err != nil {
-		d.logger.Error("failed to start lease keep-alive", xlog.Err(err))
+		e.logger.Error("failed to start lease keep-alive", xlog.Err(err))
 		return
 	}
 	for {
 		select {
-		case <-d.stopChan:
+		case <-e.stopChan:
 			return
-		case <-d.ctx.Done():
+		case <-e.ctx.Done():
 			return
 		case ka := <-keepAliveChan:
 			if ka == nil {
-				d.logger.Error("lease keep-alive channel closed")
+				e.logger.Error("lease keep-alive channel closed")
 				return
 			}
 		}
 	}
 }
 
-func (d *etcdDiscovery) watchNodesLoop() {
-	if d.client == nil {
+func (e *etcdDiscovery) watchNodesLoop() {
+	if e.client == nil {
 		return
 	}
-	watchChan := d.client.Watch(d.ctx, "/cable/nodes/", clientv3.WithPrefix())
+	watchChan := e.client.Watch(e.ctx, "/cable/nodes/", clientv3.WithPrefix())
 	for {
 		select {
-		case <-d.stopChan:
+		case <-e.stopChan:
 			return
-		case <-d.ctx.Done():
+		case <-e.ctx.Done():
 			return
 		case watchResp := <-watchChan:
 			if watchResp.Err() != nil {
-				d.logger.Error("watch error", xlog.Err(watchResp.Err()))
+				e.logger.Error("watch error", xlog.Err(watchResp.Err()))
 				return
 			}
 			for _, event := range watchResp.Events {
@@ -128,13 +120,13 @@ func (d *etcdDiscovery) watchNodesLoop() {
 					value := string(event.Kv.Value)
 					nodeID, err := extractNodeID(key)
 					if err != nil {
-						d.logger.Error("failed to extract node ID from key", xlog.Str("key", key), xlog.Err(err))
+						e.logger.Error("failed to extract node ID from key", xlog.Str("key", key), xlog.Err(err))
 						continue
 					}
 					// Don't trigger handler for our own node
-					if nodeID != d.id && d.handler != nil {
-						d.handler.OnNodeJoin(nodeID, value)
-						d.logger.Info("node joined", xlog.U64("nodeID", nodeID), xlog.Str("addr", value))
+					if nodeID != e.id && e.handler != nil {
+						e.handler.OnNodeJoin(nodeID, value)
+						e.logger.Info("node joined", xlog.U64("nodeID", nodeID), xlog.Str("addr", value))
 					}
 				}
 			}
@@ -142,52 +134,48 @@ func (d *etcdDiscovery) watchNodesLoop() {
 	}
 }
 
-func (d *etcdDiscovery) discoverExistingNodes() {
-	if d.client == nil {
+func (e *etcdDiscovery) discoverExistingNodes() {
+	if e.client == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	resp, err := d.client.Get(ctx, "/cable/nodes/", clientv3.WithPrefix())
+	resp, err := e.client.Get(ctx, "/cable/nodes/", clientv3.WithPrefix())
 	if err != nil {
-		d.logger.Error("failed to discover existing nodes", xlog.Err(err))
+		e.logger.Error("failed to discover existing nodes", xlog.Err(err))
 		return
 	}
-
 	for _, kv := range resp.Kvs {
 		key := string(kv.Key)
 		value := string(kv.Value)
 		nodeID, err := extractNodeID(key)
 		if err != nil {
-			d.logger.Error("failed to extract node ID from key", xlog.Str("key", key), xlog.Err(err))
+			e.logger.Error("failed to extract node ID from key", xlog.Str("key", key), xlog.Err(err))
 			continue
 		}
 		// Don't trigger handler for our own node
-		if nodeID != d.id && d.handler != nil {
-			d.handler.OnNodeJoin(nodeID, value)
-			d.logger.Info("discovered existing node", xlog.U64("nodeID", nodeID), xlog.Str("addr", value))
+		if nodeID != e.id && e.handler != nil {
+			e.handler.OnNodeJoin(nodeID, value)
+			e.logger.Info("discovered existing node", xlog.U64("nodeID", nodeID), xlog.Str("addr", value))
 		}
 	}
 }
 
-func (d *etcdDiscovery) Shutdown() error {
-	d.cancel()
-	close(d.stopChan)
-
-	if d.client != nil {
+func (e *etcdDiscovery) Shutdown() error {
+	e.cancel()
+	close(e.stopChan)
+	if e.client != nil {
 		// Revoke the lease to remove the node registration
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		d.client.Revoke(ctx, d.leaseID)
-
-		return d.client.Close()
+		e.client.Revoke(ctx, e.leaseID)
+		return e.client.Close()
 	}
 	return nil
 }
 
-func (d *etcdDiscovery) SetHandler(handler discovery.Handler) {
-	d.handler = handler
+func (e *etcdDiscovery) SetHandler(handler discovery.Handler) {
+	e.handler = handler
 }
 
 // getLocalIP retrieves the non-loopback local IPv4 address of the machine.

@@ -170,6 +170,7 @@ func (m *discovery) watch() error {
 		m.handler.OnNodeJoin(id, ipaddr)
 	}
 }
+
 func (m *discovery) heartbeat() error {
 	ec := coder.NewEncoder()
 	ec.WriteUInt64(m.id)
