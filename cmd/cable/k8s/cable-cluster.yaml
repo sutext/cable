@@ -69,11 +69,11 @@ data:
       authPrefix: "cable-user-auth:"
 
     discovery:
-      type: "multicast" # options: multicast, etcd
+      type: "etcd" # options: multicast, etcd
       endpoints: 
-        - "etcd-cluster-0.etcd-cluster:2379"
-        - "etcd-cluster-1.etcd-cluster:2379"
-        - "etcd-cluster-2.etcd-cluster:2379"
+        - "etcd-0.etcd-cluster:2379"
+        - "etcd-1.etcd-cluster:2379"
+        - "etcd-2.etcd-cluster:2379"
     # Auth Configuration
     auth:
       method: pass

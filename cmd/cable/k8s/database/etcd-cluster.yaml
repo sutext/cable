@@ -1,0 +1,91 @@
+# Headless Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: etcd-cluster
+  labels:
+    app: etcd
+spec:
+  clusterIP: None
+  selector:
+    app: etcd
+  ports:
+  - name: client
+    port: 2379
+  - name: peer
+    port: 2380
+---
+# StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: etcd
+spec:
+  replicas: 3
+  serviceName: etcd-cluster
+  selector:
+    matchLabels:
+      app: etcd
+  template:
+    metadata:
+      labels:
+        app: etcd
+    spec:
+      # ✅ 修复：把 强制反亲和 → 优先反亲和（单节点也能跑）
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - etcd
+              topologyKey: kubernetes.io/hostname
+      containers:
+      - name: etcd
+        image: quay.io/coreos/etcd:v3.5.12
+        ports:
+        - containerPort: 2379
+          name: client
+        - containerPort: 2380
+          name: peer
+        command:
+        - /usr/local/bin/etcd
+        - --data-dir=/var/run/etcd/default.etcd
+        - --listen-client-urls=http://0.0.0.0:2379
+        - --advertise-client-urls=http://$(POD_NAME).etcd-cluster.default.svc.cluster.local:2379
+        - --listen-peer-urls=http://0.0.0.0:2380
+        - --initial-advertise-peer-urls=http://$(POD_NAME).etcd-cluster.default.svc.cluster.local:2380
+        - --name=$(POD_NAME)
+        - --initial-cluster-token=etcd-cluster-1
+        - --initial-cluster-state=new
+        - --initial-cluster=etcd-0=http://etcd-0.etcd-cluster.default.svc.cluster.local:2380,etcd-1=http://etcd-1.etcd-cluster.default.svc.cluster.local:2380,etcd-2=http://etcd-2.etcd-cluster.default.svc.cluster.local:2380
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        livenessProbe:
+          tcpSocket:
+            port: client
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          tcpSocket:
+            port: client
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: etcd-data
+          mountPath: /var/run/etcd
+  volumeClaimTemplates:
+  - metadata:
+      name: etcd-data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 5Gi
