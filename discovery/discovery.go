@@ -12,6 +12,7 @@ import (
 
 type Handler interface {
 	OnNodeJoin(nodeId uint64, nodeAddr string)
+	OnNodeLeave(nodeId uint64)
 }
 
 type Discovery interface {
@@ -19,6 +20,13 @@ type Discovery interface {
 	Shutdown() error
 	SetHandler(handler Handler)
 }
+
+type node struct {
+	id         uint64
+	addr       string
+	updateTime time.Time
+}
+
 type discovery struct {
 	id       uint64
 	conn     *net.UDPConn
@@ -28,6 +36,7 @@ type discovery struct {
 	address  *net.UDPAddr
 	listener *net.UDPConn
 	stopChan chan struct{}
+	allNodes map[uint64]node
 }
 
 func NewMuticast(id uint64, port uint16, logger *xlog.Logger) Discovery {
@@ -41,6 +50,7 @@ func NewMuticast(id uint64, port uint16, logger *xlog.Logger) Discovery {
 		logger:   logger,
 		address:  &net.UDPAddr{IP: net.IPv4(224, 0, 0, 9), Port: 9999},
 		stopChan: make(chan struct{}),
+		allNodes: make(map[uint64]node),
 	}
 	return m
 }
@@ -65,7 +75,7 @@ func (m *discovery) Start() {
 		}
 	}()
 	go func() {
-		ticker := time.NewTicker(time.Second * 5)
+		ticker := time.NewTicker(time.Second * 10)
 		defer ticker.Stop()
 		for {
 			select {
@@ -79,7 +89,20 @@ func (m *discovery) Start() {
 		}
 	}()
 }
-
+func (m *discovery) updateNode(id uint64, addr string) {
+	m.allNodes[id] = node{
+		id:         id,
+		addr:       addr,
+		updateTime: time.Now(),
+	}
+	for _, n := range m.allNodes {
+		if time.Since(n.updateTime) > time.Second*30 {
+			delete(m.allNodes, n.id)
+			m.handler.OnNodeLeave(n.id)
+		}
+	}
+	m.handler.OnNodeJoin(id, addr)
+}
 func (m *discovery) listen() error {
 	listener, err := net.ListenMulticastUDP("udp", nil, m.address)
 	if err != nil {
@@ -118,7 +141,7 @@ func (m *discovery) listen() error {
 			m.logger.Error("decode request error", xlog.Err(err))
 			continue
 		}
-		m.handler.OnNodeJoin(id, ipaddr)
+		m.updateNode(id, ipaddr)
 		ec := coder.NewEncoder()
 		ec.WriteUInt64(m.id)
 		ec.WriteString(m.ipaddr)
@@ -167,7 +190,7 @@ func (m *discovery) watch() error {
 			m.logger.Error("decode request error", xlog.Err(err))
 			continue
 		}
-		m.handler.OnNodeJoin(id, ipaddr)
+		m.updateNode(id, ipaddr)
 	}
 }
 

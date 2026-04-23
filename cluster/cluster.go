@@ -102,6 +102,9 @@ func (c *cluster) OnNodeJoin(nodeId uint64, nodeAddr string) {
 		c.startRaft()
 	}
 }
+func (c *cluster) OnNodeLeave(nodeId uint64) {
+	c.KickBroker(context.Background(), nodeId)
+}
 
 // Start starts the cluster and begins the discovery process.
 func (c *cluster) Start() {

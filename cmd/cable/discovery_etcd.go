@@ -54,8 +54,8 @@ func (e *etcdDiscovery) Start() {
 		return
 	}
 	e.client = client
-	// Create a lease with 30-second TTL
-	lease, err := client.Grant(context.Background(), 30)
+	// Create a lease with 10-second TTL
+	lease, err := client.Grant(context.Background(), 10)
 	if err != nil {
 		e.logger.Error("failed to create lease", xlog.Err(err))
 		return
@@ -115,7 +115,20 @@ func (e *etcdDiscovery) watchNodesLoop() {
 				return
 			}
 			for _, event := range watchResp.Events {
-				if event.Type.String() == "PUT" {
+				switch event.Type {
+				case clientv3.EventTypeDelete:
+					key := string(event.Kv.Key)
+					nodeID, err := extractNodeID(key)
+					if err != nil {
+						e.logger.Error("failed to extract node ID from key", xlog.Str("key", key), xlog.Err(err))
+						continue
+					}
+					// Don't trigger handler for our own node
+					if nodeID != e.id && e.handler != nil {
+						e.handler.OnNodeLeave(nodeID)
+						e.logger.Info("node left", xlog.U64("nodeID", nodeID))
+					}
+				case clientv3.EventTypePut:
 					key := string(event.Kv.Key)
 					value := string(event.Kv.Value)
 					nodeID, err := extractNodeID(key)
