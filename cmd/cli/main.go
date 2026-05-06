@@ -16,14 +16,16 @@ var (
 	cmd      string
 	uid      string
 	network  string
+	nodeId   uint64
 	chs      map[string]string
 	logger   *xlog.Logger
 )
 
 func init() {
 	flag.StringVar(&endpoint, "endpoint", "localhost:1887", "endpoint of cable server")
-	flag.StringVar(&cmd, "cmd", "join", "sub command")
+	flag.StringVar(&cmd, "cmd", "", "sub command")
 	flag.StringVar(&uid, "uid", "", "uid of user")
+	flag.Uint64Var(&nodeId, "nodeId", 0, "nodeId of node")
 	flag.StringVar(&network, "network", "tcp", "network of listener")
 	logger = xlog.NewText(xlog.LevelInfo)
 }
@@ -46,7 +48,7 @@ func main() {
 		} else {
 			logger.Info("stop listener success", xlog.Str("network", network))
 		}
-	case "join":
+	case "joinChannel":
 		if uid == "" {
 			logger.Error("uid is empty")
 			return
@@ -57,7 +59,7 @@ func main() {
 		} else {
 			logger.Info("join channel success", xlog.Str("uid", uid))
 		}
-	case "leave":
+	case "leaveChannel":
 		if uid == "" {
 			logger.Error("uid is empty")
 			return
@@ -68,7 +70,7 @@ func main() {
 		} else {
 			logger.Info("leave channel success", xlog.Str("uid", uid))
 		}
-	case "list":
+	case "listChannels":
 		if uid == "" {
 			logger.Error("uid is empty")
 			return
@@ -79,10 +81,20 @@ func main() {
 		} else {
 			logger.Info("list channel success", xlog.Str("uid", uid), xlog.Any("channels", channels))
 		}
+	case "kickNode":
+		if nodeId == 0 {
+			logger.Error("nodeId is empty")
+			return
+		}
+		err := client.KickNode(context.Background(), nodeId)
+		if err != nil {
+			logger.Error("kick node failed", xlog.U64("nodeID", nodeId), xlog.Err(err))
+		} else {
+			logger.Info("kick node success", xlog.U64("nodeID", nodeId))
+		}
 	default:
 		logger.Error("unknown command", xlog.Str("cmd", cmd))
 	}
-
 }
 
 func RandomJoin() {

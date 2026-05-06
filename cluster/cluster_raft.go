@@ -242,9 +242,6 @@ func (c *cluster) removeNode(ctx context.Context, id uint64) error {
 }
 
 // startRaft starts the Raft node either as a new node or by joining an existing cluster.
-//
-// Parameters:
-// - join: True if joining an existing cluster, false if starting a new cluster
 func (c *cluster) startRaft() {
 	if c.raft != nil {
 		return
@@ -429,7 +426,7 @@ func (c *cluster) applyRaftOp(data []byte) {
 // Parameters:
 // - id: Node ID to remove
 func (c *cluster) applyRemoveNode(id uint64) {
-	c.size = c.peers.Len() - 1
+	c.size = c.peers.Len() + 1
 	c.broker.userClients.Delete(id)
 	c.broker.clientChannels.Delete(id)
 	c.broker.channelClients.Delete(id)

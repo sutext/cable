@@ -25,6 +25,7 @@ type Client interface {
 	IsReady() bool
 	IsOnline(ctx context.Context, uid string) (ok bool, err error)
 	KickUser(ctx context.Context, uid string) (err error)
+	KickNode(ctx context.Context, nodeId uint64) (err error)
 	SendToAll(ctx context.Context, kind packet.MessageKind, message []byte) (total, success int32, err error)
 	SendToUser(ctx context.Context, uid string, kind packet.MessageKind, message []byte) (total, success int32, err error)
 	SendToChannel(ctx context.Context, channel string, kind packet.MessageKind, message []byte) (total, success int32, err error)

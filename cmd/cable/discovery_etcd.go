@@ -116,18 +116,6 @@ func (e *etcdDiscovery) watchNodesLoop() {
 			}
 			for _, event := range watchResp.Events {
 				switch event.Type {
-				case clientv3.EventTypeDelete:
-					key := string(event.Kv.Key)
-					nodeID, err := extractNodeID(key)
-					if err != nil {
-						e.logger.Error("failed to extract node ID from key", xlog.Str("key", key), xlog.Err(err))
-						continue
-					}
-					// Don't trigger handler for our own node
-					if nodeID != e.id && e.handler != nil {
-						e.handler.OnNodeLeave(nodeID)
-						e.logger.Info("node left", xlog.U64("nodeID", nodeID))
-					}
 				case clientv3.EventTypePut:
 					key := string(event.Kv.Key)
 					value := string(event.Kv.Value)
@@ -136,10 +124,20 @@ func (e *etcdDiscovery) watchNodesLoop() {
 						e.logger.Error("failed to extract node ID from key", xlog.Str("key", key), xlog.Err(err))
 						continue
 					}
-					// Don't trigger handler for our own node
-					if nodeID != e.id && e.handler != nil {
+					if e.handler != nil {
 						e.handler.OnNodeJoin(nodeID, value)
 						e.logger.Info("node joined", xlog.U64("nodeID", nodeID), xlog.Str("addr", value))
+					}
+				case clientv3.EventTypeDelete:
+					key := string(event.Kv.Key)
+					nodeID, err := extractNodeID(key)
+					if err != nil {
+						e.logger.Error("failed to extract node ID from key", xlog.Str("key", key), xlog.Err(err))
+						continue
+					}
+					if e.handler != nil {
+						e.handler.OnNodeLeave(nodeID)
+						e.logger.Info("node left", xlog.U64("nodeID", nodeID))
 					}
 				}
 			}
